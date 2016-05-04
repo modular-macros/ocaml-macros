@@ -821,6 +821,8 @@ structure_tail:
 structure_item:
     let_bindings
       { val_of_let_bindings $1 }
+  | static_bindings
+      { val_of_let_bindings $1 }
   | primitive_declaration
       { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
   | value_description
@@ -1641,6 +1643,19 @@ let_binding:
 and_let_binding:
     AND attributes let_binding_body post_item_attributes
       { mklb false $3 ($2@$4) }
+;
+static_bindings:
+    static_binding                      { $1 }
+  | static_bindings and_static_bindings { addlb $1 $2 }
+;
+static_binding:
+  STATIC ext_attributes rec_flag let_binding_body post_item_attributes
+    { let (ext, attr) = $2 in
+      mklbs ext $3 (mklb true $4 (attr@$5)) }
+;
+and_static_bindings:
+  AND attributes let_binding_body post_item_attributes
+    { mklb false $3 ($2@$4) }
 ;
 fun_binding:
     strict_binding
