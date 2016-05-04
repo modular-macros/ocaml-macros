@@ -564,6 +564,7 @@ let package_type_of_module_type pmty =
 %token HASH
 %token <string> HASHOP
 %token SIG
+%token STATIC
 %token STAR
 %token <string * string option> STRING
 %token STRUCT
