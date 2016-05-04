@@ -590,9 +590,9 @@ let rec transl_type env policy styp =
         { row_fields = List.rev fields; row_more = newvar ();
           row_bound = (); row_closed = (closed = Closed);
           row_fixed = false; row_name = !name } in
-      let static = Btype.static_row row in
+      let is_static = Btype.static_row row in
       let row =
-        if static then { row with row_more = newty Tnil }
+        if is_static then { row with row_more = newty Tnil }
         else if policy <> Univars then row
         else { row with row_more = new_pre_univar () }
       in
