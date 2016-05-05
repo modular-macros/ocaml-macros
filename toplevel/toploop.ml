@@ -267,7 +267,7 @@ let execute_phrase print_outcome ppf phr =
                   | [ { str_desc =
                           (Tstr_eval (exp, _)
                           |Tstr_value
-                              (_, (* macros: no handling of static_flag *)
+                              (Asttypes.Nonstatic,
                                Asttypes.Nonrecursive,
                                [{vb_pat = {pat_desc=Tpat_any};
                                  vb_expr = exp}
