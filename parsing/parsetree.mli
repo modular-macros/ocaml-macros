@@ -798,9 +798,11 @@ and structure_item =
 and structure_item_desc =
   | Pstr_eval of expression * attributes
         (* E *)
-  | Pstr_value of rec_flag * value_binding list
-        (* let P1 = E1 and ... and Pn = EN       (flag = Nonrecursive)
-           let rec P1 = E1 and ... and Pn = EN   (flag = Recursive)
+  | Pstr_value of static_flag * rec_flag * value_binding list
+        (* let P1 = E1 and ... and Pn = EN        (Nonstatic, Nonrecursive)
+           let rec P1 = E1 and ... and Pn = EN    (Nonstatic, Recursive)
+           static P1 = E1 and ... and Pn = EN     (Static, Nonrecursive)
+           static rec P1 = E1 and ... and Pn = EN (Static, Recursive)
          *)
   | Pstr_primitive of value_description
         (*  val x: T
