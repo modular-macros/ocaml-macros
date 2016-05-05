@@ -89,6 +89,12 @@ let fmt_closed_flag f x =
   | Closed -> fprintf f "Closed"
   | Open -> fprintf f "Open"
 
+let fmt_static_flag f x =
+  match x with
+  | Nonstatic -> fprintf f "Nonstatic";
+  | Static -> fprintf f "Static";
+;;
+
 let fmt_rec_flag f x =
   match x with
   | Nonrecursive -> fprintf f "Nonrec";
@@ -731,8 +737,8 @@ and structure_item i ppf x =
       line i ppf "Tstr_eval\n";
       attributes i ppf attrs;
       expression i ppf e;
-  | Tstr_value (rf, l) ->
-      line i ppf "Tstr_value %a\n" fmt_rec_flag rf;
+  | Tstr_value (sf, rf, l) ->
+      line i ppf "Tstr_value %a %a\n" fmt_static_flag sf fmt_rec_flag rf;
       list i value_binding ppf l;
   | Tstr_primitive vd ->
       line i ppf "Tstr_primitive\n";

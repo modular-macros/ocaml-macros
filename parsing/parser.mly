@@ -383,7 +383,7 @@ let mklbs ext rf lb =
 let addlb lbs lb =
   { lbs with lbs_bindings = lb :: lbs.lbs_bindings }
 
-let val_of_let_bindings lbs =
+let val_of_let_bindings static_flag lbs =
   let bindings =
     List.map
       (fun lb ->
@@ -393,7 +393,7 @@ let val_of_let_bindings lbs =
            lb.lb_pattern lb.lb_expression)
       lbs.lbs_bindings
   in
-  let str = mkstr(Pstr_value(lbs.lbs_rec, List.rev bindings)) in
+  let str = mkstr(Pstr_value(static_flag, lbs.lbs_rec, List.rev bindings)) in
   match lbs.lbs_extension with
   | None -> str
   | Some id -> ghstr (Pstr_extension((id, PStr [str]), []))
@@ -820,9 +820,9 @@ structure_tail:
 ;
 structure_item:
     let_bindings
-      { val_of_let_bindings $1 }
+      { val_of_let_bindings Nonstatic $1 }
   | static_bindings
-      { val_of_let_bindings $1 }
+      { val_of_let_bindings Static $1 }
   | primitive_declaration
       { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
   | value_description

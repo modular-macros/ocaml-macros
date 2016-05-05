@@ -198,7 +198,7 @@ module Str = struct
   let mk ?(loc = !default_loc) d = {pstr_desc = d; pstr_loc = loc}
 
   let eval ?loc ?(attrs = []) a = mk ?loc (Pstr_eval (a, attrs))
-  let value ?loc a b = mk ?loc (Pstr_value (a, b))
+  let value ?loc a b c = mk ?loc (Pstr_value (a, b, c))
   let primitive ?loc a = mk ?loc (Pstr_primitive a)
   let type_ ?loc rec_flag a = mk ?loc (Pstr_type (rec_flag, a))
   let type_extension ?loc a = mk ?loc (Pstr_typext a)

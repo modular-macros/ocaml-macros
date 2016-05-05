@@ -1214,7 +1214,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
             (fun () -> Typecore.type_expression env sexpr)
         in
         Tstr_eval (expr, attrs), [], env
-    | Pstr_value(rec_flag, sdefs) ->
+    | Pstr_value(static_flag, rec_flag, sdefs) ->
         let scope =
           match rec_flag with
           | Recursive ->
@@ -1232,7 +1232,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
           Typecore.type_binding env rec_flag sdefs scope in
         (* Note: Env.find_value does not trigger the value_used event. Values
            will be marked as being used during the signature inclusion test. *)
-        Tstr_value(rec_flag, defs),
+        Tstr_value(static_flag, rec_flag, defs),
         List.map (fun id -> Sig_value(id, Env.find_value (Pident id) newenv))
           (let_bound_idents defs),
         newenv

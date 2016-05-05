@@ -136,7 +136,7 @@ module MakeIterator(Iter : IteratorArgument) : sig
       begin
         match item.str_desc with
           Tstr_eval (exp, _attrs) -> iter_expression exp
-        | Tstr_value (rec_flag, list) ->
+        | Tstr_value (_, rec_flag, list) ->
             iter_bindings rec_flag list
         | Tstr_primitive vd -> iter_value_description vd
         | Tstr_type (rf, list) -> iter_type_declarations rf list

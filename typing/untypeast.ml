@@ -142,8 +142,9 @@ let structure_item sub item =
   let desc =
     match item.str_desc with
       Tstr_eval (exp, attrs) -> Pstr_eval (sub.expr sub exp, attrs)
-    | Tstr_value (rec_flag, list) ->
-        Pstr_value (rec_flag, List.map (sub.value_binding sub) list)
+    | Tstr_value (static_flag, rec_flag, list) ->
+        Pstr_value
+          (static_flag, rec_flag, List.map (sub.value_binding sub) list)
     | Tstr_primitive vd ->
         Pstr_primitive (sub.value_description sub vd)
     | Tstr_type (rec_flag, list) ->

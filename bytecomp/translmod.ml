@@ -452,11 +452,16 @@ and transl_structure fields cc rootpath final_env = function
       | Tstr_eval (expr, _) ->
           let body, size = transl_structure fields cc rootpath final_env rem in
           Lsequence(transl_exp expr, body), size
-      | Tstr_value(rec_flag, pat_expr_list) ->
-          let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
-          let body, size =
-            transl_structure ext_fields cc rootpath final_env rem in
-          transl_let rec_flag pat_expr_list body, size
+      | Tstr_value(static_flag, rec_flag, pat_expr_list) -> (
+          match static_flag with
+          | Nonstatic ->
+            let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
+            let body, size =
+              transl_structure ext_fields cc rootpath final_env rem in
+            transl_let rec_flag pat_expr_list body, size
+          (* just ignore static items *)
+          | Static -> transl_structure fields cc rootpath final_env rem
+      )
       | Tstr_primitive descr ->
           record_primitive descr.val_val;
           transl_structure fields cc rootpath final_env rem
@@ -603,15 +608,18 @@ let transl_implementation module_name (str, cc) =
   Lprim (Psetglobal module_id, [module_initializer])
 
 (* Build the list of value identifiers defined by a toplevel structure
-   (excluding primitive declarations). *)
+   (excluding primitive declarations and static bindings). *)
 
 let rec defined_idents = function
     [] -> []
   | item :: rem ->
     match item.str_desc with
     | Tstr_eval _ -> defined_idents rem
-    | Tstr_value(_rec_flag, pat_expr_list) ->
-      let_bound_idents pat_expr_list @ defined_idents rem
+    | Tstr_value(static_flag, _rec_flag, pat_expr_list) -> (
+      match static_flag with
+      | Nonstatic -> let_bound_idents pat_expr_list @ defined_idents rem
+      | Static -> defined_idents rem (* exclude static bindings *)
+    )
     | Tstr_primitive _ -> defined_idents rem
     | Tstr_type _ -> defined_idents rem
     | Tstr_typext tyext ->
@@ -661,8 +669,12 @@ and all_idents = function
   | item :: rem ->
     match item.str_desc with
     | Tstr_eval _ -> all_idents rem
-    | Tstr_value(_rec_flag, pat_expr_list) ->
-      let_bound_idents pat_expr_list @ all_idents rem
+    | Tstr_value(static_flag, _rec_flag, pat_expr_list) ->
+      begin
+        match static_flag with
+        | Nonstatic -> let_bound_idents pat_expr_list @ all_idents rem
+        | Static -> all_idents rem (* exclude static decls *)
+      end
     | Tstr_primitive _ -> all_idents rem
     | Tstr_type _ -> all_idents rem
     | Tstr_typext tyext ->
@@ -718,11 +730,16 @@ let transl_store_structure glob map prims str =
         | Tstr_eval (expr, _attrs) ->
             Lsequence(subst_lambda subst (transl_exp expr),
                       transl_store rootpath subst rem)
-        | Tstr_value(rec_flag, pat_expr_list) ->
-            let ids = let_bound_idents pat_expr_list in
-            let lam = transl_let rec_flag pat_expr_list (store_idents ids) in
-            Lsequence(subst_lambda subst lam,
-                      transl_store rootpath (add_idents false ids subst) rem)
+        | Tstr_value(static_flag, rec_flag, pat_expr_list) ->
+          begin
+            match static_flag with
+            | Nonstatic ->
+              let ids = let_bound_idents pat_expr_list in
+              let lam = transl_let rec_flag pat_expr_list (store_idents ids) in
+              Lsequence(subst_lambda subst lam,
+                        transl_store rootpath (add_idents false ids subst) rem)
+            | Static -> lambda_unit
+          end
         | Tstr_primitive descr ->
             record_primitive descr.val_val;
             transl_store rootpath subst rem
@@ -996,17 +1013,22 @@ let close_toplevel_term (lam, ()) =
 let transl_toplevel_item item =
   match item.str_desc with
     Tstr_eval (expr, _)
-  | Tstr_value(Nonrecursive,
+  | Tstr_value(Nonstatic, Nonrecursive,
                [{vb_pat = {pat_desc=Tpat_any};vb_expr = expr}]) ->
       (* special compilation for toplevel "let _ = expr", so
          that Toploop can display the result of the expression.
          Otherwise, the normal compilation would result
          in a Lsequence returning unit. *)
       transl_exp expr
-  | Tstr_value(rec_flag, pat_expr_list) ->
-      let idents = let_bound_idents pat_expr_list in
-      transl_let rec_flag pat_expr_list
-        (make_sequence toploop_setvalue_id idents)
+  | Tstr_value(static_flag, rec_flag, pat_expr_list) ->
+    begin
+      match static_flag with
+      | Nonstatic ->
+        let idents = let_bound_idents pat_expr_list in
+        transl_let rec_flag pat_expr_list
+          (make_sequence toploop_setvalue_id idents)
+      | Static -> lambda_unit
+    end
   | Tstr_typext(tyext) ->
       let idents =
         List.map (fun ext -> ext.ext_id) tyext.tyext_constructors

@@ -103,9 +103,10 @@ let structure_item sub {str_desc; str_loc; str_env} =
   let str_desc =
     match str_desc with
     | Tstr_eval (exp, attrs) -> Tstr_eval (sub.expr sub exp, attrs)
-    | Tstr_value (rec_flag, list) ->
-        let (rec_flag, list) = sub.value_bindings sub (rec_flag, list) in
-        Tstr_value (rec_flag, list)
+    | Tstr_value (static_flag, rec_flag, list) ->
+        let (rec_flag, list) =
+          sub.value_bindings sub (rec_flag, list) in
+        Tstr_value (static_flag, rec_flag, list)
     | Tstr_primitive v -> Tstr_primitive (sub.value_description sub v)
     | Tstr_type (rec_flag, list) ->
         let (rec_flag, list) = sub.type_declarations sub (rec_flag, list) in

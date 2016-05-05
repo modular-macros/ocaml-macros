@@ -214,6 +214,9 @@ let direction_flag f = function
 let private_flag f = function
   | Public -> ()
   | Private -> pp f "private@ "
+let static_flag f = function
+  | Nonstatic -> ()
+  | Static -> pp f "static "
 
 let constant_string f s = pp f "%S" s
 let tyvar f str = pp f "'%s" str
@@ -1091,9 +1094,9 @@ and binding ctxt f {pvb_pat=p; pvb_expr=x; _} =
         pp f "%a@;=@;%a" (pattern ctxt) p (expression ctxt) x
 
 (* [in] is not printed *)
-and bindings ctxt f (rf,l) =
+and bindings ctxt f (sf, rf,l) =
   let binding kwd rf f x =
-    pp f "@[<2>%s %a%a@]@ %a" kwd rec_flag rf
+    pp f "@[<2>%s %a%a%a@]@ %a" kwd static_flag sf rec_flag rf
       (binding ctxt) x (item_attributes ctxt) x.pvb_attributes
   in
   match l with
@@ -1112,8 +1115,8 @@ and structure_item ctxt f x =
         (item_attributes ctxt) attrs
   | Pstr_type (_, []) -> assert false
   | Pstr_type (rf, l)  -> type_def_list ctxt f (rf, l)
-  | Pstr_value (rf, l) -> (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
-      pp f "@[<2>%a@]" (bindings ctxt) (rf,l)
+  | Pstr_value (sf, rf, l) -> (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
+      pp f "@[<2>%a@]" (bindings ctxt) (sf, rf,l)
   | Pstr_typext te -> type_extension ctxt f te
   | Pstr_exception ed -> exception_declaration ctxt f ed
   | Pstr_module x ->

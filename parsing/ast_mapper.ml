@@ -291,7 +291,8 @@ module M = struct
     match desc with
     | Pstr_eval (x, attrs) ->
         eval ~loc ~attrs:(sub.attributes sub attrs) (sub.expr sub x)
-    | Pstr_value (r, vbs) -> value ~loc r (List.map (sub.value_binding sub) vbs)
+    | Pstr_value (s, r, vbs) ->
+        value ~loc s r (List.map (sub.value_binding sub) vbs)
     | Pstr_primitive vd -> primitive ~loc (sub.value_description sub vd)
     | Pstr_type (rf, l) -> type_ ~loc rf (List.map (sub.type_declaration sub) l)
     | Pstr_typext te -> type_extension ~loc (sub.type_extension sub te)
