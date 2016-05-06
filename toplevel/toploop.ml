@@ -280,13 +280,14 @@ let execute_phrase print_outcome ppf phr =
                       let ty = Printtyp.tree_of_type_scheme exp.exp_type in
                       Ophr_eval (outv, ty)
 
+                  (* when phrase is empty or is a static binding, no printing *)
                   | []
-                  (* when phrase is a static binding, no printing *)
                   | [ { str_desc =
                           Tstr_value
                             (Asttypes.Static, _, _)
                       }
-                    ] -> Ophr_signature []
+                    ] ->
+                      Ophr_signature []
                   | _ -> Ophr_signature (pr_item newenv sg'))
               else Ophr_signature []
           | Exception exn ->
