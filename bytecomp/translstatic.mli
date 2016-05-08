@@ -15,11 +15,8 @@
 (** translstatic.ml: Translation of static declarations to lambda terms for the
     module language. *)
 
-open Typedtree
-open Lambda
-
 (** Translates to lambda terms all static bindings (i.e. bindings declared with
     the [static] keyword), ignore other declarations. *)
 (* module coercion not handled *)
-val transl_implementation : string -> structure -> lambda
+val transl_implementation : Typedtree.structure -> Lambda.lambda
 

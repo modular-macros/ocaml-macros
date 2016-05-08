@@ -80,6 +80,18 @@ let implementation ppf sourcefile outputprefix =
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"))
     end else begin
+      let stat_lam = Translstatic.transl_implementation typedtree in
+      let sstat_lam = Simplif.simplify_lambda stat_lam in
+      let (init_code, fun_code) = Bytegen.compile_phrase sstat_lam in
+      let (code, code_size, reloc, _) =
+        Emitcode.to_memory init_code fun_code
+      in
+      ignore (Symtable.init_toplevel ());
+      Symtable.patch_object code reloc;
+      Symtable.check_global_initialized reloc;
+      Symtable.update_global_table ();
+      ignore ((Meta.reify_bytecode code code_size) ());
+      Symtable.reset ();
       let bytecode =
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))

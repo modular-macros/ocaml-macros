@@ -15,18 +15,18 @@
 open Typedtree
 open Lambda
 
-let transl_implementation module_name str (* module coercion unhandled *) =
+let rec transl_implementation str (* module coercion unhandled *) =
   transl_structure str.str_items
 
-let rec transl_structure = function
+and transl_structure = function
   | [] -> lambda_unit
   | item :: rem ->
     begin
       match item.str_desc with
-      | Tstr_value(Static, rec_flag, pat_expr_list) ->
+      | Tstr_value(Asttypes.Static, rec_flag, pat_expr_list) ->
           let body = transl_structure rem in
-          transl_let rec_flag pat_expr_list body
-      | _ -> (* all non-static bindings are ignored *)
+          Translcore.transl_let rec_flag pat_expr_list body
+      | _ -> (* everything but static bindings is ignored *)
           transl_structure rem
     end
 

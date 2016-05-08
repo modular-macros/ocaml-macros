@@ -77,6 +77,7 @@ COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/translobj.cmo bytecomp/translattribute.cmo \
   bytecomp/translcore.cmo \
   bytecomp/translclass.cmo bytecomp/translmod.cmo \
+  bytecomp/translstatic.cmo \
   bytecomp/simplif.cmo bytecomp/runtimedef.cmo \
   bytecomp/debuginfo.cmo \
   driver/pparse.cmo driver/main_args.cmo \
