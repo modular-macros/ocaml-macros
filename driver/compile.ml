@@ -80,6 +80,7 @@ let implementation ppf sourcefile outputprefix =
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"))
     end else begin
+      (* Execute static phrases *)
       let stat_lam = Translstatic.transl_implementation typedtree in
       let sstat_lam = Simplif.simplify_lambda stat_lam in
       let (init_code, fun_code) = Bytegen.compile_phrase sstat_lam in
@@ -92,6 +93,7 @@ let implementation ppf sourcefile outputprefix =
       Symtable.update_global_table ();
       ignore ((Meta.reify_bytecode code code_size) ());
       Symtable.reset ();
+      (* Static phrases executed *)
       let bytecode =
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))
