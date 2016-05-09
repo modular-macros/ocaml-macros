@@ -203,6 +203,7 @@ and module_expr_desc =
 and structure = {
   str_items : structure_item list;
   str_type : Types.signature;
+  str_final_stat_env : Env.t;
   str_final_env : Env.t;
 }
 

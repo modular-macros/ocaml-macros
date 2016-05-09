@@ -33,6 +33,7 @@ type mapper =
     class_type_declaration: mapper -> class_type_declaration ->
       class_type_declaration;
     class_type_field: mapper -> class_type_field -> class_type_field;
+    stat_env: mapper -> Env.t -> Env.t;
     env: mapper -> Env.t -> Env.t;
     expr: mapper -> expression -> expression;
     extension_constructor: mapper -> extension_constructor ->
@@ -69,9 +70,10 @@ let tuple2 f1 f2 (x, y) = (f1 x, f2 y)
 let tuple3 f1 f2 f3 (x, y, z) = (f1 x, f2 y, f3 z)
 let opt f = function None -> None | Some x -> Some (f x)
 
-let structure sub {str_items; str_type; str_final_env} =
+let structure sub {str_items; str_type; str_final_stat_env; str_final_env} =
   {
     str_items = List.map (sub.structure_item sub) str_items;
+    str_final_stat_env = sub.stat_env sub str_final_stat_env;
     str_final_env = sub.env sub str_final_env;
     str_type;
   }
@@ -643,6 +645,8 @@ let value_binding sub x =
   let vb_expr = sub.expr sub x.vb_expr in
   {x with vb_pat; vb_expr}
 
+let stat_env _sub x = x
+
 let env _sub x = x
 
 let default =
@@ -658,6 +662,7 @@ let default =
     class_type;
     class_type_declaration;
     class_type_field;
+    stat_env;
     env;
     expr;
     extension_constructor;
