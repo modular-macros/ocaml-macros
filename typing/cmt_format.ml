@@ -74,7 +74,10 @@ let keep_only_summary = Env.keep_only_summary
 open Tast_mapper
 
 let cenv =
-  {Tast_mapper.default with env = fun _sub env -> keep_only_summary env}
+  {Tast_mapper.default with
+    env = (fun _sub env -> keep_only_summary env);
+    stat_env = fun _sub env -> keep_only_summary env
+  }
 
 let clear_part = function
   | Partial_structure s -> Partial_structure (cenv.structure cenv s)
