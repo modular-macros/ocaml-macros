@@ -1091,7 +1091,7 @@ let rec type_module ?(alias=false) sttn funct_body anchor env smod =
   | Pmod_structure sstr ->
       let (str, sg, _finalstatenv, _finalenv) =
         type_structure funct_body anchor
-          env (* <- temporary and dubious *) env sstr smod.pmod_loc in
+          Env.empty (* <- temporary and dubious *) env sstr smod.pmod_loc in
       let md =
         rm { mod_desc = Tmod_structure str;
              mod_type = Mty_signature sg;
@@ -1507,7 +1507,7 @@ let type_toplevel_phrase env s =
   end;
   let (str, sg, _, final_env) =
     type_structure ~toplevel:true false None
-    env (* <- temporary and dubious *) env s Location.none
+    Env.empty (* <- temporary and dubious *) env s Location.none
   in
   (str, sg, final_env)
 let type_module_alias = type_module ~alias:true true false None
