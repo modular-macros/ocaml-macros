@@ -61,6 +61,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _g = option "-g"
   let _i = option "-i"
   let _I s = option_with_arg "-I" s
+  let _M s = option_with_arg "-M" s
   let _impl s = with_impl := true; option_with_arg "-impl" s
   let _intf s = with_intf := true; option_with_arg "-intf" s
   let _intf_suffix s = option_with_arg "-intf-suffix" s

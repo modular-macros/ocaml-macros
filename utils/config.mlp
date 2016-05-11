@@ -89,6 +89,7 @@ and cmxs_magic_number = "Caml2007D002"
 and cmt_magic_number = "Caml2012T007"
 
 let load_path = ref ([] : string list)
+let static_load_path = ref([] : string list)
 
 let interface_suffix = ref ".mli"
 

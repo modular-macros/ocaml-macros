@@ -35,6 +35,7 @@ let init_path ?(dir="") native =
     List.map (Misc.expand_directory Config.standard_library) dirs in
   Config.load_path := dir ::
       List.rev_append exp_dirs (Clflags.std_include_dir ());
+  Config.static_load_path := !Clflags.static_load_dirs;
   Env.reset_cache ()
 
 (* Return the initial environment in which compilation proceeds. *)

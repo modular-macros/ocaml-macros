@@ -55,6 +55,9 @@ val cc_profile : string
 val load_path: string list ref
         (* Directories in the search path for .cmi and .cmo files *)
 
+val static_load_path: string list ref
+        (* same as [load_path], but for loading in the static environment. *)
+
 val interface_suffix: string ref
         (* Suffix for interface file names *)
 

@@ -102,7 +102,7 @@ let _ = add_directive "cd" (Directive_string dir_cd)
 (* Load in-core a .cmo file *)
 
 let load_file recursive ppf name =
-  Cmo_load.load_file recursive ppf name
+  Cmo_load.load_file recursive ppf !Config.load_path name
     (fun () -> may_trace := true)
     (fun () -> may_trace := false)
     (fun exn ->
