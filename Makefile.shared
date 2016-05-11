@@ -197,7 +197,8 @@ MIDDLE_END=\
   middle_end/middle_end.cmo
 
 TOPLEVEL=toplevel/genprintval.cmo toplevel/toploop.cmo \
-  toplevel/trace.cmo toplevel/topdirs.cmo toplevel/topmain.cmo
+  toplevel/trace.cmo bytecomp/cmo_load.cmo toplevel/topdirs.cmo \
+  toplevel/topmain.cmo
 
 OPTTOPLEVEL=toplevel/genprintval.cmo toplevel/opttoploop.cmo \
   toplevel/opttopdirs.cmo toplevel/opttopmain.cmo

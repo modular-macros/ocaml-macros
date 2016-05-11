@@ -19,7 +19,6 @@ open Format
 open Misc
 open Longident
 open Types
-open Cmo_format
 open Trace
 open Toploop
 
@@ -102,119 +101,15 @@ let _ = add_directive "cd" (Directive_string dir_cd)
     }
 (* Load in-core a .cmo file *)
 
-exception Load_failed
-
-let check_consistency ppf filename cu =
-  try
-    List.iter
-      (fun (name, crco) ->
-       Env.add_import name;
-       match crco with
-         None -> ()
-       | Some crc->
-           Consistbl.check Env.crc_units name crc filename)
-      cu.cu_imports
-  with Consistbl.Inconsistency(name, user, auth) ->
-    fprintf ppf "@[<hv 0>The files %s@ and %s@ \
-                 disagree over interface %s@]@."
-            user auth name;
-    raise Load_failed
-
-let load_compunit ic filename ppf compunit =
-  check_consistency ppf filename compunit;
-  seek_in ic compunit.cu_pos;
-  let code_size = compunit.cu_codesize + 8 in
-  let code = Meta.static_alloc code_size in
-  unsafe_really_input ic code 0 compunit.cu_codesize;
-  Bytes.unsafe_set code compunit.cu_codesize (Char.chr Opcodes.opRETURN);
-  String.unsafe_blit "\000\000\000\001\000\000\000" 0
-                     code (compunit.cu_codesize + 1) 7;
-  let initial_symtable = Symtable.current_state() in
-  Symtable.patch_object code compunit.cu_reloc;
-  Symtable.update_global_table();
-  let events =
-    if compunit.cu_debug = 0 then [| |]
-    else begin
-      seek_in ic compunit.cu_debug;
-      [| input_value ic |]
-    end in
-  Meta.add_debug_info code code_size events;
-  begin try
-    may_trace := true;
-    ignore((Meta.reify_bytecode code code_size) ());
-    may_trace := false;
-  with exn ->
-    record_backtrace ();
-    may_trace := false;
-    Symtable.restore_state initial_symtable;
-    print_exception_outcome ppf exn;
-    raise Load_failed
-  end
-
-let rec load_file recursive ppf name =
-  let filename =
-    try Some (find_in_path !Config.load_path name) with Not_found -> None
-  in
-  match filename with
-  | None -> fprintf ppf "Cannot find file %s.@." name; false
-  | Some filename ->
-      let ic = open_in_bin filename in
-      try
-        let success = really_load_file recursive ppf name filename ic in
-        close_in ic;
-        success
-      with exn ->
-        close_in ic;
-        raise exn
-
-and really_load_file recursive ppf name filename ic =
-  let buffer = really_input_string ic (String.length Config.cmo_magic_number) in
-  try
-    if buffer = Config.cmo_magic_number then begin
-      let compunit_pos = input_binary_int ic in  (* Go to descriptor *)
-      seek_in ic compunit_pos;
-      let cu : compilation_unit = input_value ic in
-      if recursive then
-        List.iter
-          (function
-            | (Reloc_getglobal id, _)
-              when not (Symtable.is_global_defined id) ->
-                let file = Ident.name id ^ ".cmo" in
-                begin match try Some (Misc.find_in_path_uncap !Config.load_path
-                                        file)
-                      with Not_found -> None
-                with
-                | None -> ()
-                | Some file ->
-                    if not (load_file recursive ppf file) then raise Load_failed
-                end
-            | _ -> ()
-          )
-          cu.cu_reloc;
-      load_compunit ic filename ppf cu;
-      true
-    end else
-      if buffer = Config.cma_magic_number then begin
-        let toc_pos = input_binary_int ic in  (* Go to table of contents *)
-        seek_in ic toc_pos;
-        let lib = (input_value ic : library) in
-        List.iter
-          (fun dllib ->
-            let name = Dll.extract_dll_name dllib in
-            try Dll.open_dlls Dll.For_execution [name]
-            with Failure reason ->
-              fprintf ppf
-                "Cannot load required shared library %s.@.Reason: %s.@."
-                name reason;
-              raise Load_failed)
-          lib.lib_dllibs;
-        List.iter (load_compunit ic filename ppf) lib.lib_units;
-        true
-      end else begin
-        fprintf ppf "File %s is not a bytecode object file.@." name;
-        false
-      end
-  with Load_failed -> false
+let load_file recursive ppf name =
+  Cmo_load.load_file recursive ppf name
+    (fun () -> may_trace := true)
+    (fun () -> may_trace := false)
+    (fun exn ->
+      record_backtrace ();
+      may_trace := false;
+      print_exception_outcome ppf exn
+    )
 
 let dir_load ppf name = ignore (load_file false ppf name)
 
