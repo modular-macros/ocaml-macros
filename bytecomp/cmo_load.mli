@@ -13,12 +13,15 @@
 (**************************************************************************)
 
 (** [load_cmo.ml]
-    .cmo files loading *)
+    .cmo files loading into the symtable (used to run bytecode in the toplevel
+    and when running static code and macros. *)
 
 (** Exception raised in case of failure in loading an object file. *)
 exception Load_failed
 
-(** [load_file recursive fmt path name before_ld after_ld on_failure]
+(** [load_file recursive fmt path name before_ld after_ld on_failure] loads a
+    compilation unit (and its dependencies if [recursive] is [true]) into the
+    bytecode symtable.
     @param recursive If [true], will load recursively all compilation units
       required by [name], otherwise won't.
     @param fmt The formatter for error messages.
