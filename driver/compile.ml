@@ -65,7 +65,6 @@ let implementation ppf sourcefile outputprefix =
   Compmisc.init_path false;
   let modulename = module_of_filename ppf sourcefile outputprefix in
   Env.set_unit_name modulename;
-  let static_env = Compmisc.initial_env () in
   let env = Compmisc.initial_env() in
   try
     let (typedtree, coercion) =
@@ -73,8 +72,7 @@ let implementation ppf sourcefile outputprefix =
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
       ++ print_if ppf Clflags.dump_source Pprintast.structure
       ++ Timings.(time (Typing sourcefile))
-          (Typemod.type_implementation sourcefile outputprefix modulename
-            static_env env)
+          (Typemod.type_implementation sourcefile outputprefix modulename env)
       ++ print_if ppf Clflags.dump_typedtree
         Printtyped.implementation_with_coercion
     in

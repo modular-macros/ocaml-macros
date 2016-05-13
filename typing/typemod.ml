@@ -1089,9 +1089,8 @@ let rec type_module ?(alias=false) sttn funct_body anchor env smod =
             { md with mod_type = mty }
       in rm md
   | Pmod_structure sstr ->
-      let (str, sg, _finalstatenv, _finalenv) =
-        type_structure funct_body anchor
-          env (* <- temporary and dubious *) env sstr smod.pmod_loc in
+      let (str, sg, _finalenv) =
+        type_structure funct_body anchor env sstr smod.pmod_loc in
       let md =
         rm { mod_desc = Tmod_structure str;
              mod_type = Mty_signature sg;
@@ -1204,18 +1203,17 @@ let rec type_module ?(alias=false) sttn funct_body anchor env smod =
   | Pmod_extension ext ->
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
 
-and type_structure ?(toplevel = false) funct_body anchor stat_env env
-    sstr scope =
+and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
   let names = new_names () in
 
-  let type_str_item stat_env env srem {pstr_loc = loc; pstr_desc = desc} =
+  let type_str_item env srem {pstr_loc = loc; pstr_desc = desc} =
     match desc with
     | Pstr_eval (sexpr, attrs) ->
         let expr =
           Builtin_attributes.with_warning_attribute attrs
             (fun () -> Typecore.type_expression env sexpr)
         in
-        Tstr_eval (expr, attrs), [], stat_env, env
+        Tstr_eval (expr, attrs), [], env
     | Pstr_value(static_flag, rec_flag, sdefs) ->
         let scope =
           match rec_flag with
@@ -1230,32 +1228,17 @@ and type_structure ?(toplevel = false) funct_body anchor stat_env env
               in
               Some (Annot.Idef {scope with Location.loc_start = start})
         in
-        (* Update the relevant environment according to static_flag *)
-        let (defs, stat_env', env', sg) = match static_flag with
-        | Nonstatic ->
-            let (defs, newenv) =
-              Typecore.type_binding env rec_flag sdefs scope
-            in
-            (defs, stat_env, newenv,
-            List.map
-              (fun id -> Sig_value(id, Env.find_value (Pident id) newenv))
-              (let_bound_idents defs)
-            )
-        | Static ->
-            let (defs, newenv) =
-              Typecore.type_binding stat_env rec_flag sdefs scope
-            in (defs, newenv, env,
-                [] (* ignore static values in signatures for now *))
-        in
+        let (defs, newenv) =
+          Typecore.type_binding env rec_flag sdefs scope in
         (* Note: Env.find_value does not trigger the value_used event. Values
            will be marked as being used during the signature inclusion test. *)
         Tstr_value(static_flag, rec_flag, defs),
-        sg,
-        stat_env', env'
+        List.map (fun id -> Sig_value(id, Env.find_value (Pident id) newenv))
+          (let_bound_idents defs),
+        newenv
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
-        Tstr_primitive desc, [Sig_value(desc.val_id, desc.val_val)],
-        stat_env, newenv
+        Tstr_primitive desc, [Sig_value(desc.val_id, desc.val_val)], newenv
     | Pstr_type (rec_flag, sdecls) ->
         List.iter
           (fun decl -> check_name check_type names decl.ptype_name)
@@ -1265,7 +1248,6 @@ and type_structure ?(toplevel = false) funct_body anchor stat_env env
         map_rec_type_with_row_types ~rec_flag
           (fun rs info -> Sig_type(info.typ_id, info.typ_type, rs))
           decls [],
-        stat_env,
         enrich_type_decls anchor decls env newenv
     | Pstr_typext styext ->
         List.iter
@@ -1274,19 +1256,16 @@ and type_structure ?(toplevel = false) funct_body anchor stat_env env
         let (tyext, newenv) =
           Typedecl.transl_type_extension true env loc styext
         in
-        let (str, sg, env) =
-          (Tstr_typext tyext,
-           map_ext
-             (fun es ext -> Sig_typext(ext.ext_id, ext.ext_type, es))
-             tyext.tyext_constructors [],
-           newenv)
-        in (str, sg, stat_env, env)
+        (Tstr_typext tyext,
+         map_ext
+           (fun es ext -> Sig_typext(ext.ext_id, ext.ext_type, es))
+           tyext.tyext_constructors [],
+         newenv)
     | Pstr_exception sext ->
         check_name check_typext names sext.pext_name;
         let (ext, newenv) = Typedecl.transl_exception env sext in
         Tstr_exception ext,
         [Sig_typext(ext.ext_id, ext.ext_type, Text_exception)],
-        stat_env,
         newenv
     | Pstr_module {pmb_name = name; pmb_expr = smodl; pmb_attributes = attrs;
                    pmb_loc;
@@ -1315,7 +1294,6 @@ and type_structure ?(toplevel = false) funct_body anchor stat_env env
                      md_attributes = attrs;
                      md_loc = pmb_loc;
                     }, Trec_not)],
-        stat_env,
         newenv
     | Pstr_recmodule sbind ->
         let sbind =
@@ -1381,7 +1359,6 @@ and type_structure ?(toplevel = false) funct_body anchor stat_env env
                 md_loc=mb.mb_loc;
               }, rs))
            bindings2 [],
-        stat_env,
         newenv
     | Pstr_modtype pmtd ->
         (* check that it is non-abstract *)
@@ -1389,10 +1366,10 @@ and type_structure ?(toplevel = false) funct_body anchor stat_env env
           Builtin_attributes.with_warning_attribute pmtd.pmtd_attributes
             (fun () -> transl_modtype_decl names env pmtd)
         in
-        Tstr_modtype mtd, [sg], stat_env, newenv
+        Tstr_modtype mtd, [sg], newenv
     | Pstr_open sod ->
         let (_path, newenv, od) = type_open ~toplevel env sod in
-        Tstr_open od, [], stat_env, newenv
+        Tstr_open od, [], newenv
     | Pstr_class cl ->
         List.iter
           (fun {pci_name} -> check_name check_type names pci_name)
@@ -1419,7 +1396,6 @@ and type_structure ?(toplevel = false) funct_body anchor stat_env env
                Sig_type(cls.cls_obj_id, cls.cls_obj_abbr, rs);
                Sig_type(cls.cls_typesharp_id, cls.cls_abbr, rs)])
              classes []),
-        stat_env,
         new_env
     | Pstr_class_type cl ->
         List.iter
@@ -1444,7 +1420,6 @@ and type_structure ?(toplevel = false) funct_body anchor stat_env env
                  Sig_type(decl.clsty_obj_id, decl.clsty_obj_abbr, rs);
                  Sig_type(decl.clsty_typesharp_id, decl.clsty_abbr, rs)])
              classes []),
-        stat_env,
         new_env
     | Pstr_include sincl ->
         let smodl = sincl.pincl_mod in
@@ -1464,40 +1439,37 @@ and type_structure ?(toplevel = false) funct_body anchor stat_env env
             incl_loc = sincl.pincl_loc;
           }
         in
-        Tstr_include incl, sg, stat_env, new_env
+        Tstr_include incl, sg, new_env
     | Pstr_extension (ext, _attrs) ->
         raise (Error_forward (Builtin_attributes.error_of_extension ext))
     | Pstr_attribute x ->
         Builtin_attributes.warning_attribute [x];
-        Tstr_attribute x, [], stat_env, env
+        Tstr_attribute x, [], env
   in
-  let rec type_struct stat_env env sstr =
+  let rec type_struct env sstr =
     Ctype.init_def(Ident.current_time());
     match sstr with
-    | [] -> ([], [], stat_env, env)
+    | [] -> ([], [], env)
     | pstr :: srem ->
         let previous_saved_types = Cmt_format.get_saved_types () in
-        let desc, sg, new_stat_env, new_env =
-          type_str_item stat_env env srem pstr in
+        let desc, sg, new_env = type_str_item env srem pstr in
         let str = { str_desc = desc; str_loc = pstr.pstr_loc; str_env = env } in
         Cmt_format.set_saved_types (Cmt_format.Partial_structure_item str
                                     :: previous_saved_types);
-        let (str_rem, sig_rem, final_stat_env, final_env) =
-          type_struct new_stat_env new_env srem in
-        (str :: str_rem, sg @ sig_rem, final_stat_env, final_env)
+        let (str_rem, sig_rem, final_env) = type_struct new_env srem in
+        (str :: str_rem, sg @ sig_rem, final_env)
   in
   if !Clflags.annotations then
     (* moved to genannot *)
     List.iter (function {pstr_loc = l} -> Stypes.record_phrase l) sstr;
   let previous_saved_types = Cmt_format.get_saved_types () in
   if not toplevel then Builtin_attributes.warning_enter_scope ();
-  let (items, sg, final_stat_env, final_env) = type_struct stat_env env sstr in
-  let str = { str_items = items; str_type = sg;
-    str_final_stat_env = final_stat_env; str_final_env = final_env } in
+  let (items, sg, final_env) = type_struct env sstr in
+  let str = { str_items = items; str_type = sg; str_final_env = final_env } in
   if not toplevel then Builtin_attributes.warning_leave_scope ();
   Cmt_format.set_saved_types
     (Cmt_format.Partial_structure str :: previous_saved_types);
-  str, sg, final_stat_env, final_env
+  str, sg, final_env
 
 let type_toplevel_phrase env s =
   Env.reset_required_globals ();
@@ -1505,11 +1477,7 @@ let type_toplevel_phrase env s =
     let iter = Builtin_attributes.emit_external_warnings in
     iter.Ast_iterator.structure iter s
   end;
-  let (str, sg, _, final_env) =
-    type_structure ~toplevel:true false None
-    env (* <- temporary and dubious *) env s Location.none
-  in
-  (str, sg, final_env)
+  type_structure ~toplevel:true false None env s Location.none
 let type_module_alias = type_module ~alias:true true false None
 let type_module = type_module true false None
 let type_structure = type_structure false None
@@ -1605,8 +1573,7 @@ let () =
 
 (* Typecheck an implementation file *)
 
-let type_implementation sourcefile outputprefix modulename
-    initial_static_env initial_env ast =
+let type_implementation sourcefile outputprefix modulename initial_env ast =
   Cmt_format.clear ();
   try
   Typecore.reset_delayed_checks ();
@@ -1616,9 +1583,8 @@ let type_implementation sourcefile outputprefix modulename
     iter.Ast_iterator.structure iter ast
   end;
 
-  let (str, sg, _, finalenv) =
-    type_structure initial_static_env initial_env ast
-      (Location.in_file sourcefile) in
+  let (str, sg, finalenv) =
+    type_structure initial_env ast (Location.in_file sourcefile) in
   let simple_sg = simplify_signature sg in
   if !Clflags.print_types then begin
     Printtyp.wrap_printing_env initial_env

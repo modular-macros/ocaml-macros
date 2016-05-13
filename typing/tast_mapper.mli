@@ -32,7 +32,6 @@ type mapper =
     class_type_declaration: mapper -> class_type_declaration ->
       class_type_declaration;
     class_type_field: mapper -> class_type_field -> class_type_field;
-    stat_env: mapper -> Env.t -> Env.t;
     env: mapper -> Env.t -> Env.t;
     expr: mapper -> expression -> expression;
     extension_constructor: mapper -> extension_constructor ->
