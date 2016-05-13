@@ -83,7 +83,6 @@ let process_implementation_file sourcefile =
   let modulename = String.capitalize_ascii(Filename.basename prefixname) in
   Env.set_unit_name modulename;
   let inputfile = preprocess sourcefile in
-  let stat_env = initial_env () in
   let env = initial_env () in
   try
     let parsetree =
@@ -92,7 +91,7 @@ let process_implementation_file sourcefile =
     in
     let typedtree =
       Typemod.type_implementation
-        sourcefile prefixname modulename stat_env env parsetree
+        sourcefile prefixname modulename env parsetree
     in
     (Some (parsetree, typedtree), inputfile)
   with
