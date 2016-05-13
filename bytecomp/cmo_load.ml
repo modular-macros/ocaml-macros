@@ -63,16 +63,16 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure =
     raise Load_failed
   end
 
-let rec load_file recursive ppf path name before_ld after_ld on_failure =
+let rec load_file recursive ppf name before_ld after_ld on_failure =
   let filename =
-    try Some (find_in_path path name) with Not_found -> None
+    try Some (find_in_path !Config.load_path name) with Not_found -> None
   in
   match filename with
   | None -> fprintf ppf "Cannot find file %s.@." name; false
   | Some filename ->
       let ic = open_in_bin filename in
       try
-        let success = really_load_file recursive ppf path name filename ic
+        let success = really_load_file recursive ppf name filename ic
               before_ld after_ld on_failure
         in
         close_in ic;
@@ -81,7 +81,7 @@ let rec load_file recursive ppf path name before_ld after_ld on_failure =
         close_in ic;
         raise exn
 
-and really_load_file recursive ppf path name filename ic
+and really_load_file recursive ppf name filename ic
     before_ld after_ld on_failure =
   let buffer = really_input_string ic (String.length Config.cmo_magic_number) in
   try
@@ -95,14 +95,14 @@ and really_load_file recursive ppf path name filename ic
             | (Reloc_getglobal id, _)
               when not (Symtable.is_global_defined id) ->
                 let file = Ident.name id ^ ".cmo" in
-                begin match try Some (Misc.find_in_path_uncap path file)
+                begin match try Some (Misc.find_in_path_uncap !Config.load_path
+                                        file)
                       with Not_found -> None
                 with
                 | None -> ()
                 | Some file ->
                     if not (load_file
-                        recursive ppf path file before_ld after_ld on_failure)
-                    then
+                        recursive ppf file before_ld after_ld on_failure) then
                       raise Load_failed
                 end
             | _ -> ()

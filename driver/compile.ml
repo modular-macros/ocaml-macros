@@ -67,8 +67,6 @@ let implementation ppf sourcefile outputprefix =
   Env.set_unit_name modulename;
   let static_env = Compmisc.initial_env () in
   let env = Compmisc.initial_env() in
-  (* Load modules in the `-M` path into the static environment *)
-  (* symtable is only used to run static code here *)
   try
     let (typedtree, coercion) =
       Pparse.parse_implementation ~tool_name ppf sourcefile

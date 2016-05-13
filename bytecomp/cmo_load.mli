@@ -25,14 +25,13 @@ exception Load_failed
     @param recursive If [true], will load recursively all compilation units
       required by [name], otherwise won't.
     @param fmt The formatter for error messages.
-    @param path The names of the directories in which to search for the file.
     @param name The name of the file to load, without extension.
     @param before_ld Function that will be called before executing the contents
       of the object file.
     @param after_ld Same as [before_ld], but will be called after the execution.
     @param on_failure Function called in case the load failed.
  *)
-val load_file : bool -> Format.formatter -> string list -> string
+val load_file : bool -> Format.formatter -> string
   -> (unit -> unit) -> (unit -> unit) -> (exn -> unit)
   -> bool
 
