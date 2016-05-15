@@ -240,6 +240,11 @@ end
 module Meths : Map.S with type key = string
 module Vars  : Map.S with type key = string
 
+(* Representation of metaprogramming phases as a non-negative integer: 0 is
+   runtime, 1 is compile-time. *)
+
+type phase = int
+
 (* Value descriptions *)
 
 type value_description =

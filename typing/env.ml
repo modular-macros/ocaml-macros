@@ -170,6 +170,7 @@ let implicit_coercion_flag = 0x02
 
 type t = {
   values: (Path.t * value_description) EnvTbl.t;
+  phases: (Path.t * phase) EnvTbl.t;
   constrs: constructor_description EnvTbl.t;
   labels: label_description EnvTbl.t;
   types: (Path.t * (type_declaration * type_descriptions)) EnvTbl.t;
@@ -183,6 +184,7 @@ type t = {
   local_constraints: type_declaration PathMap.t;
   gadt_instances: (int * TypeSet.t ref) list;
   flags: int;
+  cur_env_phase: phase;
 }
 
 and module_components =
@@ -198,6 +200,7 @@ and module_components_repr =
 
 and structure_components = {
   mutable comp_values: (string, (value_description * int)) Tbl.t;
+  mutable comp_phases: (string, (phase * int)) Tbl.t;
   mutable comp_constrs: (string, (constructor_description * int) list) Tbl.t;
   mutable comp_labels: (string, (label_description * int) list) Tbl.t;
   mutable comp_types:
@@ -223,6 +226,9 @@ let copy_local ~from env =
     local_constraints = from.local_constraints;
     gadt_instances = from.gadt_instances;
     flags = from.flags }
+
+let cur_phase env = env.cur_env_phase
+and with_phase phase env = {env with cur_env_phase = phase}
 
 let same_constr = ref (fun _ _ _ -> assert false)
 
@@ -258,10 +264,11 @@ let empty = {
   labels = EnvTbl.empty; types = EnvTbl.empty;
   modules = EnvTbl.empty; modtypes = EnvTbl.empty;
   components = EnvTbl.empty; classes = EnvTbl.empty;
-  cltypes = EnvTbl.empty;
+  cltypes = EnvTbl.empty; phases = EnvTbl.empty;
   summary = Env_empty; local_constraints = PathMap.empty; gadt_instances = [];
   flags = 0;
   functor_args = Ident.empty;
+  cur_env_phase = 0;
  }
 
 let in_signature b env =
@@ -572,6 +579,10 @@ let find proj1 proj2 path env =
 
 let find_value =
   find (fun env -> env.values) (fun sc -> sc.comp_values)
+and find_phase path env =
+  try
+    find (fun env -> env.phases) (fun sc -> sc.comp_phases) path env
+  with Not_found -> 0
 and find_type_full =
   find (fun env -> env.types) (fun sc -> sc.comp_types)
 and find_modtype =
@@ -929,7 +940,7 @@ let cstr_shadow cstr1 cstr2 =
 let lbl_shadow _lbl1 _lbl2 = false
 
 let lookup_value =
-  lookup (fun env -> env.values) (fun sc -> sc.comp_values)
+    lookup (fun env -> env.values) (fun sc -> sc.comp_values)
 and lookup_all_constructors =
   lookup_all_simple (fun env -> env.constrs) (fun sc -> sc.comp_constrs)
     cstr_shadow
@@ -1378,6 +1389,7 @@ and components_of_module_maker (env, sub, path, mty) =
     Mty_signature sg ->
       let c =
         { comp_values = Tbl.empty;
+          comp_phases = Tbl.empty;
           comp_constrs = Tbl.empty;
           comp_labels = Tbl.empty; comp_types = Tbl.empty;
           comp_modules = Tbl.empty; comp_modtypes = Tbl.empty;
@@ -1464,6 +1476,7 @@ and components_of_module_maker (env, sub, path, mty) =
   | Mty_alias _ ->
         Structure_comps {
           comp_values = Tbl.empty;
+          comp_phases = Tbl.empty;
           comp_constrs = Tbl.empty;
           comp_labels = Tbl.empty;
           comp_types = Tbl.empty;
@@ -1505,6 +1518,12 @@ and store_value ?check slot id path decl env renv =
     values = EnvTbl.add slot (fun x -> `Value x) id (path, decl)
         env.values renv.values;
     summary = Env_value(env.summary, id, decl) }
+
+and store_phase id path phase env renv =
+  { env with
+    phases =
+      EnvTbl.add None (fun x -> x) id (path, phase) env.phases renv.phases;
+  }
 
 and store_type ~check slot id path info env renv =
   let loc = info.type_loc in
@@ -1653,6 +1672,9 @@ let add_functor_arg id env =
 
 let add_value ?check id desc env =
   store_value None ?check id (Pident id) desc env env
+
+let add_phase id phase env =
+  store_phase id (Pident id) phase env env
 
 let add_type ~check id info env =
   store_type ~check None id (Pident id) info env env

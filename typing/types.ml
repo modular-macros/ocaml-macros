@@ -84,6 +84,10 @@ module OrderedString =
 module Meths = Map.Make(OrderedString)
 module Vars = Meths
 
+(* Representation of a metaprogramming phase *)
+
+type phase = int
+
 (* Value descriptions *)
 
 type value_description =

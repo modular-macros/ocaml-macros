@@ -1228,11 +1228,12 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
               in
               Some (Annot.Idef {scope with Location.loc_start = start})
         in
-        let (defs, newenv) =
-          Typecore.type_binding env rec_flag sdefs scope in
         begin
           match static_flag with
           | Nonstatic ->
+              let (defs, newenv) =
+                Typecore.type_binding
+                  (Env.with_phase 0 env) rec_flag sdefs scope in
               (* Note: Env.find_value does not trigger the value_used event.
                  Values will be marked as being used during the signature
                  inclusion test. *)
@@ -1242,6 +1243,9 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                 (let_bound_idents defs),
               newenv
           | Static ->
+              let (defs, newenv) =
+                Typecore.type_binding
+                  (Env.with_phase 1 env) rec_flag sdefs scope in
               Tstr_value(static_flag, rec_flag, defs),
               [], (* static values are not included in signatures *)
               newenv

@@ -41,6 +41,12 @@ val initial_unsafe_string: t
 val diff: t -> t -> Ident.t list
 val copy_local: from:t -> t -> t
 
+(** [cur_phase env] returns the phase associated with the environment [env]. *)
+val cur_phase: t -> phase
+
+(** Returns a new environment with a new phase value. *)
+val with_phase: phase -> t -> t
+
 type type_descriptions =
     constructor_description list * label_description list
 
@@ -57,6 +63,10 @@ val find_shadowed_types: Path.t -> t -> Path.t list
 (* Lookup by paths *)
 
 val find_value: Path.t -> t -> value_description
+val find_phase: Path.t -> t -> phase
+
+(** Lookup the phase of a value by path. When the value is not found, returns
+    0. *)
 val find_type: Path.t -> t -> type_declaration
 val find_type_descrs: Path.t -> t -> type_descriptions
 val find_module: Path.t -> t -> module_declaration
@@ -133,6 +143,7 @@ exception Recmodule
 
 val add_value:
     ?check:(string -> Warnings.t) -> Ident.t -> value_description -> t -> t
+val add_phase: Ident.t -> phase -> t -> t
 val add_type: check:bool -> Ident.t -> type_declaration -> t -> t
 val add_extension: check:bool -> Ident.t -> extension_constructor -> t -> t
 val add_module: ?arg:bool -> Ident.t -> module_type -> t -> t
