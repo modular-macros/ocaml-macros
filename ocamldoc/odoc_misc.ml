@@ -151,7 +151,7 @@ let string_of_author_list l =
     [] ->
       ""
   | _ ->
-      "* "^Odoc_messages.authors^":\n"^
+      "* " ^ Odoc_messages.authors ^ ":\n"^
       (String.concat ", " l)^
       "\n"
 

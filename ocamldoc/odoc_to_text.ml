@@ -578,7 +578,7 @@ class virtual to_text =
     method text_of_module_type_kind ?(with_def_syntax=true) tk =
       match tk with
       | Module_type_struct _ ->
-          [Code ((if with_def_syntax then " = " else "")^Odoc_messages.sig_end)]
+          [Code ((if with_def_syntax then " = " else "") ^ Odoc_messages.sig_end)]
 
       | Module_type_functor (p, k) ->
           let t1 =
