@@ -18,6 +18,8 @@ open Cmo_format
 
 exception Load_failed
 
+let std_modules = ["Pervasives"; "Printf"]
+
 let check_consistency ppf filename cu =
   try
     List.iter
@@ -90,24 +92,7 @@ and really_load_file recursive ppf name filename ic
       seek_in ic compunit_pos;
       let cu : compilation_unit = input_value ic in
       if recursive then
-        List.iter
-          (function
-            | (Reloc_getglobal id, _)
-              when not (Symtable.is_global_defined id) ->
-                let file = Ident.name id ^ ".cmo" in
-                begin match try Some (Misc.find_in_path_uncap !Config.load_path
-                                        file)
-                      with Not_found -> None
-                with
-                | None -> ()
-                | Some file ->
-                    if not (load_file
-                        recursive ppf file before_ld after_ld on_failure) then
-                      raise Load_failed
-                end
-            | _ -> ()
-          )
-          cu.cu_reloc;
+        load_deps ppf cu.cu_reloc before_ld after_ld on_failure;
       load_compunit ic filename ppf cu before_ld after_ld on_failure;
       true
     end else
@@ -135,4 +120,25 @@ and really_load_file recursive ppf name filename ic
         false
       end
   with Load_failed -> false
+
+and load_deps ppf reloc before_ld after_ld on_failure =
+  List.iter
+    (function
+      | (Reloc_getglobal id, _)
+        when not (Symtable.is_global_defined id) && not (List.mem (Ident.name id) std_modules) ->
+          let file = Ident.name id ^ ".cmo" in
+          begin match try Some (Misc.find_in_path_uncap !Config.load_path
+                                  file)
+                with Not_found -> None
+          with
+          | None -> ()
+          | Some file ->
+              if not (load_file
+                  true ppf file before_ld after_ld on_failure) then
+                raise Load_failed
+          end
+      | _ -> ()
+    )
+    reloc
+
 

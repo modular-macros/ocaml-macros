@@ -527,12 +527,14 @@ bytecomp/bytesections.cmx : utils/config.cmx bytecomp/bytesections.cmi
 bytecomp/bytesections.cmi :
 bytecomp/cmo_format.cmi : bytecomp/lambda.cmi typing/ident.cmi
 bytecomp/cmo_load.cmo : bytecomp/symtable.cmi bytecomp/opcodes.cmo \
-    utils/misc.cmi bytecomp/meta.cmi typing/ident.cmi bytecomp/dll.cmi \
-    utils/config.cmi bytecomp/cmo_load.cmi
+    utils/misc.cmi bytecomp/meta.cmi typing/ident.cmi typing/env.cmi \
+    bytecomp/dll.cmi utils/consistbl.cmi utils/config.cmi \
+    bytecomp/cmo_format.cmi bytecomp/cmo_load.cmi
 bytecomp/cmo_load.cmx : bytecomp/symtable.cmx bytecomp/opcodes.cmx \
-    utils/misc.cmx bytecomp/meta.cmx typing/ident.cmx bytecomp/dll.cmx \
-    utils/config.cmx bytecomp/cmo_load.cmi
-bytecomp/cmo_load.cmi :
+    utils/misc.cmx bytecomp/meta.cmx typing/ident.cmx typing/env.cmx \
+    bytecomp/dll.cmx utils/consistbl.cmx utils/config.cmx \
+    bytecomp/cmo_format.cmi bytecomp/cmo_load.cmi
+bytecomp/cmo_load.cmi : bytecomp/cmo_format.cmi
 bytecomp/debuginfo.cmo : parsing/location.cmi bytecomp/lambda.cmi \
     bytecomp/debuginfo.cmi
 bytecomp/debuginfo.cmx : parsing/location.cmx bytecomp/lambda.cmx \
@@ -695,9 +697,11 @@ bytecomp/translobj.cmx : typing/primitive.cmx utils/misc.cmx \
     bytecomp/translobj.cmi
 bytecomp/translobj.cmi : bytecomp/lambda.cmi typing/ident.cmi typing/env.cmi
 bytecomp/translstatic.cmo : typing/typedtree.cmi bytecomp/translcore.cmi \
-    bytecomp/lambda.cmi parsing/asttypes.cmi bytecomp/translstatic.cmi
+    typing/tast_mapper.cmi typing/path.cmi bytecomp/lambda.cmi \
+    parsing/asttypes.cmi bytecomp/translstatic.cmi
 bytecomp/translstatic.cmx : typing/typedtree.cmx bytecomp/translcore.cmx \
-    bytecomp/lambda.cmx parsing/asttypes.cmi bytecomp/translstatic.cmi
+    typing/tast_mapper.cmx typing/path.cmx bytecomp/lambda.cmx \
+    parsing/asttypes.cmi bytecomp/translstatic.cmi
 bytecomp/translstatic.cmi : typing/typedtree.cmi bytecomp/lambda.cmi
 bytecomp/typeopt.cmo : typing/types.cmi typing/typedtree.cmi \
     typing/predef.cmi typing/path.cmi bytecomp/lambda.cmi typing/ident.cmi \
@@ -1966,8 +1970,9 @@ driver/compile.cmo : utils/warnings.cmi typing/typemod.cmi \
     parsing/printast.cmi parsing/pprintast.cmi driver/pparse.cmi \
     utils/misc.cmi bytecomp/meta.cmi parsing/location.cmi \
     typing/includemod.cmi typing/env.cmi bytecomp/emitcode.cmi \
-    driver/compmisc.cmi driver/compenv.cmi utils/clflags.cmi utils/ccomp.cmi \
-    bytecomp/bytegen.cmi parsing/builtin_attributes.cmi driver/compile.cmi
+    driver/compmisc.cmi driver/compenv.cmi bytecomp/cmo_load.cmi \
+    utils/clflags.cmi utils/ccomp.cmi bytecomp/bytegen.cmi \
+    parsing/builtin_attributes.cmi driver/compile.cmi
 driver/compile.cmx : utils/warnings.cmx typing/typemod.cmx \
     typing/typedtree.cmx typing/typecore.cmx bytecomp/translstatic.cmx \
     bytecomp/translmod.cmx utils/timings.cmx bytecomp/symtable.cmx \
@@ -1976,8 +1981,9 @@ driver/compile.cmx : utils/warnings.cmx typing/typemod.cmx \
     parsing/printast.cmx parsing/pprintast.cmx driver/pparse.cmx \
     utils/misc.cmx bytecomp/meta.cmx parsing/location.cmx \
     typing/includemod.cmx typing/env.cmx bytecomp/emitcode.cmx \
-    driver/compmisc.cmx driver/compenv.cmx utils/clflags.cmx utils/ccomp.cmx \
-    bytecomp/bytegen.cmx parsing/builtin_attributes.cmx driver/compile.cmi
+    driver/compmisc.cmx driver/compenv.cmx bytecomp/cmo_load.cmx \
+    utils/clflags.cmx utils/ccomp.cmx bytecomp/bytegen.cmx \
+    parsing/builtin_attributes.cmx driver/compile.cmi
 driver/compile.cmi :
 driver/compmisc.cmo : typing/typemod.cmi utils/misc.cmi \
     parsing/longident.cmi parsing/location.cmi typing/ident.cmi \
@@ -2126,22 +2132,18 @@ toplevel/opttopstart.cmo : toplevel/opttopmain.cmi
 toplevel/opttopstart.cmx : toplevel/opttopmain.cmx
 toplevel/topdirs.cmo : utils/warnings.cmi typing/typetexp.cmi \
     typing/types.cmi toplevel/trace.cmi toplevel/toploop.cmi \
-    bytecomp/symtable.cmi typing/printtyp.cmi typing/predef.cmi \
-    typing/path.cmi parsing/parsetree.cmi utils/misc.cmi \
-    parsing/longident.cmi parsing/location.cmi typing/ident.cmi \
-    typing/env.cmi bytecomp/dll.cmi typing/ctype.cmi utils/consistbl.cmi \
-    utils/config.cmi bytecomp/cmo_load.cmi bytecomp/cmo_format.cmi \
-    utils/clflags.cmi typing/btype.cmi parsing/asttypes.cmi \
-    toplevel/topdirs.cmi
+    typing/printtyp.cmi typing/predef.cmi typing/path.cmi \
+    parsing/parsetree.cmi utils/misc.cmi parsing/longident.cmi \
+    parsing/location.cmi typing/ident.cmi typing/env.cmi bytecomp/dll.cmi \
+    typing/ctype.cmi utils/config.cmi bytecomp/cmo_load.cmi utils/clflags.cmi \
+    typing/btype.cmi parsing/asttypes.cmi toplevel/topdirs.cmi
 toplevel/topdirs.cmx : utils/warnings.cmx typing/typetexp.cmx \
     typing/types.cmx toplevel/trace.cmx toplevel/toploop.cmx \
-    bytecomp/symtable.cmx typing/printtyp.cmx typing/predef.cmx \
-    typing/path.cmx parsing/parsetree.cmi utils/misc.cmx \
-    parsing/longident.cmx parsing/location.cmx typing/ident.cmx \
-    typing/env.cmx bytecomp/dll.cmx typing/ctype.cmx utils/consistbl.cmx \
-    utils/config.cmx bytecomp/cmo_load.cmx bytecomp/cmo_format.cmi \
-    utils/clflags.cmx typing/btype.cmx parsing/asttypes.cmi \
-    toplevel/topdirs.cmi
+    typing/printtyp.cmx typing/predef.cmx typing/path.cmx \
+    parsing/parsetree.cmi utils/misc.cmx parsing/longident.cmx \
+    parsing/location.cmx typing/ident.cmx typing/env.cmx bytecomp/dll.cmx \
+    typing/ctype.cmx utils/config.cmx bytecomp/cmo_load.cmx utils/clflags.cmx \
+    typing/btype.cmx parsing/asttypes.cmi toplevel/topdirs.cmi
 toplevel/topdirs.cmi : parsing/longident.cmi
 toplevel/toploop.cmo : utils/warnings.cmi typing/typetexp.cmi \
     typing/types.cmi typing/typemod.cmi typing/typedtree.cmi \

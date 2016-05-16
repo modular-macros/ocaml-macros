@@ -89,7 +89,7 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/printinstr.cmo bytecomp/opcodes.cmo bytecomp/emitcode.cmo \
   bytecomp/bytesections.cmo bytecomp/dll.cmo bytecomp/symtable.cmo \
   bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
-  driver/errors.cmo driver/compile.cmo
+  driver/errors.cmo bytecomp/cmo_load.cmo driver/compile.cmo
 
 INTEL_ASM=\
   asmcomp/x86_proc.cmo \
@@ -197,7 +197,7 @@ MIDDLE_END=\
   middle_end/middle_end.cmo
 
 TOPLEVEL=toplevel/genprintval.cmo toplevel/toploop.cmo \
-  toplevel/trace.cmo bytecomp/cmo_load.cmo toplevel/topdirs.cmo \
+  toplevel/trace.cmo toplevel/topdirs.cmo \
   toplevel/topmain.cmo
 
 OPTTOPLEVEL=toplevel/genprintval.cmo toplevel/opttoploop.cmo \

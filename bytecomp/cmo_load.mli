@@ -12,7 +12,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** [load_cmo.ml]
+(** [cmo_load.ml]
     .cmo files loading into the symtable (used to run bytecode in the toplevel
     and when running static code and macros. *)
 
@@ -34,4 +34,10 @@ exception Load_failed
 val load_file : bool -> Format.formatter -> string
   -> (unit -> unit) -> (unit -> unit) -> (exn -> unit)
   -> bool
+
+(** [load_deps reloc] loads all the .cmo dependencies of a compilation unit
+    (represented as its relocation information) into the bytecode symtable. *)
+val load_deps : Format.formatter -> (Cmo_format.reloc_info * int) list
+  -> (unit -> unit) -> (unit -> unit) -> (exn -> unit)
+  -> unit
 

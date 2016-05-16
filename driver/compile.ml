@@ -87,6 +87,10 @@ let implementation ppf sourcefile outputprefix =
       let (code, code_size, reloc, _) =
         Emitcode.to_memory init_code fun_code
       in
+      Cmo_load.load_deps ppf reloc
+        (fun () -> ())
+        (fun () -> ())
+        (fun _ -> ());
       ignore (Symtable.init_toplevel ());
       Symtable.patch_object code reloc;
       Symtable.check_global_initialized reloc;
