@@ -107,7 +107,16 @@ let rec is_lifted = function
   | Pdot (p, _, _) -> is_lifted p
   | Papply (p, _) -> is_lifted p
 
-let unlift name =
+let unlift_string name =
   if String.length name > 1 && name.[0] == '^' then
     String.sub name 1 (String.length name - 1)
   else name
+
+let rec unlift = function
+  | Pident s as id ->
+      if Ident.persistent s then
+        Pident (Ident.create_persistent @@ unlift_string @@ Ident.name s)
+      else
+        id
+  | Pdot (p, a, b) -> Pdot(unlift p, a, b)
+  | Papply (p, a) -> Papply(unlift p, a)

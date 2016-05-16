@@ -48,4 +48,8 @@ val is_constructor_typath: t -> bool
 val is_lifted: t -> bool
 
 (** Removes the first character of its argument if it is a caret (`^`). *)
-val unlift: string -> string
+val unlift: t -> t
+
+(** Removes the lifting symbol in path (if any) iff the path begins with a
+    persistent identifier (see [Ident]). *)
+val unlift_string: string -> string

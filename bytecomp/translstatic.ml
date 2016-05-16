@@ -14,8 +14,23 @@
 
 open Typedtree
 open Lambda
+open Tast_mapper
+
+let clear_lifting sub expr =
+  let desc =
+    match expr.exp_desc with
+    | Texp_ident (p, loc, desc) ->
+        Texp_ident(Path.unlift p, loc, desc)
+    | _ -> (default.expr sub expr).exp_desc
+  in
+  {expr with exp_desc = desc}
+
+let clear_lifting_mapper =
+  {Tast_mapper.default with expr =
+    fun sub e -> clear_lifting sub e}
 
 let rec transl_implementation str (* module coercion unhandled *) =
+  let str = clear_lifting_mapper.structure clear_lifting_mapper str in
   transl_structure str.str_items
 
 and transl_structure = function

@@ -416,7 +416,7 @@ let read_pers_struct check modname filename =
       flags
   in
   (* Check module name (ignoring lifting symbol) *)
-  if name <> Path.unlift modname then
+  if name <> Path.unlift_string modname then
     error (Illegal_renaming(modname, name, filename));
   let comps =
       !components_of_module' ~deprecated empty Subst.identity
@@ -449,7 +449,7 @@ let find_pers_struct check name =
   | None -> raise Not_found
   | exception Not_found ->
       (* remove lifting symbol if any *)
-      let filename = Path.unlift name
+      let filename = Path.unlift_string name
       in
       let filename =
         try
