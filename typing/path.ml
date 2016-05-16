@@ -99,3 +99,10 @@ let is_constructor_typath p =
   match constructor_typath p with
   | Regular _ -> false
   | _ -> true
+
+let rec is_lifted = function
+  | Pident id ->
+      let name = Ident.name id in
+      String.length name <> 0 && name.[0] = '^'
+  | Pdot (p, _, _) -> is_lifted p
+  | Papply (p, _) -> is_lifted p

@@ -43,3 +43,6 @@ type typath =
 
 val constructor_typath: t -> typath
 val is_constructor_typath: t -> bool
+
+(** Returns [true] iff the left-most identifier begins with a caret (`^`). *)
+val is_lifted: t -> bool
