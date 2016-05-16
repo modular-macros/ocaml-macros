@@ -4381,7 +4381,7 @@ let report_error env ppf = function
   | Unknown_literal (n, m) ->
       fprintf ppf "Unknown modifier '%c' for literal %s%c" m n m
   | Staging (p, phase, expect_phase) ->
-      fprintf ppf "Staging error: attempt to use value %a of phase %d in an \
+      fprintf ppf "Attempt to use value %a of phase %d in an \
                    environment of phase %d" path p phase expect_phase
 
 
