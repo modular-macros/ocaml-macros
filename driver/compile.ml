@@ -91,7 +91,7 @@ let implementation ppf sourcefile outputprefix =
       Cmo_load.load_deps ppf reloc
         (fun () -> ())
         (fun () -> ())
-        (fun _ -> ());
+        (fun exn -> raise exn);
       Symtable.patch_object code reloc;
       Symtable.check_global_initialized reloc;
       Symtable.update_global_table ();
