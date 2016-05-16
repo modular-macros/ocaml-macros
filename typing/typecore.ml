@@ -1433,10 +1433,14 @@ let add_pattern_variables ?check ?check_as env =
   (List.fold_right
      (fun (id, ty, _name, loc, as_var) env ->
        let check = if as_var then check_as else check in
-       Env.add_value ?check id
+       let env = Env.add_value ?check id
          {val_type = ty; val_kind = Val_reg; Types.val_loc = loc;
           val_attributes = [];
          } env
+       in
+       if Env.cur_phase env <> 0 then
+         Env.add_phase id (Env.cur_phase env) env
+       else env
      )
      pv env,
    get_ref module_variables)
