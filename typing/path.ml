@@ -106,3 +106,8 @@ let rec is_lifted = function
       String.length name <> 0 && name.[0] = '^'
   | Pdot (p, _, _) -> is_lifted p
   | Papply (p, _) -> is_lifted p
+
+let unlift name =
+  if String.length name > 1 && name.[0] == '^' then
+    String.sub name 1 (String.length name - 1)
+  else name

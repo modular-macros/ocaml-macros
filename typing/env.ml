@@ -415,20 +415,21 @@ let read_pers_struct check modname filename =
     List.fold_left (fun acc -> function Deprecated s -> Some s | _ -> acc) None
       flags
   in
+  (* Check module name (ignoring lifting symbol) *)
+  if name <> Path.unlift modname then
+    error (Illegal_renaming(modname, name, filename));
   let comps =
       !components_of_module' ~deprecated empty Subst.identity
-                             (Pident(Ident.create_persistent name))
+                             (Pident(Ident.create_persistent modname))
                              (Mty_signature sign)
   in
-  let ps = { ps_name = name;
+  let ps = { ps_name = modname;
              ps_sig = lazy (Subst.signature Subst.identity sign);
              ps_comps = comps;
              ps_crcs = crcs;
              ps_filename = filename;
              ps_flags = flags;
            } in
-  if ps.ps_name <> modname then
-    error (Illegal_renaming(modname, ps.ps_name, filename));
   List.iter
     (function
         | Rectypes ->
@@ -447,11 +448,14 @@ let find_pers_struct check name =
   | Some ps -> ps
   | None -> raise Not_found
   | exception Not_found ->
+      (* remove lifting symbol if any *)
+      let filename = Path.unlift name
+      in
       let filename =
         try
-          find_in_path_uncap !load_path (name ^ ".cmi")
+          find_in_path_uncap !load_path (filename ^ ".cmi")
         with Not_found ->
-          Hashtbl.add persistent_structures name None;
+          Hashtbl.add persistent_structures filename None;
           raise Not_found
       in
       read_pers_struct check name filename
@@ -1385,6 +1389,7 @@ let rec components_of_module ~deprecated env sub path mty =
   }
 
 and components_of_module_maker (env, sub, path, mty) =
+  let lifted = Path.is_lifted path in
   (match scrape_alias env mty with
     Mty_signature sg ->
       let c =
@@ -1404,6 +1409,8 @@ and components_of_module_maker (env, sub, path, mty) =
             let decl' = Subst.value_description sub decl in
             c.comp_values <-
               Tbl.add (Ident.name id) (decl', !pos) c.comp_values;
+            if lifted then
+              c.comp_phases <- Tbl.add (Ident.name id) (1, !pos) c.comp_phases;
             begin match decl.val_kind with
               Val_prim _ -> () | _ -> incr pos
             end
