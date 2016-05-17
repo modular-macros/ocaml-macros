@@ -46,7 +46,7 @@ let rec strengthen env mty p =
 and strengthen_sig env sg p pos =
   match sg with
     [] -> []
-  | (Sig_value(_, desc) as sigelt) :: rem ->
+  | (Sig_value(_, _, desc) as sigelt) :: rem ->
       let nextpos = match desc.val_kind with Val_prim _ -> pos | _ -> pos+1 in
       sigelt :: strengthen_sig env rem p nextpos
   | Sig_type(id, {type_kind=Type_abstract}, _) ::
@@ -134,8 +134,8 @@ let nondep_supertype env mid mty =
   | item :: rem ->
       let rem' = nondep_sig env va rem in
       match item with
-        Sig_value(id, d) ->
-          Sig_value(id,
+        Sig_value(id, sf, d) ->
+          Sig_value(id, sf,
                     {d with val_type = Ctype.nondep_type env mid d.val_type})
           :: rem'
       | Sig_type(id, d, rs) ->
@@ -211,7 +211,7 @@ let rec type_paths env p mty =
 and type_paths_sig env p pos sg =
   match sg with
     [] -> []
-  | Sig_value(_id, decl) :: rem ->
+  | Sig_value(_id, _sf, decl) :: rem ->
       let pos' = match decl.val_kind with Val_prim _ -> pos | _ -> pos + 1 in
       type_paths_sig env p pos' rem
   | Sig_type(id, _decl, _) :: rem ->
@@ -236,7 +236,7 @@ let rec no_code_needed env mty =
 and no_code_needed_sig env sg =
   match sg with
     [] -> true
-  | Sig_value(_id, decl) :: rem ->
+  | Sig_value(_id, _sf, decl) :: rem ->
       begin match decl.val_kind with
       | Val_prim _ -> no_code_needed_sig env rem
       | _ -> false

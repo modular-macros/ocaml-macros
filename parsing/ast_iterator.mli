@@ -60,7 +60,8 @@ type iterator = {
   type_extension: iterator -> type_extension -> unit;
   type_kind: iterator -> type_kind -> unit;
   value_binding: iterator -> value_binding -> unit;
-  value_description: iterator -> value_description -> unit;
+  value_description: iterator ->
+    (Asttypes.static_flag * value_description) -> unit;
   with_constraint: iterator -> with_constraint -> unit;
 }
 (** A [iterator] record implements one "method" per syntactic category,

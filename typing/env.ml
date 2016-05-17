@@ -1287,7 +1287,7 @@ let scrape_alias env mty = scrape_alias env mty
 
 let rec prefix_idents root pos sub = function
     [] -> ([], sub)
-  | Sig_value(id, decl) :: rem ->
+  | Sig_value(id, _, decl) :: rem ->
       let p = Pdot(root, Ident.name id, pos) in
       let nextpos = match decl.val_kind with Val_prim _ -> pos | _ -> pos+1 in
       let (pl, final_sub) = prefix_idents root nextpos sub rem in
@@ -1330,8 +1330,8 @@ let subst_signature sub sg =
   List.map
     (fun item ->
       match item with
-      | Sig_value(id, decl) ->
-          Sig_value (id, Subst.value_description sub decl)
+      | Sig_value(id, sf, decl) ->
+          Sig_value (id, sf, Subst.value_description sub decl)
       | Sig_type(id, decl, x) ->
           Sig_type(id, Subst.type_declaration sub decl, x)
       | Sig_typext(id, ext, es) ->
@@ -1405,11 +1405,11 @@ and components_of_module_maker (env, sub, path, mty) =
       let pos = ref 0 in
       List.iter2 (fun item path ->
         match item with
-          Sig_value(id, decl) ->
+          Sig_value(id, sf, decl) ->
             let decl' = Subst.value_description sub decl in
             c.comp_values <-
               Tbl.add (Ident.name id) (decl', !pos) c.comp_values;
-            if lifted then
+            if lifted || sf = Static then
               c.comp_phases <- Tbl.add (Ident.name id) (1, !pos) c.comp_phases;
             begin match decl.val_kind with
               Val_prim _ -> () | _ -> incr pos
@@ -1747,7 +1747,12 @@ let enter_module ?arg s mty env =
 
 let add_item comp env =
   match comp with
-    Sig_value(id, decl)     -> add_value id decl env
+    Sig_value(id, sf, decl)     ->
+      let env = add_value id decl env in begin
+        match sf with
+        | Nonstatic -> env
+        | Static -> add_phase id 1 env
+      end
   | Sig_type(id, decl, _)   -> add_type ~check:false id decl env
   | Sig_typext(id, ext, _)  -> add_extension ~check:false id ext env
   | Sig_module(id, md, _)   -> add_module_declaration id md env
@@ -1773,8 +1778,12 @@ let open_signature slot root sg env0 =
     List.fold_left2
       (fun env item p ->
         match item with
-          Sig_value(id, decl) ->
-            store_value slot (Ident.hide id) p decl env env0
+          Sig_value(id, sf, decl) ->
+            let env = store_value slot (Ident.hide id) p decl env env0 in begin
+              match sf with
+              | Nonstatic -> env
+              | Static -> store_phase (Ident.hide id) p 1 env env0
+            end
         | Sig_type(id, decl, _) ->
             store_type ~check:false slot (Ident.hide id) p decl env env0
         | Sig_typext(id, ext, _) ->

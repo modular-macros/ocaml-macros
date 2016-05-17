@@ -63,7 +63,8 @@ type iterator = {
   type_extension: iterator -> type_extension -> unit;
   type_kind: iterator -> type_kind -> unit;
   value_binding: iterator -> value_binding -> unit;
-  value_description: iterator -> value_description -> unit;
+  value_description: iterator ->
+    (Asttypes.static_flag * value_description) -> unit;
   with_constraint: iterator -> with_constraint -> unit;
 }
 (** A [iterator] record implements one "method" per syntactic category,
@@ -233,7 +234,7 @@ module MT = struct
   let iter_signature_item sub {psig_desc = desc; psig_loc = loc} =
     sub.location sub loc;
     match desc with
-    | Psig_value vd -> sub.value_description sub vd
+    | Psig_value (sf, vd) -> sub.value_description sub (sf, vd)
     | Psig_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Psig_typext te -> sub.type_extension sub te
     | Psig_exception ed -> sub.extension_constructor sub ed
@@ -278,7 +279,7 @@ module M = struct
     | Pstr_eval (x, attrs) ->
         sub.expr sub x; sub.attributes sub attrs
     | Pstr_value (_, _r, vbs) -> List.iter (sub.value_binding sub) vbs
-    | Pstr_primitive vd -> sub.value_description sub vd
+    | Pstr_primitive vd -> sub.value_description sub (Asttypes.Nonstatic, vd)
     | Pstr_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Pstr_typext te -> sub.type_extension sub te
     | Pstr_exception ed -> sub.extension_constructor sub ed
@@ -490,8 +491,8 @@ let default_iterator =
     type_extension = T.iter_type_extension;
     extension_constructor = T.iter_extension_constructor;
     value_description =
-      (fun this {pval_name; pval_type; pval_prim = _; pval_loc;
-                 pval_attributes} ->
+      (fun this (_sf, {pval_name; pval_type; pval_prim = _; pval_loc;
+                      pval_attributes}) ->
         iter_loc this pval_name;
         this.typ this pval_type;
         this.attributes this pval_attributes;

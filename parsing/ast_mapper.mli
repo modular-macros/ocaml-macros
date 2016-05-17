@@ -95,7 +95,9 @@ type mapper = {
   type_extension: mapper -> type_extension -> type_extension;
   type_kind: mapper -> type_kind -> type_kind;
   value_binding: mapper -> value_binding -> value_binding;
-  value_description: mapper -> value_description -> value_description;
+  value_description:
+    mapper -> (Asttypes.static_flag * value_description)
+    -> (Asttypes.static_flag * value_description);
   with_constraint: mapper -> with_constraint -> with_constraint;
 }
 (** A mapper record implements one "method" per syntactic category,

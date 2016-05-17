@@ -174,7 +174,7 @@ end
 module Sig = struct
   let mk ?(loc = !default_loc) d = {psig_desc = d; psig_loc = loc}
 
-  let value ?loc a = mk ?loc (Psig_value a)
+  let value ?loc static_flag a = mk ?loc (Psig_value (static_flag, a))
   let type_ ?loc rec_flag a = mk ?loc (Psig_type (rec_flag, a))
   let type_extension ?loc a = mk ?loc (Psig_typext a)
   let exception_ ?loc a = mk ?loc (Psig_exception a)

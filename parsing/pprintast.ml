@@ -940,8 +940,10 @@ and signature_item ctxt f x : unit =
   match x.psig_desc with
   | Psig_type (rf, l) ->
       type_def_list ctxt f (rf, l)
-  | Psig_value vd ->
-      let intro = if vd.pval_prim = [] then "val" else "external" in
+  | Psig_value (sf, vd) ->
+      let intro =
+        (match sf with Nonstatic -> "" | Static -> "static ") ^
+        if vd.pval_prim = [] then "val" else "external" in
       pp f "@[<2>%s@ %a@ :@ %a@]%a" intro
         protect_ident vd.pval_name.txt
         (value_description ctxt) vd

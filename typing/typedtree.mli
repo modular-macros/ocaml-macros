@@ -354,7 +354,8 @@ and value_binding =
 
 and module_coercion =
     Tcoerce_none
-  | Tcoerce_structure of (int * module_coercion) list *
+  | Tcoerce_structure of (int * module_coercion) list * (* static part *)
+                         (int * module_coercion) list * (* runtime part *)
                          (Ident.t * int * module_coercion) list
   | Tcoerce_functor of module_coercion * module_coercion
   | Tcoerce_primitive of primitive_coercion
@@ -396,7 +397,7 @@ and signature_item =
     sig_loc: Location.t }
 
 and signature_item_desc =
-    Tsig_value of value_description
+    Tsig_value of static_flag * value_description
   | Tsig_type of rec_flag * type_declaration list
   | Tsig_typext of type_extension
   | Tsig_exception of extension_constructor

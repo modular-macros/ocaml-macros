@@ -17,7 +17,8 @@ open Typedtree
 
 module type MapArgument = sig
   val enter_structure : structure -> structure
-  val enter_value_description : value_description -> value_description
+  val enter_value_description : Asttypes.static_flag * value_description
+    -> Asttypes.static_flag * value_description
   val enter_type_declaration : type_declaration -> type_declaration
   val enter_type_extension : type_extension -> type_extension
   val enter_extension_constructor :
@@ -46,7 +47,8 @@ module type MapArgument = sig
   val enter_structure_item : structure_item -> structure_item
 
   val leave_structure : structure -> structure
-  val leave_value_description : value_description -> value_description
+  val leave_value_description : Asttypes.static_flag * value_description
+    -> Asttypes.static_flag * value_description
   val leave_type_declaration : type_declaration -> type_declaration
   val leave_type_extension : type_extension -> type_extension
   val leave_extension_constructor :
@@ -115,7 +117,8 @@ module MakeMap(Map : MapArgument) = struct
         | Tstr_value (static_flag, rec_flag, list) ->
           Tstr_value (static_flag, rec_flag, map_bindings list)
         | Tstr_primitive vd ->
-          Tstr_primitive (map_value_description vd)
+          let (_, v) = (map_value_description (Asttypes.Nonstatic, vd)) in
+          Tstr_primitive v
         | Tstr_type (rf, list) ->
           Tstr_type (rf, List.map map_type_declaration list)
         | Tstr_typext tyext ->
@@ -155,10 +158,11 @@ module MakeMap(Map : MapArgument) = struct
   and map_module_binding x =
     {x with mb_expr = map_module_expr x.mb_expr}
 
-  and map_value_description v =
-    let v = Map.enter_value_description v in
+  and map_value_description ((sf, v) : Asttypes.static_flag * Typedtree.value_description) :
+   Asttypes.static_flag * Typedtree.value_description =
+    let (sf, v) = Map.enter_value_description (sf, v) in
     let val_desc = map_core_type v.val_desc in
-    Map.leave_value_description { v with val_desc = val_desc }
+    Map.leave_value_description (sf, { v with val_desc = val_desc })
 
   and map_type_declaration decl =
     let decl = Map.enter_type_declaration decl in
@@ -424,8 +428,9 @@ module MakeMap(Map : MapArgument) = struct
     let item = Map.enter_signature_item item in
     let sig_desc =
       match item.sig_desc with
-          Tsig_value vd ->
-            Tsig_value (map_value_description vd)
+          Tsig_value (sf, vd) ->
+            let (sf, vd) = map_value_description (sf, vd) in
+            Tsig_value (sf, vd)
         | Tsig_type (rf, list) ->
             Tsig_type (rf, List.map map_type_declaration list)
         | Tsig_typext tyext ->
@@ -664,7 +669,7 @@ end
 module DefaultMapArgument = struct
 
   let enter_structure t = t
-  let enter_value_description t = t
+  let enter_value_description (sf, t) = (sf, t)
   let enter_type_declaration t = t
   let enter_type_extension t = t
   let enter_extension_constructor t = t
@@ -691,7 +696,7 @@ module DefaultMapArgument = struct
 
 
   let leave_structure t = t
-  let leave_value_description t = t
+  let leave_value_description (sf, t) = (sf, t)
   let leave_type_declaration t = t
   let leave_type_extension t = t
   let leave_extension_constructor t = t

@@ -319,7 +319,7 @@ let type_iterators =
   let it_signature it =
     List.iter (it.it_signature_item it)
   and it_signature_item it = function
-      Sig_value (_, vd)     -> it.it_value_description it vd
+      Sig_value (_, _, vd)     -> it.it_value_description it vd
     | Sig_type (_, td, _)   -> it.it_type_declaration it td
     | Sig_typext (_, td, _) -> it.it_extension_constructor it td
     | Sig_module (_, md, _) -> it.it_module_declaration it md

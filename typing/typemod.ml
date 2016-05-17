@@ -484,7 +484,7 @@ let check_sig_item names loc = function
 let simplify_signature sg =
   let rec aux = function
     | [] -> [], StringSet.empty
-    | (Sig_value(id, _descr) as component) :: sg ->
+    | (Sig_value(id, _sf, _descr) as component) :: sg ->
         let (sg, val_names) as k = aux sg in
         let name = Ident.name id in
         if StringSet.mem name val_names then k
@@ -578,14 +578,14 @@ and transl_signature env sg =
     | item :: srem ->
         let loc = item.psig_loc in
         match item.psig_desc with
-        | Psig_value sdesc ->
+        | Psig_value (sf, sdesc) ->
             let (tdesc, newenv) =
               Builtin_attributes.with_warning_attribute sdesc.pval_attributes
                 (fun () -> Typedecl.transl_value_decl env item.psig_loc sdesc)
             in
             let (trem,rem, final_env) = transl_sig newenv srem in
-            mksig (Tsig_value tdesc) env loc :: trem,
-            Sig_value(tdesc.val_id, tdesc.val_val) :: rem,
+            mksig (Tsig_value (sf, tdesc)) env loc :: trem,
+            Sig_value(tdesc.val_id, sf, tdesc.val_val) :: rem,
               final_env
         | Psig_type (rec_flag, sdecls) ->
             List.iter
@@ -862,13 +862,13 @@ let rec closed_modtype env = function
       closed_modtype env body
 
 and closed_signature_item env = function
-    Sig_value(_id, desc) -> Ctype.closed_schema env desc.val_type
+    Sig_value(_id, _sf, desc) -> Ctype.closed_schema env desc.val_type
   | Sig_module(_id, md, _) -> closed_modtype env md.md_type
   | _ -> true
 
 let check_nongen_scheme env sig_item =
   match sig_item with
-    Sig_value(_id, vd) ->
+    Sig_value(_id, _sf, vd) ->
       if not (Ctype.closed_schema env vd.val_type) then
         raise (Error (vd.val_loc, env, Non_generalizable vd.val_type))
   | Sig_module (_id, md, _) ->
@@ -1239,7 +1239,8 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                  inclusion test. *)
               Tstr_value(static_flag, rec_flag, defs),
               List.map
-                (fun id -> Sig_value(id, Env.find_value (Pident id) newenv))
+                (fun id ->
+                  Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
                 (let_bound_idents defs),
               newenv
           | Static ->
@@ -1247,12 +1248,16 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                 Typecore.type_binding
                   (Env.with_phase 1 env) rec_flag sdefs scope in
               Tstr_value(static_flag, rec_flag, defs),
-              [], (* static values are not included in signatures *)
+              List.map
+                (fun id ->
+                  Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
+                (let_bound_idents defs),
               newenv
         end
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
-        Tstr_primitive desc, [Sig_value(desc.val_id, desc.val_val)], newenv
+        Tstr_primitive
+          desc, [Sig_value(desc.val_id, Nonstatic, desc.val_val)], newenv
     | Pstr_type (rec_flag, sdecls) ->
         List.iter
           (fun decl -> check_name check_type names decl.ptype_name)
@@ -1507,7 +1512,7 @@ let rec normalize_modtype env = function
 and normalize_signature env = List.iter (normalize_signature_item env)
 
 and normalize_signature_item env = function
-    Sig_value(_id, desc) -> Ctype.normalize_type env desc.val_type
+    Sig_value(_id, _sf, desc) -> Ctype.normalize_type env desc.val_type
   | Sig_module(_id, md, _) -> normalize_modtype env md.md_type
   | _ -> ()
 

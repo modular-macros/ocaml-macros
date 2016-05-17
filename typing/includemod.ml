@@ -143,7 +143,7 @@ let kind_of_field_desc = function
   | Field_classtype _ -> "class type"
 
 let item_ident_name = function
-    Sig_value(id, d) -> (id, d.val_loc, Field_value(Ident.name id))
+    Sig_value(id, _, d) -> (id, d.val_loc, Field_value(Ident.name id))
   | Sig_type(id, d, _) -> (id, d.type_loc, Field_type(Ident.name id))
   | Sig_typext(id, d, _) -> (id, d.ext_loc, Field_typext(Ident.name id))
   | Sig_module(id, d, _) -> (id, d.md_loc, Field_module(Ident.name id))
@@ -152,11 +152,12 @@ let item_ident_name = function
   | Sig_class_type(id, d, _) -> (id, d.clty_loc, Field_classtype(Ident.name id))
 
 let is_runtime_component = function
-  | Sig_value(_,{val_kind = Val_prim _})
+  | Sig_value(_,_,{val_kind = Val_prim _})
+  | Sig_value(_,Asttypes.Static,_)
   | Sig_type(_,_,_)
   | Sig_modtype(_,_)
   | Sig_class_type(_,_,_) -> false
-  | Sig_value(_,_)
+  | Sig_value(_,_,_)
   | Sig_typext(_,_,_)
   | Sig_module(_,_,_)
   | Sig_class(_, _,_) -> true
@@ -174,9 +175,10 @@ let rec print_coercion ppf c =
   let pr fmt = Format.fprintf ppf fmt in
   match c with
     Tcoerce_none -> pr "id"
-  | Tcoerce_structure (fl, nl) ->
-      pr "@[<2>struct@ %a@ %a@]"
-        (print_list print_coercion2) fl
+  | Tcoerce_structure (stat_fl, rt_fl, nl) ->
+      pr "@[<2>struct@ static %a@ runtime %a@ %a@]"
+        (print_list print_coercion2) stat_fl
+        (print_list print_coercion2) rt_fl
         (print_list print_coercion3) nl
   | Tcoerce_functor (inp, out) ->
       pr "@[<2>functor@ (%a)@ (%a)@]"
@@ -197,15 +199,15 @@ and print_coercion3 ppf (i, n, c) =
 
 (* Simplify a structure coercion *)
 
-let simplify_structure_coercion cc id_pos_list =
+let simplify_structure_coercion stat_cc rt_cc id_pos_list =
   let rec is_identity_coercion pos = function
   | [] ->
       true
   | (n, c) :: rem ->
       n = pos && c = Tcoerce_none && is_identity_coercion (pos + 1) rem in
-  if is_identity_coercion 0 cc
+  if is_identity_coercion 0 stat_cc && is_identity_coercion 0 rt_cc
   then Tcoerce_none
-  else Tcoerce_structure (cc, id_pos_list)
+  else Tcoerce_structure (stat_cc, rt_cc, id_pos_list)
 
 (* Inclusion between module types.
    Return the restriction that transforms a value of the smaller type
@@ -320,13 +322,13 @@ and signatures env cxt subst sig1 sig2 =
       [] ->
         begin match unpaired with
             [] ->
-              let cc =
+              let (stat_cc, rt_cc) =
                 signature_components env new_env cxt subst (List.rev paired)
               in
               if len1 = len2 then (* see PR#5098 *)
-                simplify_structure_coercion cc id_pos_list
+                simplify_structure_coercion stat_cc rt_cc id_pos_list
               else
-                Tcoerce_structure (cc, id_pos_list)
+                Tcoerce_structure (stat_cc, rt_cc, id_pos_list)
           | _  -> raise(Error unpaired)
         end
     | item2 :: rem ->

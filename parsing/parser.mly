@@ -934,9 +934,9 @@ signature:
 ;
 signature_item:
     value_description
-      { let (body, ext) = $1 in mksig_ext (Psig_value body) ext }
+      { let (body, ext) = $1 in mksig_ext (Psig_value (Nonstatic, body)) ext }
   | primitive_declaration
-      { let (body, ext) = $1 in mksig_ext (Psig_value body) ext}
+      { let (body, ext) = $1 in mksig_ext (Psig_value (Nonstatic, body)) ext}
   | type_declarations
       { let (nr, l, ext) = $1 in mksig_ext (Psig_type (nr, List.rev l)) ext }
   | sig_type_extension

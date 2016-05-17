@@ -249,7 +249,7 @@ module Sig:
   sig
     val mk: ?loc:loc -> signature_item_desc -> signature_item
 
-    val value: ?loc:loc -> value_description -> signature_item
+    val value: ?loc:loc -> static_flag -> value_description -> signature_item
     val type_: ?loc:loc -> rec_flag -> type_declaration list -> signature_item
     val type_extension: ?loc:loc -> type_extension -> signature_item
     val exception_: ?loc:loc -> extension_constructor -> signature_item

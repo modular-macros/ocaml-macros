@@ -673,7 +673,7 @@ and signature_item =
     }
 
 and signature_item_desc =
-  | Psig_value of value_description
+  | Psig_value of static_flag * value_description
         (*
           val x: T
           external x: T = "s1" ... "sn"

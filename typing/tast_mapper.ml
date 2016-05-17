@@ -60,7 +60,8 @@ type mapper =
     value_binding: mapper -> value_binding -> value_binding;
     value_bindings: mapper -> (rec_flag * value_binding list) ->
       (rec_flag * value_binding list);
-    value_description: mapper -> value_description -> value_description;
+    value_description: mapper -> static_flag * value_description
+      -> static_flag * value_description;
     with_constraint: mapper -> with_constraint -> with_constraint;
   }
 
@@ -107,7 +108,8 @@ let structure_item sub {str_desc; str_loc; str_env} =
         let (rec_flag, list) =
           sub.value_bindings sub (rec_flag, list) in
         Tstr_value (static_flag, rec_flag, list)
-    | Tstr_primitive v -> Tstr_primitive (sub.value_description sub v)
+    | Tstr_primitive v ->
+        Tstr_primitive (snd (sub.value_description sub (Nonstatic, v)))
     | Tstr_type (rec_flag, list) ->
         let (rec_flag, list) = sub.type_declarations sub (rec_flag, list) in
         Tstr_type (rec_flag, list)
@@ -130,9 +132,9 @@ let structure_item sub {str_desc; str_loc; str_env} =
   in
   {str_desc; str_env; str_loc}
 
-let value_description sub x =
-  let val_desc = sub.typ sub x.val_desc in
-  {x with val_desc}
+let value_description sub (sf, v) =
+  let val_desc = sub.typ sub v.val_desc in
+  (sf, {v with val_desc})
 
 let label_decl sub x =
   let ld_type = sub.typ sub x.ld_type in
@@ -359,8 +361,9 @@ let signature_item sub x =
   let sig_env = sub.env sub x.sig_env in
   let sig_desc =
     match x.sig_desc with
-    | Tsig_value v ->
-        Tsig_value (sub.value_description sub v)
+    | Tsig_value (sf, v) ->
+        let (sf, v) = (sub.value_description sub (sf, v)) in
+        Tsig_value (sf, v)
     | Tsig_type (rec_flag, list) ->
         let (rec_flag, list) = sub.type_declarations sub (rec_flag, list) in
         Tsig_type (rec_flag, list)
@@ -425,12 +428,13 @@ let module_coercion sub = function
       Tcoerce_functor (sub.module_coercion sub c1, sub.module_coercion sub c2)
   | Tcoerce_alias (p, c1) ->
       Tcoerce_alias (p, sub.module_coercion sub c1)
-  | Tcoerce_structure (l1, l2) ->
+  | Tcoerce_structure (l1, l2, l3) ->
       let l1' = List.map (fun (i,c) -> i, sub.module_coercion sub c) l1 in
-      let l2' =
-        List.map (fun (id,i,c) -> id, i, sub.module_coercion sub c) l2
+      let l2' = List.map (fun (i,c) -> i, sub.module_coercion sub c) l2 in
+      let l3' =
+        List.map (fun (id,i,c) -> id, i, sub.module_coercion sub c) l3
       in
-      Tcoerce_structure (l1', l2')
+      Tcoerce_structure (l1', l2', l3')
   | Tcoerce_primitive pc ->
       Tcoerce_primitive {pc with pc_env = sub.env sub pc.pc_env}
 

@@ -63,7 +63,8 @@ type mapper = {
   type_extension: mapper -> T.type_extension -> type_extension;
   type_kind: mapper -> T.type_kind -> type_kind;
   value_binding: mapper -> T.value_binding -> value_binding;
-  value_description: mapper -> T.value_description -> value_description;
+  value_description: mapper -> static_flag * T.value_description
+    -> static_flag * value_description;
   with_constraint:
     mapper -> (Path.t * Longident.t Location.loc * T.with_constraint)
     -> with_constraint;
@@ -146,7 +147,7 @@ let structure_item sub item =
         Pstr_value
           (static_flag, rec_flag, List.map (sub.value_binding sub) list)
     | Tstr_primitive vd ->
-        Pstr_primitive (sub.value_description sub vd)
+        Pstr_primitive (snd (sub.value_description sub (Nonstatic, vd)))
     | Tstr_type (rec_flag, list) ->
         Pstr_type (rec_flag, List.map (sub.type_declaration sub) list)
     | Tstr_typext tyext ->
@@ -178,13 +179,15 @@ let structure_item sub item =
   in
   Str.mk ~loc desc
 
-let value_description sub v =
+let value_description sub (sf, v) =
   let loc = sub.location sub v.val_loc in
   let attrs = sub.attributes sub v.val_attributes in
+  (sf,
   Val.mk ~loc ~attrs
     ~prim:v.val_prim
     (map_loc sub v.val_name)
     (sub.typ sub v.val_desc)
+  )
 
 let module_binding sub mb =
   let loc = sub.location sub mb.mb_loc; in
@@ -490,8 +493,9 @@ let signature_item sub item =
   let loc = sub.location sub item.sig_loc; in
   let desc =
     match item.sig_desc with
-      Tsig_value v ->
-        Psig_value (sub.value_description sub v)
+      Tsig_value (sf, v) ->
+        let (sf, v) = (sub.value_description sub (sf, v)) in
+        Psig_value (sf, v)
     | Tsig_type (rec_flag, list) ->
         Psig_type (rec_flag, List.map (sub.type_declaration sub) list)
     | Tsig_typext tyext ->

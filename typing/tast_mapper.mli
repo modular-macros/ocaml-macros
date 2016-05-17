@@ -59,7 +59,8 @@ type mapper =
     value_binding: mapper -> value_binding -> value_binding;
     value_bindings: mapper -> (rec_flag * value_binding list) ->
       (rec_flag * value_binding list);
-    value_description: mapper -> value_description -> value_description;
+    value_description: mapper -> static_flag * value_description
+      -> static_flag * value_description;
     with_constraint: mapper -> with_constraint -> with_constraint;
   }
 

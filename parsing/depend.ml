@@ -336,7 +336,7 @@ and add_signature_binding bv sg =
 
 and add_sig_item (bv, m) item =
   match item.psig_desc with
-    Psig_value vd ->
+    Psig_value (_, vd) ->
       add_type bv vd.pval_type; (bv, m)
   | Psig_type (_, dcls) ->
       List.iter (add_type_declaration bv) dcls; (bv, m)

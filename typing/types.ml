@@ -249,7 +249,7 @@ type module_type =
 and signature = signature_item list
 
 and signature_item =
-    Sig_value of Ident.t * value_description
+    Sig_value of Ident.t * static_flag * value_description
   | Sig_type of Ident.t * type_declaration * rec_status
   | Sig_typext of Ident.t * extension_constructor * ext_status
   | Sig_module of Ident.t * module_declaration * rec_status

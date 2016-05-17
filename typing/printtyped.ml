@@ -634,8 +634,8 @@ and signature_item i ppf x =
   line i ppf "signature_item %a\n" fmt_location x.sig_loc;
   let i = i+1 in
   match x.sig_desc with
-  | Tsig_value vd ->
-      line i ppf "Tsig_value\n";
+  | Tsig_value (sf, vd) ->
+      line i ppf "Tsig_value %a\n" fmt_static_flag sf;
       value_description i ppf vd;
   | Tsig_type (rf, l) ->
       line i ppf "Tsig_type %a\n" fmt_rec_flag rf;

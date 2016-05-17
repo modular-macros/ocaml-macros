@@ -359,7 +359,7 @@ let rec rename_bound_idents s idents = function
       (* cheat and pretend they are types cf. PR#6650 *)
       let id' = Ident.rename id in
       rename_bound_idents (add_type id (Pident id') s) (id' :: idents) sg
-  | (Sig_value(id, _) | Sig_typext(id, _, _)) :: sg ->
+  | (Sig_value(id, _, _) | Sig_typext(id, _, _)) :: sg ->
       let id' = Ident.rename id in
       rename_bound_idents s (id' :: idents) sg
 
@@ -392,8 +392,8 @@ and signature s sg =
 
 and signature_component s comp newid =
   match comp with
-    Sig_value(_id, d) ->
-      Sig_value(newid, value_description s d)
+    Sig_value(_id, sf, d) ->
+      Sig_value(newid, sf, value_description s d)
   | Sig_type(_id, d, rs) ->
       Sig_type(newid, type_declaration s d, rs)
   | Sig_typext(_id, ext, es) ->

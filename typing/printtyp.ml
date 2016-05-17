@@ -1212,7 +1212,7 @@ and tree_of_signature_rec env' in_type_group = function
       trees @ tree_of_signature_rec env' in_type_group rem
 
 and trees_of_sigitem = function
-  | Sig_value(id, decl) ->
+  | Sig_value(id, _, decl) ->
       [tree_of_value_description id decl]
   | Sig_type(id, _, _) when is_row_name (Ident.name id) ->
       []
