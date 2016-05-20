@@ -67,6 +67,8 @@ and transl_structure fields = function
 and transl_module m =
   match m.mod_desc with
   | Tmod_structure str -> transl_structure [] str.str_items
-  | _ (* rest not supported *) ->
-      lambda_unit
+    (* other module expressions not supported *)
+  | _ -> lambda_unit
+    (* might result in segfaults if these unsupported constructions are used
+     * with static code in them *)
 
