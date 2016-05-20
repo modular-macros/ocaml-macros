@@ -81,8 +81,10 @@ let implementation ppf sourcefile outputprefix =
       Stypes.dump (Some (outputprefix ^ ".annot"))
     end else begin
       (* Execute static phrases *)
-      let stat_lam = Translstatic.transl_implementation typedtree in
-      let sstat_lam = Simplif.simplify_lambda stat_lam in
+      let stat_lam =
+        Translstatic.transl_implementation typedtree in
+      let sstat_lam =
+        Simplif.simplify_lambda stat_lam in
       let (init_code, fun_code) = Bytegen.compile_phrase sstat_lam in
       let (code, code_size, reloc, _) =
         Emitcode.to_memory init_code fun_code
