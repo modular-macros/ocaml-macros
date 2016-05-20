@@ -826,7 +826,7 @@ structure_item:
   | primitive_declaration
       { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
   | value_description
-      { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
+      { let (_, (body, ext)) = $1 in mkstr_ext (Pstr_primitive body) ext }
   | type_declarations
       { let (nr, l, ext ) = $1 in mkstr_ext (Pstr_type (nr, List.rev l)) ext }
   | str_type_extension
@@ -934,7 +934,7 @@ signature:
 ;
 signature_item:
     value_description
-      { let (body, ext) = $1 in mksig_ext (Psig_value (Nonstatic, body)) ext }
+      { let (sf, (body, ext)) = $1 in mksig_ext (Psig_value (sf, body)) ext }
   | primitive_declaration
       { let (body, ext) = $1 in mksig_ext (Psig_value (Nonstatic, body)) ext}
   | type_declarations
@@ -1906,11 +1906,16 @@ opt_pattern_type_constraint:
 /* Value descriptions */
 
 value_description:
-    VAL ext_attributes val_ident COLON core_type post_item_attributes
-      { let (ext, attrs) = $2 in
-        Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
-              ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
-      , ext }
+    VAL value_description_tail { (Nonstatic, $2) }
+  | STATIC VAL value_description_tail { (Static, $3) }
+;
+
+value_description_tail:
+  ext_attributes val_ident COLON core_type post_item_attributes
+    { let (ext, attrs) = $1 in
+      Val.mk (mkrhs $2 3) $4 ~attrs:(attrs@$5)
+            ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+    , ext }
 ;
 
 /* Primitive declarations */
