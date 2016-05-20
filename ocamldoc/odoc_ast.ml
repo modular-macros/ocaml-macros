@@ -958,7 +958,7 @@ module Analyser =
               | _ -> false)
         | Element_value v ->
             (function
-                Types.Sig_value (ident,_) ->
+                Types.Sig_value (ident,_,_) ->
                   let n1 = Name.simple v.val_name
                   and n2 = Ident.name ident in
                   n1 = n2

@@ -46,7 +46,8 @@ module Signature_search =
 
     let add_to_hash table signat =
       match signat with
-        Types.Sig_value (ident, _) ->
+        (* macros: static values not supported *)
+        Types.Sig_value (ident, _, _) ->
           Hashtbl.add table (V (Name.from_ident ident)) signat
       | Types.Sig_typext (ident, _, _) ->
           Hashtbl.add table (X (Name.from_ident ident)) signat
@@ -68,7 +69,8 @@ module Signature_search =
 
     let search_value table name =
       match Hashtbl.find table (V name) with
-      | (Types.Sig_value (_, val_desc)) ->  val_desc.Types.val_type
+        (* macros: static values not supported *)
+      | (Types.Sig_value (_, _, val_desc)) ->  val_desc.Types.val_type
       | _ -> assert false
 
     let search_extension table name =
@@ -589,7 +591,7 @@ module Analyser =
     and analyse_signature_item_desc env _signat table current_module_name
         sig_item_loc pos_start_ele pos_end_ele pos_limit comment_opt sig_item_desc =
         match sig_item_desc with
-          Parsetree.Psig_value value_desc ->
+          Parsetree.Psig_value (_, value_desc) ->
             let name_pre = value_desc.Parsetree.pval_name in
             let type_expr =
               try Signature_search.search_value table name_pre.txt

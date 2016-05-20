@@ -103,7 +103,8 @@ let is_constructor_typath p =
 let rec is_lifted = function
   | Pident id ->
       let name = Ident.name id in
-      String.length name <> 0 && name.[0] = '^'
+      String.length name > 1 && name.[0] = '^' &&
+        'A' <= name.[1] && name.[1] <= 'Z'
   | Pdot (p, _, _) -> is_lifted p
   | Papply (p, _) -> is_lifted p
 

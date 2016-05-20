@@ -53,7 +53,8 @@ let rec add_signature env root ?rel signat =
   in
   let f env item =
     match item with
-      Types.Sig_value (ident, _) -> { env with env_values = (rel_name ident, qualify ident) :: env.env_values }
+      (* macros: static components not supported *)
+      Types.Sig_value (ident, _, _) -> { env with env_values = (rel_name ident, qualify ident) :: env.env_values }
     | Types.Sig_type (ident,_,_) -> { env with env_types = (rel_name ident, qualify ident) :: env.env_types }
     | Types.Sig_typext (ident, _, _) -> { env with env_extensions = (rel_name ident, qualify ident) :: env.env_extensions }
     | Types.Sig_module (ident, md, _) ->

@@ -2494,7 +2494,7 @@ let rec event_branch repr lam =
   | (_, Some _) ->
       Printlambda.lambda Format.str_formatter lam ;
       fatal_error
-        ("Matching.event_branch: "^Format.flush_str_formatter ())
+        ("Matching.event_branch: " ^ Format.flush_str_formatter ())
   end
 
 

@@ -175,10 +175,9 @@ let rec print_coercion ppf c =
   let pr fmt = Format.fprintf ppf fmt in
   match c with
     Tcoerce_none -> pr "id"
-  | Tcoerce_structure (stat_fl, rt_fl, nl) ->
-      pr "@[<2>struct@ static %a@ runtime %a@ %a@]"
-        (print_list print_coercion2) stat_fl
-        (print_list print_coercion2) rt_fl
+  | Tcoerce_structure (fl, nl) ->
+      pr "@[<2>struct@ %a@ %a@]"
+        (print_list print_coercion2) fl
         (print_list print_coercion3) nl
   | Tcoerce_functor (inp, out) ->
       pr "@[<2>functor@ (%a)@ (%a)@]"
@@ -199,15 +198,15 @@ and print_coercion3 ppf (i, n, c) =
 
 (* Simplify a structure coercion *)
 
-let simplify_structure_coercion stat_cc rt_cc id_pos_list =
+let simplify_structure_coercion cc id_pos_list =
   let rec is_identity_coercion pos = function
   | [] ->
       true
   | (n, c) :: rem ->
       n = pos && c = Tcoerce_none && is_identity_coercion (pos + 1) rem in
-  if is_identity_coercion 0 stat_cc && is_identity_coercion 0 rt_cc
+  if is_identity_coercion 0 cc
   then Tcoerce_none
-  else Tcoerce_structure (stat_cc, rt_cc, id_pos_list)
+  else Tcoerce_structure (cc, id_pos_list)
 
 (* Inclusion between module types.
    Return the restriction that transforms a value of the smaller type
@@ -322,13 +321,13 @@ and signatures env cxt subst sig1 sig2 =
       [] ->
         begin match unpaired with
             [] ->
-              let (stat_cc, rt_cc) =
+              let cc =
                 signature_components env new_env cxt subst (List.rev paired)
               in
               if len1 = len2 then (* see PR#5098 *)
-                simplify_structure_coercion stat_cc rt_cc id_pos_list
+                simplify_structure_coercion cc id_pos_list
               else
-                Tcoerce_structure (stat_cc, rt_cc, id_pos_list)
+                Tcoerce_structure (cc, id_pos_list)
           | _  -> raise(Error unpaired)
         end
     | item2 :: rem ->
@@ -376,7 +375,7 @@ and signature_components old_env env cxt subst paired =
   let comps_rec rem = signature_components old_env env cxt subst rem in
   match paired with
     [] -> []
-  | (Sig_value(id1, valdecl1), Sig_value(_id2, valdecl2), pos) :: rem ->
+  | (Sig_value(id1, _, valdecl1), Sig_value(_id2, _, valdecl2), pos) :: rem ->
       let cc = value_descriptions env cxt subst id1 valdecl1 valdecl2 in
       begin match valdecl2.val_kind with
         Val_prim _ -> comps_rec rem

@@ -197,7 +197,7 @@ let init_shape modl =
   and init_shape_struct env sg =
     match sg with
       [] -> []
-    | Sig_value(_id, {val_kind=Val_reg; val_type=ty}) :: rem ->
+    | Sig_value(_id, Nonstatic, {val_kind=Val_reg; val_type=ty}) :: rem ->
         let init_v =
           match Ctype.expand_head env ty with
             {desc = Tarrow(_,_,_,_)} ->
@@ -206,7 +206,9 @@ let init_shape modl =
               Const_pointer 1 (* camlinternalMod.Lazy *)
           | _ -> raise Not_found in
         init_v :: init_shape_struct env rem
-    | Sig_value(_, {val_kind=Val_prim _}) :: rem ->
+    | Sig_value(_, Nonstatic, {val_kind=Val_prim _}) :: rem ->
+        init_shape_struct env rem
+    | Sig_value(_, Static, _) :: rem ->
         init_shape_struct env rem
     | Sig_value _ :: _rem ->
         assert false
@@ -321,8 +323,10 @@ let compile_recmodule compile_rhs bindings cont =
 
 let rec bound_value_identifiers = function
     [] -> []
-  | Sig_value(id, {val_kind = Val_reg}) :: rem ->
+  | Sig_value(id, Nonstatic, {val_kind = Val_reg}) :: rem ->
       id :: bound_value_identifiers rem
+  | Sig_value(_, Static, _) :: rem ->
+      bound_value_identifiers rem
   | Sig_typext(id, _, _) :: rem -> id :: bound_value_identifiers rem
   | Sig_module(id, _, _) :: rem -> id :: bound_value_identifiers rem
   | Sig_class(id, _, _) :: rem -> id :: bound_value_identifiers rem
