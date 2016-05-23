@@ -1906,16 +1906,16 @@ opt_pattern_type_constraint:
 /* Value descriptions */
 
 value_description:
-    VAL value_description_tail { (Nonstatic, $2) }
-  | STATIC VAL value_description_tail { (Static, $3) }
-;
-
-value_description_tail:
-  ext_attributes val_ident COLON core_type post_item_attributes
-    { let (ext, attrs) = $1 in
-      Val.mk (mkrhs $2 3) $4 ~attrs:(attrs@$5)
-            ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
-    , ext }
+    VAL ext_attributes val_ident COLON core_type post_item_attributes
+      { (Nonstatic, let (ext, attrs) = $2 in
+          Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
+                ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+        , ext) }
+  | STATIC VAL ext_attributes val_ident COLON core_type post_item_attributes
+      { (Static, let (ext, attrs) = $3 in
+          Val.mk (mkrhs $4 3) $6 ~attrs:(attrs@$7)
+                ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+        , ext) }
 ;
 
 /* Primitive declarations */
