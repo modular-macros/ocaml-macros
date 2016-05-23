@@ -68,7 +68,6 @@ let implementation ppf sourcefile outputprefix ~backend =
   Compmisc.init_path true;
   let modulename = module_of_filename ppf sourcefile outputprefix in
   Env.set_unit_name modulename;
-  let stat_env = Compmisc.initial_env() in
   let env = Compmisc.initial_env() in
   Compilenv.reset ~source_provenance ?packname:!Clflags.for_package modulename;
   let cmxfile = outputprefix ^ ".cmx" in
@@ -79,8 +78,7 @@ let implementation ppf sourcefile outputprefix ~backend =
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
       ++ print_if ppf Clflags.dump_source Pprintast.structure
       ++ Timings.(time (Typing sourcefile))
-          (Typemod.type_implementation sourcefile outputprefix modulename
-            stat_env env)
+          (Typemod.type_implementation sourcefile outputprefix modulename env)
       ++ print_if ppf Clflags.dump_typedtree
           Printtyped.implementation_with_coercion
     in
