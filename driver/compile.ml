@@ -80,17 +80,18 @@ let implementation ppf sourcefile outputprefix =
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"))
     end else begin
-      (* Execute static phrases *)
+      (* Save and run static code *)
       let stat_lam =
-        Translstatic.transl_implementation typedtree in
+        Translstatic.transl_implementation modulename typedtree in
       let sstat_lam =
         Simplif.simplify_lambda stat_lam in
       let (init_code, fun_code) = Bytegen.compile_phrase sstat_lam in
+      (* Execute static code *)
       let (code, code_size, reloc, _) =
         Emitcode.to_memory init_code fun_code
       in
       ignore (Symtable.init_toplevel ());
-      Cmo_load.load_deps ppf reloc
+      Cmo_load.load_deps ppf Asttypes.Static reloc
         (fun () -> ())
         (fun () -> ())
         (fun exn -> raise exn);
@@ -99,7 +100,6 @@ let implementation ppf sourcefile outputprefix =
       Symtable.update_global_table ();
       ignore ((Meta.reify_bytecode code code_size) ());
       Symtable.reset ();
-      (* Static phrases executed *)
       let bytecode =
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))
@@ -114,7 +114,7 @@ let implementation ppf sourcefile outputprefix =
       in
       let objfile = outputprefix ^ ".cmo" in
       let oc = open_out_bin objfile in
-      try
+      begin try
         bytecode
         ++ Timings.(accumulate_time (Generate sourcefile))
             (Emitcode.to_file oc modulename objfile);
@@ -124,6 +124,20 @@ let implementation ppf sourcefile outputprefix =
       with x ->
         close_out oc;
         remove_file objfile;
+        raise x
+      end;
+      (* Save static code *)
+      let stat_bytecode =
+        Bytegen.compile_implementation modulename sstat_lam in
+      let static_objfile = outputprefix ^ ".cmm" in
+      let s_oc = open_out_bin static_objfile in
+      try
+        stat_bytecode
+        ++ (Emitcode.to_file s_oc modulename static_objfile);
+        close_out s_oc
+      with x ->
+        close_out s_oc;
+        remove_file static_objfile;
         raise x
     end
   with x ->

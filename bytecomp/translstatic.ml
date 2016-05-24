@@ -14,9 +14,9 @@
 
 open Typedtree
 open Lambda
-open Tast_mapper
 open Asttypes
 
+(*
 let clear_lifting sub expr =
   let desc =
     match expr.exp_desc with
@@ -29,6 +29,7 @@ let clear_lifting sub expr =
 let clear_lifting_mapper =
   {Tast_mapper.default with expr =
     fun sub e -> clear_lifting sub e}
+*)
 
 let rec module_let_kind m =
   match m.mod_desc with
@@ -36,9 +37,13 @@ let rec module_let_kind m =
   | Tmod_constraint (m,_,_,_) -> module_let_kind m
   | _ -> Strict
 
-let rec transl_implementation str (* module coercion unhandled *) =
+let rec transl_implementation module_name str (* module coercion unhandled *) =
+  (*
   let str = clear_lifting_mapper.structure clear_lifting_mapper str in
-  transl_structure [] str.str_items
+  *)
+  let module_id = Ident.create_persistent module_name in
+  let body = transl_structure [] str.str_items in
+  Lprim (Psetglobal module_id, [body])
 
 and transl_structure fields = function
   | [] ->

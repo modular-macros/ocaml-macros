@@ -35,9 +35,11 @@ val load_file : bool -> Format.formatter -> string
   -> (unit -> unit) -> (unit -> unit) -> (exn -> unit)
   -> bool
 
-(** [load_deps reloc] loads all the .cmo dependencies of a compilation unit
-    (represented as its relocation information) into the bytecode symtable. *)
-val load_deps : Format.formatter -> (Cmo_format.reloc_info * int) list
+(** [load_deps ppf reloc before_ld after_ld on_failure] loads all the .cmo
+    dependencies of a compilation unit (represented as its relocation
+    information) into the bytecode symtable. *)
+val load_deps : Format.formatter -> Asttypes.static_flag
+  -> (Cmo_format.reloc_info * int) list
   -> (unit -> unit) -> (unit -> unit) -> (exn -> unit)
   -> unit
 
