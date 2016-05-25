@@ -46,6 +46,12 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
   String.unsafe_blit "\000\000\000\001\000\000\000" 0
                      code (compunit.cu_codesize + 1) 7;
   let initial_symtable = Symtable.current_state() in
+  let fmt_static oc = function
+    | Nonstatic -> output_string oc "Nonstatic"
+    | Static -> output_string oc "Static"
+  in
+  Printf.fprintf stderr "%s loaded with dependency scheme %a -> %a\n%!"
+    filename fmt_static (fst dependency) fmt_static (snd dependency);
   let unlifted_name = compunit.cu_name in
   let reloc_mapper = match dependency with
   | (Static, Nonstatic) -> (function
@@ -76,7 +82,8 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
     raise Load_failed
   end
 
-let rec load_file recursive ppf dependency name before_ld after_ld on_failure =
+let rec load_file recursive ppf dependency name before_ld after_ld
+    on_failure =
   let filename =
     try Some (find_in_path !Config.load_path name) with Not_found -> None
   in
@@ -103,7 +110,8 @@ and really_load_file recursive ppf name filename ic
       seek_in ic compunit_pos;
       let cu : compilation_unit = input_value ic in
       if recursive then
-        load_deps ppf (snd dependency) cu.cu_reloc before_ld after_ld on_failure;
+        load_deps ppf (snd dependency) cu.cu_reloc
+          before_ld after_ld on_failure;
       load_compunit ic filename ppf cu before_ld after_ld on_failure dependency;
       true
     end else
@@ -123,7 +131,8 @@ and really_load_file recursive ppf name filename ic
           lib.lib_dllibs;
         List.iter
           (fun cu ->
-            load_compunit ic filename ppf cu before_ld after_ld on_failure dependency)
+            load_compunit ic filename ppf cu before_ld after_ld on_failure
+              dependency)
           lib.lib_units;
         true
       end else begin
@@ -146,7 +155,8 @@ and load_deps ppf static_flag reloc before_ld after_ld on_failure =
             | None -> ()
             | Some file ->
                 if not (load_file
-                    true ppf (Nonstatic, Nonstatic) file before_ld after_ld on_failure) then
+                    true ppf (Nonstatic, Nonstatic) file before_ld
+                    after_ld on_failure) then
                   raise Load_failed
             end
         | _ -> ()
@@ -167,7 +177,8 @@ and load_deps ppf static_flag reloc before_ld after_ld on_failure =
              | None -> ()
              | Some file ->
                  if not (load_file
-                     true ppf (Static, Nonstatic) file before_ld after_ld on_failure) then
+                     true ppf (Static, Nonstatic) file
+                     before_ld after_ld on_failure) then
                    raise Load_failed
              end
            else
@@ -179,7 +190,8 @@ and load_deps ppf static_flag reloc before_ld after_ld on_failure =
              | None -> ()
              | Some file ->
                  if not (load_file
-                     true ppf (Static, Static) file before_ld after_ld on_failure) then
+                     true ppf (Static, Static) file
+                     before_ld after_ld on_failure) then
                    raise Load_failed
              end
        | _ -> ()

@@ -314,6 +314,21 @@ let init_toplevel () =
   with Bytesections.Bad_magic_number | Not_found | Failure _ ->
     fatal_error "Toplevel bytecode executable is corrupted"
 
+(* Initialize the linker for running static code *)
+
+let init_static () =
+  ignore (init_toplevel ());
+  (* Add lifting symbol to all global identifiers *)
+  let add_lifted_key k x tbl =
+    Tbl.add (Ident.create_persistent @@ "^" ^ Ident.name k) x tbl
+  in
+  let new_globals =
+    Tbl.fold add_lifted_key (!global_table).num_tbl (!global_table).num_tbl
+  in
+  global_table := { !global_table with
+    num_tbl = new_globals
+  }
+
 (* Find the value of a global identifier *)
 
 let get_global_position id = slot_for_getglobal id

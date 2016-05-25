@@ -84,13 +84,14 @@ let implementation ppf sourcefile outputprefix =
       let stat_lam =
         Translstatic.transl_implementation modulename typedtree in
       let sstat_lam =
+        print_if ppf (ref true) Printlambda.lambda @@
         Simplif.simplify_lambda stat_lam in
       let (init_code, fun_code) = Bytegen.compile_phrase sstat_lam in
       (* Execute static code *)
       let (code, code_size, reloc, _) =
         Emitcode.to_memory init_code fun_code
       in
-      ignore (Symtable.init_toplevel ());
+      Symtable.init_static ();
       Cmo_load.load_deps ppf Asttypes.Static reloc
         (fun () -> ())
         (fun () -> ())

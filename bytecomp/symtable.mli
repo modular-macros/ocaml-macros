@@ -33,6 +33,7 @@ val data_primitive_names: unit -> string
 (* Functions for the toplevel *)
 
 val init_toplevel: unit -> (string * Digest.t option) list
+val init_static: unit -> unit
 val update_global_table: unit -> unit
 val get_global_value: Ident.t -> Obj.t
 val is_global_defined: Ident.t -> bool
