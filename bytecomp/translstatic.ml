@@ -48,7 +48,10 @@ let rec transl_implementation module_name str (* module coercion unhandled *) =
 and transl_structure fields = function
   | [] ->
       Lprim(Pmakeblock (0, Immutable, None),
-        List.map (fun id -> Lvar id) (List.rev fields))
+        List.map (fun id ->
+          if Ident.name id = "0" then Lconst(Const_base(Const_int 0))
+          else Lvar id)
+          (List.rev fields))
   | item :: rem ->
     begin
       match item.str_desc with
@@ -56,6 +59,11 @@ and transl_structure fields = function
           let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
           let body = transl_structure ext_fields rem in
           Translcore.transl_let rec_flag pat_expr_list body
+      | Tstr_value(Asttypes.Nonstatic, _, pat_expr_list) ->
+          let placeholders = List.map (fun _ -> Ident.create_persistent "0")
+            @@ rev_let_bound_idents pat_expr_list
+          in
+          transl_structure (placeholders @ fields) rem
       | Tstr_module mb ->
           let id = mb.mb_id in
           let body = transl_structure (id :: fields) rem in
@@ -65,7 +73,7 @@ and transl_structure fields = function
           Llet(module_let_kind mb.mb_expr, Pgenval, id,
                module_body,
                body)
-      | _ -> (* everything but static bindings is ignored *)
+      | _ -> (* other items ignored *)
           transl_structure fields rem
     end
 

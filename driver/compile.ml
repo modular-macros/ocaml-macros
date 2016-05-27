@@ -67,7 +67,8 @@ let implementation ppf sourcefile outputprefix =
   Env.set_unit_name modulename;
   let env = Compmisc.initial_env() in
   try
-    let (typedtree, coercion) =
+    let (typedtree, _stat_coercion, rt_coercion)
+      : structure * module_coercion * module_coercion =
       Pparse.parse_implementation ~tool_name ppf sourcefile
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
       ++ print_if ppf Clflags.dump_source Pprintast.structure
@@ -80,7 +81,7 @@ let implementation ppf sourcefile outputprefix =
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"))
     end else begin
-      (* Save and run static code *)
+      (* Run static code *)
       let stat_lam =
         Translstatic.transl_implementation modulename typedtree in
       let sstat_lam =
@@ -102,7 +103,7 @@ let implementation ppf sourcefile outputprefix =
       ignore ((Meta.reify_bytecode code code_size) ());
       Symtable.reset ();
       let bytecode =
-        (typedtree, coercion)
+        (typedtree, rt_coercion)
         ++ Timings.(time (Transl sourcefile))
             (Translmod.transl_implementation modulename)
         ++ print_if ppf Clflags.dump_rawlambda Printlambda.lambda

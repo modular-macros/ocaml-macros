@@ -153,7 +153,6 @@ let item_ident_name = function
 
 let is_runtime_component = function
   | Sig_value(_,_,{val_kind = Val_prim _})
-  | Sig_value(_,Asttypes.Static,_)
   | Sig_type(_,_,_)
   | Sig_modtype(_,_)
   | Sig_class_type(_,_,_) -> false

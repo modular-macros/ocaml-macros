@@ -408,10 +408,15 @@ and transl_structure fields cc rootpath final_env = function
       let body, size =
         match cc with
           Tcoerce_none ->
+            Printf.fprintf stderr "Tcoerce_none\n%!";
             Lprim(Pmakeblock(0, Immutable, None),
-                  List.map (fun id -> Lvar id) (List.rev fields)),
+                  List.map (fun id ->
+                    if Ident.name id = "0" then Lconst(Const_base(Const_int 0))
+                    else Lvar id)
+                    (List.rev fields)),
               List.length fields
         | Tcoerce_structure(pos_cc_list, id_pos_list) ->
+            Printf.fprintf stderr "Tcoerce_structure\n%!";
                 (* Do not ignore id_pos_list ! *)
             (*Format.eprintf "%a@.@[" Includemod.print_coercion cc;
             List.iter (fun l -> Format.eprintf "%a@ " Ident.print l)
@@ -463,8 +468,14 @@ and transl_structure fields cc rootpath final_env = function
             let body, size =
               transl_structure ext_fields cc rootpath final_env rem in
             transl_let rec_flag pat_expr_list body, size
-          (* just ignore static items *)
-          | Static -> transl_structure fields cc rootpath final_env rem
+          (* Put zero as a placeholder for static items *)
+          | Static ->
+              let placeholders =
+                List.map (fun _ -> Ident.create_persistent "0") @@
+                  rev_let_bound_idents pat_expr_list
+              in
+              transl_structure (placeholders @ fields)
+                cc rootpath final_env rem
       )
       | Tstr_primitive descr ->
           record_primitive descr.val_val;
