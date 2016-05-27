@@ -21,7 +21,7 @@
 *.obj
 *.lib
 *.dll
-*.cm[ioxat]
+*.cm[iomxat]
 *.cmx[as]
 *.cmti
 *.annot
