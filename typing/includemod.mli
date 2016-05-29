@@ -29,7 +29,8 @@ val print_coercion: formatter -> module_coercion -> unit
 
 type symptom =
     Missing_field of Ident.t * Location.t * string (* kind *)
-  | Value_descriptions of Ident.t * value_description * value_description
+  | Value_descriptions of Ident.t * Asttypes.static_flag * value_description
+      * Asttypes.static_flag * value_description
   | Type_declarations of Ident.t * type_declaration
         * type_declaration * Includecore.type_mismatch list
   | Extension_constructors of

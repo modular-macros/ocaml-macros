@@ -1628,6 +1628,9 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
           raise(Error(Location.in_file sourcefile, Env.empty,
                       Interface_not_compiled sourceintf)) in
       let dclsig = Env.read_signature modulename intf_file in
+      (* First check that the inferred signature is included in the declared
+         one, then get separate coercions for runtime and static parts. *)
+      ignore (Includemod.compunit initial_env sourcefile sg intf_file dclsig);
       let (stat_dclsig, rt_dclsig) = split_by_phase dclsig in
       let (stat_sg, rt_sg) = split_by_phase sg in
       let (stat_coercion, rt_coercion) =

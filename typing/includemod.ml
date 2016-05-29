@@ -22,7 +22,8 @@ open Types
 
 type symptom =
     Missing_field of Ident.t * Location.t * string (* kind *)
-  | Value_descriptions of Ident.t * value_description * value_description
+  | Value_descriptions of Ident.t * Asttypes.static_flag * value_description *
+    Asttypes.static_flag * value_description
   | Type_declarations of Ident.t * type_declaration
         * type_declaration * Includecore.type_mismatch list
   | Extension_constructors of
@@ -53,14 +54,14 @@ exception Error of error list
 
 (* Inclusion between value descriptions *)
 
-let value_descriptions env cxt subst id vd1 vd2 =
+let value_descriptions env cxt subst id sf1 vd1 sf2 vd2 =
   Cmt_format.record_value_dependency vd1 vd2;
   Env.mark_value_used env (Ident.name id) vd1;
   let vd2 = Subst.value_description subst vd2 in
   try
-    Includecore.value_descriptions env vd1 vd2
+    Includecore.value_descriptions env sf1 vd1 sf2 vd2
   with Includecore.Dont_match ->
-    raise(Error[cxt, env, Value_descriptions(id, vd1, vd2)])
+    raise(Error[cxt, env, Value_descriptions(id, sf1, vd1, sf2, vd2)])
 
 (* Inclusion between type declarations *)
 
@@ -374,8 +375,8 @@ and signature_components old_env env cxt subst paired =
   let comps_rec rem = signature_components old_env env cxt subst rem in
   match paired with
     [] -> []
-  | (Sig_value(id1, _, valdecl1), Sig_value(_id2, _, valdecl2), pos) :: rem ->
-      let cc = value_descriptions env cxt subst id1 valdecl1 valdecl2 in
+  | (Sig_value(id1, sf1, valdecl1), Sig_value(_id2, sf2, valdecl2), pos) :: rem ->
+      let cc = value_descriptions env cxt subst id1 sf1 valdecl1 sf2 valdecl2 in
       begin match valdecl2.val_kind with
         Val_prim _ -> comps_rec rem
       | _ -> (pos, cc) :: comps_rec rem
@@ -489,10 +490,15 @@ let include_err ppf = function
   | Missing_field (id, loc, kind) ->
       fprintf ppf "The %s `%a' is required but not provided" kind ident id;
       show_loc "Expected declaration" ppf loc
-  | Value_descriptions(id, d1, d2) ->
+  | Value_descriptions(id, sf1, d1, sf2, d2) ->
+      let fmt_static ppf = function
+      | Asttypes.Static -> fprintf ppf "static "
+      | Asttypes.Nonstatic -> ()
+      in
       fprintf ppf
-        "@[<hv 2>Values do not match:@ %a@;<1 -2>is not included in@ %a@]"
-        (value_description id) d1 (value_description id) d2;
+        "@[<hv 2>Values do not match:@ %a%a@;<1 -2>is not included in@ %a%a@]"
+        fmt_static sf1 (value_description id) d1
+        fmt_static sf2 (value_description id) d2;
       show_locs ppf (d1.val_loc, d2.val_loc);
   | Type_declarations(id, d1, d2, errs) ->
       fprintf ppf "@[<v>@[<hv>%s:@;<1 2>%a@ %s@;<1 2>%a@]%a%a@]"
