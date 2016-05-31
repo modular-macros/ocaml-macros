@@ -1589,14 +1589,6 @@ let () =
   Typecore.type_package := type_package;
   type_module_type_of_fwd := type_module_type_of
 
-(* Split a signature into static and runtime parts *)
-let split_by_phase =
-  let is_static = function
-  | Sig_value (_, sf, _) -> sf = Static
-  | _ -> false
-  in
-  List.partition is_static
-
 (* Typecheck an implementation file *)
 
 let type_implementation sourcefile outputprefix modulename initial_env ast =
@@ -1616,7 +1608,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
     Printtyp.wrap_printing_env initial_env
       (fun () -> fprintf std_formatter "%a@." Printtyp.signature simple_sg);
     (* result is ignored by Compile.implementation *)
-    (str, Tcoerce_none, Tcoerce_none)
+    (str, Tcoerce_none)
   end else begin
     let sourceintf =
       Misc.chop_extension_if_any sourcefile ^ !Config.interface_suffix in
@@ -1630,12 +1622,8 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
       let dclsig = Env.read_signature modulename intf_file in
       (* First check that the inferred signature is included in the declared
          one, then get separate coercions for runtime and static parts. *)
-      ignore (Includemod.compunit initial_env sourcefile sg intf_file dclsig);
-      let (stat_dclsig, rt_dclsig) = split_by_phase dclsig in
-      let (stat_sg, rt_sg) = split_by_phase sg in
-      let (stat_coercion, rt_coercion) =
-        (Includemod.compunit initial_env sourcefile stat_sg intf_file stat_dclsig,
-         Includemod.compunit initial_env sourcefile rt_sg intf_file rt_dclsig)
+      let coercion =
+        Includemod.compunit initial_env sourcefile sg intf_file dclsig
       in
       Typecore.force_delayed_checks ();
       (* It is important to run these checks after the inclusion test above,
@@ -1643,17 +1631,13 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
          are not reported as being unused. *)
       Cmt_format.save_cmt (outputprefix ^ ".cmt") modulename
         (Cmt_format.Implementation str) (Some sourcefile) initial_env None;
-      (str, stat_coercion, rt_coercion)
+      (str, coercion)
     end else begin
       check_nongen_schemes finalenv sg;
       normalize_signature finalenv simple_sg;
-      let (stat_ssg, rt_ssg) = split_by_phase simple_sg in
-      let (stat_sg, rt_sg) = split_by_phase sg in
-      let (stat_coercion, rt_coercion) =
-        (Includemod.compunit initial_env sourcefile stat_sg
-           "(inferred signature)" stat_ssg,
-         Includemod.compunit initial_env sourcefile rt_sg
-           "(inferred signature)" rt_ssg)
+      let coercion =
+        Includemod.compunit initial_env sourcefile
+          sg "(inferred signature)" simple_sg
       in
       Typecore.force_delayed_checks ();
       (* See comment above. Here the target signature contains all
@@ -1670,7 +1654,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
           (Cmt_format.Implementation str)
           (Some sourcefile) initial_env (Some sg);
       end;
-      (str, stat_coercion, rt_coercion)
+      (str, coercion)
     end
     end
   with e ->

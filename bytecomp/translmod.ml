@@ -408,7 +408,6 @@ and transl_structure fields cc rootpath final_env = function
       let body, size =
         match cc with
           Tcoerce_none ->
-            Printf.fprintf stderr "Tcoerce_none\n%!";
             Lprim(Pmakeblock(0, Immutable, None),
                   List.map (fun id ->
                     if Ident.name id = "0" then Lconst(Const_base(Const_int 0))
@@ -416,14 +415,16 @@ and transl_structure fields cc rootpath final_env = function
                     (List.rev fields)),
               List.length fields
         | Tcoerce_structure(pos_cc_list, id_pos_list) ->
-            Printf.fprintf stderr "Tcoerce_structure\n%!";
                 (* Do not ignore id_pos_list ! *)
             (*Format.eprintf "%a@.@[" Includemod.print_coercion cc;
             List.iter (fun l -> Format.eprintf "%a@ " Ident.print l)
               fields;
             Format.eprintf "@]@.";*)
             let v = Array.of_list (List.rev fields) in
-            let get_field pos = Lvar v.(pos)
+            let get_field pos =
+              let id = v.(pos) in
+              if Ident.name id = "0" then Lconst (Const_base (Const_int 0))
+              else Lvar id
             and ids = List.fold_right IdentSet.add fields IdentSet.empty in
             let lam =
               (Lprim(Pmakeblock(0, Immutable, None),

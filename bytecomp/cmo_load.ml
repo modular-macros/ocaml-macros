@@ -46,12 +46,6 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
   String.unsafe_blit "\000\000\000\001\000\000\000" 0
                      code (compunit.cu_codesize + 1) 7;
   let initial_symtable = Symtable.current_state() in
-  let fmt_static oc = function
-    | Nonstatic -> output_string oc "Nonstatic"
-    | Static -> output_string oc "Static"
-  in
-  Printf.fprintf stderr "%s loaded with dependency scheme %a -> %a\n%!"
-    filename fmt_static (fst dependency) fmt_static (snd dependency);
   let unlifted_name = compunit.cu_name in
   let reloc_mapper = match dependency with
   | (Static, Nonstatic) -> (function

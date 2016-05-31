@@ -162,8 +162,7 @@ let process_file sourcefile =
          match parsetree_typedtree_opt with
            None ->
              None
-         | Some (parsetree, (str, _, rt_cc)) ->
-             let typedtree = (str, rt_cc) in (* macros: static components not handled *)
+         | Some (parsetree, typedtree) ->
              let file_module = Ast_analyser.analyse_typed_tree file
                  !Location.input_name parsetree typedtree
              in
