@@ -27,6 +27,9 @@ CAMLOPT=$(CAMLRUN) ./ocamlopt -g -nostdlib -I stdlib -I otherlibs/dynlink
 COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-41-42-44-45-48 -warn-error A \
           -bin-annot -safe-string -strict-formats $(INCLUDES)
 LINKFLAGS=
+# For debugging
+# COMPFLAGS=-warn-error A -g $(INCLUDES) # NNN
+# LINKFLAGS=-g #NNN
 
 YACCFLAGS=-v --strict
 CAMLLEX=$(CAMLRUN) boot/ocamllex
@@ -56,6 +59,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/ast_mapper.cmo parsing/ast_iterator.cmo parsing/attr_helper.cmo \
   parsing/builtin_attributes.cmo parsing/ast_invariants.cmo parsing/depend.cmo
 
+# NNN (trx)
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
   typing/btype.cmo typing/oprint.cmo \

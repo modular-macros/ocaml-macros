@@ -440,6 +440,8 @@ module MakeIterator(Iter : IteratorArgument) : sig
             ) list
         | Tmty_typeof mexpr ->
             iter_module_expr mexpr
+        | Texp_quote exp -> iter_expression exp
+        | Texp_escape exp -> iter_expression exp
       end;
       Iter.leave_module_type mty;
 

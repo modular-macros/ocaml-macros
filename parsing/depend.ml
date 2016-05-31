@@ -262,6 +262,8 @@ let rec add_expr bv exp =
   | Pexp_pack m -> add_module bv m
   | Pexp_open (_ovf, m, e) ->
       let bv = open_module bv m.txt in add_expr bv e
+  | Pexp_quote e -> add_expr bv e
+  | Pexp_escape e -> add_expr bv e
   | Pexp_extension (({ txt = ("ocaml.extension_constructor"|
                               "extension_constructor"); _ },
                      PStr [item]) as e) ->

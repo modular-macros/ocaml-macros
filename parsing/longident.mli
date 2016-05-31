@@ -15,7 +15,7 @@
 
 (** Long identifiers, used in parsetree. *)
 
-type t =
+type t = CamlinternalAST.lid =
     Lident of string
   | Ldot of t * string
   | Lapply of t * t

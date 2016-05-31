@@ -386,6 +386,8 @@ module MakeMap(Map : MapArgument) = struct
           Texp_object (map_class_structure cl, string_list)
         | Texp_pack (mexpr) ->
           Texp_pack (map_module_expr mexpr)
+        | Texp_quote exp -> Texp_quote (map_expression exp)
+        | Texp_escape exp -> Texp_escape (map_expression exp)
         | Texp_unreachable ->
           Texp_unreachable
         | Texp_extension_constructor _ as e ->

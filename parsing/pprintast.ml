@@ -47,6 +47,8 @@ let fixity_of_string  = function
 
 let view_fixity_of_exp = function
   | {pexp_desc = Pexp_ident {txt=Lident l;_};_} -> fixity_of_string l
+  | {pexp_desc = Pexp_ident {txt=Ldot (Lident "Pervasives",l);_};_} ->  (*NNN*)
+      fixity_of_string l                                                (*NNN*)
   | _ -> `Normal  ;;
 
 let is_infix  = function  | `Infix _ -> true | _  -> false
@@ -613,7 +615,11 @@ and expression ctxt f x =
           (expression ctxt) e
     | Pexp_variant (l,Some eo) ->
         pp f "@[<2>`%s@;%a@]" l (simple_expr ctxt) eo
-    | Pexp_extension e -> extension ctxt f e
+    | Pexp_quote e ->
+        pp f "@[<2><<@ %a@ >>@]" (expression ctxt)  e
+    | Pexp_escape e ->
+        pp f "@[<2>$%a>>@]" (simple_expr ctxt)  e
+    | Pexp_extension e -> (extension ctxt) ctxt f e
     | Pexp_unreachable -> pp f "."
     | _ -> expression1 ctxt f x
 

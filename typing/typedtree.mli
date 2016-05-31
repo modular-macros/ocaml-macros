@@ -209,6 +209,8 @@ and expression_desc =
   | Texp_assert of expression
   | Texp_lazy of expression
   | Texp_object of class_structure * string list
+  | Texp_quote of expression
+  | Texp_escape of expression
   | Texp_pack of module_expr
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t

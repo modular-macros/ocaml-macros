@@ -464,6 +464,9 @@ let package_type_of_module_type pmty =
 
 /* Tokens */
 
+%token LESSLESS
+%token GREATERGREATER
+%token DOLLAR
 %token AMPERAMPER
 %token AMPERSAND
 %token AND
@@ -641,6 +644,7 @@ The precedences must be listed from low to high.
 %nonassoc prec_unary_minus prec_unary_plus /* unary - */
 %nonassoc prec_constant_constructor     /* cf. simple_expr (C versus C x) */
 %nonassoc prec_constr_appl              /* above AS BAR COLONCOLON COMMA */
+%left	  prec_escape    /* NNN */
 %nonassoc below_HASH
 %nonassoc HASH                         /* simple_expr/toplevel_directive */
 %left     HASHOP
@@ -1480,6 +1484,10 @@ simple_expr:
       { reloc_exp $2 }
   | LPAREN seq_expr error
       { unclosed "(" 1 ")" 3 }
+  | LESSLESS expr GREATERGREATER
+      { mkexp(Pexp_quote $2) }
+  | DOLLAR simple_expr %prec prec_escape  /* NNN */
+      { mkexp(Pexp_escape $2) }             /* NNN */
   | BEGIN ext_attributes seq_expr END
       { wrap_exp_attrs (reloc_exp $3) $2 (* check location *) }
   | BEGIN ext_attributes END
@@ -2425,6 +2433,7 @@ operator:
   | PLUSEQ                                      { "+=" }
   | PERCENT                                     { "%" }
 ;
+
 constr_ident:
     UIDENT                                      { $1 }
   | LBRACKET RBRACKET                           { "[]" }

@@ -17,7 +17,7 @@
 
 open Format
 
-type t = {
+type t = CamlinternalAST.location = {
   loc_start: Lexing.position;
   loc_end: Lexing.position;
   loc_ghost: bool;

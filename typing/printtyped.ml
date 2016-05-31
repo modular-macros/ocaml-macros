@@ -388,6 +388,12 @@ and expression i ppf x =
   | Texp_pack me ->
       line i ppf "Texp_pack";
       module_expr i ppf me
+  | Texp_quote e ->
+      line i ppf "Pexp_quote";
+      expression i ppf e
+  | Texp_escape e ->
+      line i ppf "Pexp_escape";
+      expression i ppf e
   | Texp_unreachable ->
       line i ppf "Texp_unreachable"
   | Texp_extension_constructor (li, _) ->

@@ -377,6 +377,12 @@ and expression i ppf x =
       line i ppf "Pexp_open %a \"%a\"\n" fmt_override_flag ovf
         fmt_longident_loc m;
       expression i ppf e
+  | Pexp_quote arg ->
+      line i ppf "Pexp_quote\n";
+      expression i ppf arg
+  | Pexp_escape arg ->
+      line i ppf "Pexp_escape\n";
+      expression i ppf arg
   | Pexp_extension (s, arg) ->
       line i ppf "Pexp_extension \"%s\"\n" s.txt;
       payload i ppf arg

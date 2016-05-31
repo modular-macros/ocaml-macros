@@ -345,12 +345,14 @@ and expression_desc =
         (* let open M in E
            let! open M in E
         *)
+  | Pexp_quote of expression
+  | Pexp_escape of expression
   | Pexp_extension of extension
         (* [%id] *)
   | Pexp_unreachable
         (* . *)
 
-and case =   (* (P -> E) or (P when E0 -> E) *)
+and case = (* (P -> E) or (P when E0 -> E) *)
     {
      pc_lhs: pattern;
      pc_guard: expression option;

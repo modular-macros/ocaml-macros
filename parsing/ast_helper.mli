@@ -161,6 +161,9 @@ module Exp:
     val pack: ?loc:loc -> ?attrs:attrs -> module_expr -> expression
     val open_: ?loc:loc -> ?attrs:attrs -> override_flag -> lid -> expression
                -> expression
+    val quote : ?loc:loc -> ?attrs:attrs -> expression -> expression
+    val escape : ?loc:loc -> ?attrs:attrs -> expression -> expression
+
     val extension: ?loc:loc -> ?attrs:attrs -> extension -> expression
     val unreachable: ?loc:loc -> ?attrs:attrs -> unit -> expression
 
