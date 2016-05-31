@@ -361,6 +361,8 @@ module E = struct
         sub.expr sub e
     | Pexp_assert e -> sub.expr sub e
     | Pexp_lazy e -> sub.expr sub e
+    | Pexp_quote e -> sub.expr sub e
+    | Pexp_escape e -> sub.expr sub e
     | Pexp_poly (e, t) ->
         sub.expr sub e; iter_opt (sub.typ sub) t
     | Pexp_object cls -> sub.class_structure sub cls

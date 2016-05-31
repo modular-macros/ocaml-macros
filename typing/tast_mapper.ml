@@ -336,6 +336,10 @@ let expr sub x =
         Texp_assert (sub.expr sub exp)
     | Texp_lazy exp ->
         Texp_lazy (sub.expr sub exp)
+    | Texp_quote exp ->
+        Texp_quote (sub.expr sub exp)
+    | Texp_escape exp ->
+        Texp_escape (sub.expr sub exp)
     | Texp_object (cl, sl) ->
         Texp_object (sub.class_structure sub cl, sl)
     | Texp_pack mexpr ->

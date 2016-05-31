@@ -239,12 +239,6 @@ module Map : sig
 
   val add : Symbol.t -> 'a -> 'a t -> 'a t
 
-  val find : Symbol.t -> 'a t -> 'a
-
-  val find_list : Symbol.t -> 'a t list -> 'a
-
-  val find_alist : Symbol.t -> ('a t * 'b) list -> 'a
-
   val iter : ('a -> unit) -> 'a t -> unit
 
   val merge : ('a -> 'a -> unit) -> 'a t -> 'a t -> 'a t
@@ -265,28 +259,12 @@ end = struct
 
   let add = SymbolMap.add
 
-  let find = SymbolMap.find
-
-  let rec find_list sym = function
-    | [] -> raise Not_found
-    | heap :: rest ->
-        match find sym heap with
-        | exception Not_found -> find_list sym rest
-        | v -> v
-
-  let rec find_alist sym = function
-    | [] -> raise Not_found
-    | (heap, _) :: rest ->
-        match find sym heap with
-        | exception Not_found -> find_alist sym rest
-        | v -> v
-
   let iter f t =
     SymbolMap.iter (fun _ v -> f v) t
 
   let merge intersection t1 t2 =
     SymbolMap.merge
-      (fun x v1 v2 ->
+      (fun _ v1 v2 ->
         match v1, v2 with
         | None, None -> None
         | Some v, None -> Some v
@@ -302,12 +280,12 @@ end = struct
   let same left t1 right t2 =
     ignore
       (SymbolMap.merge
-         (fun x v1 v2 ->
+         (fun _ v1 v2 ->
            match v1, v2 with
            | None, None -> None
            | Some v, None -> left v; None
            | None, Some v -> right v; None
-           | Some v, Some _  -> None)
+           | Some _, Some _  -> None)
          t1 t2)
 
 end
@@ -900,7 +878,7 @@ module Case = struct
 
   let nonbinding loc lhs rhs =
     let lhs = PatRepr.nonbinding loc lhs in
-    let heap, rhs = ExpRepr.merge loc heap rhs in
+    let heap, rhs = ExpRepr.merge loc Heap.empty rhs in
       mk heap lhs None rhs
 
   let simple loc name f =

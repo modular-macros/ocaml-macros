@@ -38,32 +38,32 @@ module Name = struct
   let unmarshal = combinator "Name" "unmarshal"
 end
 
-module Var : sig
+module Var = struct
   let name = combinator "Var" "name"
 end
 
-module Constant : sig
+module Constant = struct
   let unmarshal = combinator "Constant" "unmarshal"
 end
 
-module Ident : sig
+module Ident = struct
   let unmarshal = combinator "Ident" "unmarshal"
 end
 
-module Label : sig
+module Label = struct
   let none = combinator "Label" "none"
   let of_string = combinator "Label" "of_string"
 end
 
-module Variant : sig
+module Variant = struct
   let of_string = combinator "Variant" "of_string"
 end
 
-module Method : sig
+module Method = struct
   let of_string = combinator "Method" "of_string"
 end
 
-module Pat : sig
+module Pat = struct
   let any = combinator "Pat" "any"
   let var = combinator "Pat" "var"
   let alias = combinator "Pat" "alias"
@@ -80,14 +80,14 @@ module Pat : sig
   let exception_ = combinator "Pat" "exception"
 end
 
-module rec Case : sig
+module rec Case = struct
   let nonbinding = combinator "Case" "nonbinding"
   let simple = combinator "Case" "simple"
   let pattern = combinator "Case" "pattern"
   let guarded = combinator "Case" "guarded"
 end
 
-and Exp : sig
+and Exp = struct
   let var = combinator "Exp" "var"
   let ident = combinator "Exp" "ident"
   let constant = combinator "Exp" "constant"
@@ -355,7 +355,7 @@ let rec case_binding exn transl stage cases =
         bind pat_id pat
           (bind guard_id guard
             (bind exp_id exp
-              (triple (Lvar pat_id, Lvar guard_id, Lvar exp_id)))
+              (triple (Lvar pat_id, Lvar guard_id, Lvar exp_id))))
       in
       Guarded(list names, func ids body)
 
@@ -393,7 +393,7 @@ and quote_expression transl stage e =
   | Texp_constant const ->
       let const = quote_constant loc const in
       apply loc Exp.constant [quote_loc loc; const]
-  | Texp_let of rec_flag * value_binding list * expression
+  | Texp_let _ -> assert false (* TODO *)
   | Texp_function(label, cases, _) -> begin
       let cbs = List.map (case_binding transl stage) cases in
       match cbs with
@@ -487,9 +487,7 @@ and quote_expression transl stage e =
       let cond = quote_expression transl stage cond in
       let body = quote_expression transl stage body in
       apply loc Exp.while_ [quote_loc loc; cond; body]
-  | Texp_for of
-      Ident.t * Parsetree.pattern * expression * expression * direction_flag *
-        expression
+  | Texp_for _ -> assert false (* TODO *)
   | Texp_send(obj, meth, _) ->
       let obj = quote_expression transl stage obj in
       let meth = quote_method meth in

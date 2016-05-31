@@ -352,6 +352,8 @@ module MakeIterator(Iter : IteratorArgument) : sig
             iter_class_structure cl
         | Texp_pack (mexpr) ->
             iter_module_expr mexpr
+        | Texp_quote exp -> iter_expression exp
+        | Texp_escape exp -> iter_expression exp
         | Texp_unreachable ->
             ()
         | Texp_extension_constructor _ ->
@@ -440,8 +442,6 @@ module MakeIterator(Iter : IteratorArgument) : sig
             ) list
         | Tmty_typeof mexpr ->
             iter_module_expr mexpr
-        | Texp_quote exp -> iter_expression exp
-        | Texp_escape exp -> iter_expression exp
       end;
       Iter.leave_module_type mty;
 

@@ -59,10 +59,11 @@ parsing/ast_invariants.cmx : parsing/syntaxerr.cmx parsing/parsetree.cmi \
     parsing/ast_iterator.cmx parsing/ast_invariants.cmi
 parsing/ast_invariants.cmi : parsing/parsetree.cmi
 parsing/ast_iterator.cmo : parsing/parsetree.cmi parsing/location.cmi \
-    parsing/ast_iterator.cmi
+    parsing/asttypes.cmi parsing/ast_iterator.cmi
 parsing/ast_iterator.cmx : parsing/parsetree.cmi parsing/location.cmx \
-    parsing/ast_iterator.cmi
-parsing/ast_iterator.cmi : parsing/parsetree.cmi parsing/location.cmi
+    parsing/asttypes.cmi parsing/ast_iterator.cmi
+parsing/ast_iterator.cmi : parsing/parsetree.cmi parsing/location.cmi \
+    parsing/asttypes.cmi
 parsing/ast_mapper.cmo : parsing/parsetree.cmi utils/misc.cmi \
     parsing/longident.cmi parsing/location.cmi utils/config.cmi \
     utils/clflags.cmi parsing/asttypes.cmi parsing/ast_helper.cmi \
@@ -71,7 +72,8 @@ parsing/ast_mapper.cmx : parsing/parsetree.cmi utils/misc.cmx \
     parsing/longident.cmx parsing/location.cmx utils/config.cmx \
     utils/clflags.cmx parsing/asttypes.cmi parsing/ast_helper.cmx \
     parsing/ast_mapper.cmi
-parsing/ast_mapper.cmi : parsing/parsetree.cmi parsing/location.cmi
+parsing/ast_mapper.cmi : parsing/parsetree.cmi parsing/location.cmi \
+    parsing/asttypes.cmi
 parsing/asttypes.cmi : parsing/location.cmi
 parsing/attr_helper.cmo : parsing/parsetree.cmi parsing/location.cmi \
     parsing/asttypes.cmi parsing/attr_helper.cmi
@@ -149,6 +151,160 @@ parsing/printast.cmi : parsing/parsetree.cmi
 parsing/syntaxerr.cmo : parsing/location.cmi parsing/syntaxerr.cmi
 parsing/syntaxerr.cmx : parsing/location.cmx parsing/syntaxerr.cmi
 parsing/syntaxerr.cmi : parsing/location.cmi
+stdlib/arg.cmo : stdlib/arg.cmi
+stdlib/arg.cmx : stdlib/arg.cmi
+stdlib/arg.cmi :
+stdlib/array.cmo : stdlib/array.cmi
+stdlib/array.cmx : stdlib/array.cmi
+stdlib/array.cmi :
+stdlib/arrayLabels.cmo : stdlib/arrayLabels.cmi
+stdlib/arrayLabels.cmx : stdlib/arrayLabels.cmi
+stdlib/arrayLabels.cmi :
+stdlib/buffer.cmo : stdlib/buffer.cmi
+stdlib/buffer.cmx : stdlib/buffer.cmi
+stdlib/buffer.cmi :
+stdlib/bytes.cmo : stdlib/bytes.cmi
+stdlib/bytes.cmx : stdlib/bytes.cmi
+stdlib/bytes.cmi :
+stdlib/bytesLabels.cmo : stdlib/bytesLabels.cmi
+stdlib/bytesLabels.cmx : stdlib/bytesLabels.cmi
+stdlib/bytesLabels.cmi :
+stdlib/callback.cmo : stdlib/callback.cmi
+stdlib/callback.cmx : stdlib/callback.cmi
+stdlib/callback.cmi :
+stdlib/camlinternalAST.cmi :
+stdlib/camlinternalFormat.cmo : stdlib/camlinternalFormat.cmi
+stdlib/camlinternalFormat.cmx : stdlib/camlinternalFormat.cmi
+stdlib/camlinternalFormat.cmi :
+stdlib/camlinternalFormatBasics.cmo : stdlib/camlinternalFormatBasics.cmi
+stdlib/camlinternalFormatBasics.cmx : stdlib/camlinternalFormatBasics.cmi
+stdlib/camlinternalFormatBasics.cmi :
+stdlib/camlinternalLazy.cmo : stdlib/camlinternalLazy.cmi
+stdlib/camlinternalLazy.cmx : stdlib/camlinternalLazy.cmi
+stdlib/camlinternalLazy.cmi :
+stdlib/camlinternalMod.cmo : stdlib/camlinternalMod.cmi
+stdlib/camlinternalMod.cmx : stdlib/camlinternalMod.cmi
+stdlib/camlinternalMod.cmi :
+stdlib/camlinternalOO.cmo : stdlib/camlinternalOO.cmi
+stdlib/camlinternalOO.cmx : stdlib/camlinternalOO.cmi
+stdlib/camlinternalOO.cmi :
+stdlib/camlinternalQuote.cmo : stdlib/camlinternalQuote.cmi
+stdlib/camlinternalQuote.cmx : stdlib/camlinternalQuote.cmi
+stdlib/camlinternalQuote.cmi :
+stdlib/char.cmo : stdlib/char.cmi
+stdlib/char.cmx : stdlib/char.cmi
+stdlib/char.cmi :
+stdlib/complex.cmo : stdlib/complex.cmi
+stdlib/complex.cmx : stdlib/complex.cmi
+stdlib/complex.cmi :
+stdlib/digest.cmo : stdlib/digest.cmi
+stdlib/digest.cmx : stdlib/digest.cmi
+stdlib/digest.cmi :
+stdlib/ephemeron.cmo : stdlib/ephemeron.cmi
+stdlib/ephemeron.cmx : stdlib/ephemeron.cmi
+stdlib/ephemeron.cmi :
+stdlib/filename.cmo : stdlib/filename.cmi
+stdlib/filename.cmx : stdlib/filename.cmi
+stdlib/filename.cmi :
+stdlib/format.cmo : stdlib/format.cmi
+stdlib/format.cmx : stdlib/format.cmi
+stdlib/format.cmi :
+stdlib/gc.cmo : stdlib/gc.cmi
+stdlib/gc.cmx : stdlib/gc.cmi
+stdlib/gc.cmi :
+stdlib/genlex.cmo : stdlib/genlex.cmi
+stdlib/genlex.cmx : stdlib/genlex.cmi
+stdlib/genlex.cmi :
+stdlib/hashtbl.cmo : stdlib/hashtbl.cmi
+stdlib/hashtbl.cmx : stdlib/hashtbl.cmi
+stdlib/hashtbl.cmi :
+stdlib/int32.cmo : stdlib/int32.cmi
+stdlib/int32.cmx : stdlib/int32.cmi
+stdlib/int32.cmi :
+stdlib/int64.cmo : stdlib/int64.cmi
+stdlib/int64.cmx : stdlib/int64.cmi
+stdlib/int64.cmi :
+stdlib/lazy.cmo : stdlib/lazy.cmi
+stdlib/lazy.cmx : stdlib/lazy.cmi
+stdlib/lazy.cmi :
+stdlib/lexing.cmo : stdlib/lexing.cmi
+stdlib/lexing.cmx : stdlib/lexing.cmi
+stdlib/lexing.cmi :
+stdlib/list.cmo : stdlib/list.cmi
+stdlib/list.cmx : stdlib/list.cmi
+stdlib/list.cmi :
+stdlib/listLabels.cmo : stdlib/listLabels.cmi
+stdlib/listLabels.cmx : stdlib/listLabels.cmi
+stdlib/listLabels.cmi :
+stdlib/map.cmo : stdlib/map.cmi
+stdlib/map.cmx : stdlib/map.cmi
+stdlib/map.cmi :
+stdlib/marshal.cmo : stdlib/marshal.cmi
+stdlib/marshal.cmx : stdlib/marshal.cmi
+stdlib/marshal.cmi :
+stdlib/moreLabels.cmo : stdlib/moreLabels.cmi
+stdlib/moreLabels.cmx : stdlib/moreLabels.cmi
+stdlib/moreLabels.cmi :
+stdlib/nativeint.cmo : stdlib/nativeint.cmi
+stdlib/nativeint.cmx : stdlib/nativeint.cmi
+stdlib/nativeint.cmi :
+stdlib/obj.cmo : stdlib/obj.cmi
+stdlib/obj.cmx : stdlib/obj.cmi
+stdlib/obj.cmi :
+stdlib/oo.cmo : stdlib/oo.cmi
+stdlib/oo.cmx : stdlib/oo.cmi
+stdlib/oo.cmi :
+stdlib/parsing.cmo : stdlib/parsing.cmi
+stdlib/parsing.cmx : stdlib/parsing.cmi
+stdlib/parsing.cmi :
+stdlib/pervasives.cmo : stdlib/pervasives.cmi
+stdlib/pervasives.cmx : stdlib/pervasives.cmi
+stdlib/pervasives.cmi :
+stdlib/printexc.cmo : stdlib/printexc.cmi
+stdlib/printexc.cmx : stdlib/printexc.cmi
+stdlib/printexc.cmi :
+stdlib/printf.cmo : stdlib/printf.cmi
+stdlib/printf.cmx : stdlib/printf.cmi
+stdlib/printf.cmi :
+stdlib/queue.cmo : stdlib/queue.cmi
+stdlib/queue.cmx : stdlib/queue.cmi
+stdlib/queue.cmi :
+stdlib/random.cmo : stdlib/random.cmi
+stdlib/random.cmx : stdlib/random.cmi
+stdlib/random.cmi :
+stdlib/scanf.cmo : stdlib/scanf.cmi
+stdlib/scanf.cmx : stdlib/scanf.cmi
+stdlib/scanf.cmi :
+stdlib/set.cmo : stdlib/set.cmi
+stdlib/set.cmx : stdlib/set.cmi
+stdlib/set.cmi :
+stdlib/sort.cmo : stdlib/sort.cmi
+stdlib/sort.cmx : stdlib/sort.cmi
+stdlib/sort.cmi :
+stdlib/stack.cmo : stdlib/stack.cmi
+stdlib/stack.cmx : stdlib/stack.cmi
+stdlib/stack.cmi :
+stdlib/stdLabels.cmo : stdlib/stdLabels.cmi
+stdlib/stdLabels.cmx : stdlib/stdLabels.cmi
+stdlib/stdLabels.cmi :
+stdlib/std_exit.cmo :
+stdlib/std_exit.cmx :
+stdlib/stream.cmo : stdlib/stream.cmi
+stdlib/stream.cmx : stdlib/stream.cmi
+stdlib/stream.cmi :
+stdlib/string.cmo : stdlib/string.cmi
+stdlib/string.cmx : stdlib/string.cmi
+stdlib/string.cmi :
+stdlib/stringLabels.cmo : stdlib/stringLabels.cmi
+stdlib/stringLabels.cmx : stdlib/stringLabels.cmi
+stdlib/stringLabels.cmi :
+stdlib/sys.cmi :
+stdlib/uchar.cmo : stdlib/uchar.cmi
+stdlib/uchar.cmx : stdlib/uchar.cmi
+stdlib/uchar.cmi :
+stdlib/weak.cmo : stdlib/weak.cmi
+stdlib/weak.cmx : stdlib/weak.cmi
+stdlib/weak.cmi :
 typing/annot.cmi : parsing/location.cmi
 typing/btype.cmo : typing/types.cmi typing/path.cmi utils/misc.cmi \
     typing/ident.cmi parsing/asttypes.cmi typing/btype.cmi
@@ -226,22 +382,22 @@ typing/includecore.cmx : typing/types.cmx typing/typedtree.cmx \
     typing/ctype.cmx typing/btype.cmx parsing/asttypes.cmi \
     typing/includecore.cmi
 typing/includecore.cmi : typing/types.cmi typing/typedtree.cmi \
-    typing/ident.cmi typing/env.cmi
+    typing/ident.cmi typing/env.cmi parsing/asttypes.cmi
 typing/includemod.cmo : typing/types.cmi typing/typedtree.cmi utils/tbl.cmi \
     typing/subst.cmi typing/printtyp.cmi typing/primitive.cmi typing/path.cmi \
     typing/mtype.cmi utils/misc.cmi parsing/location.cmi \
     typing/includecore.cmi typing/includeclass.cmi typing/ident.cmi \
     typing/env.cmi typing/ctype.cmi typing/cmt_format.cmi utils/clflags.cmi \
-    typing/includemod.cmi
+    parsing/asttypes.cmi typing/includemod.cmi
 typing/includemod.cmx : typing/types.cmx typing/typedtree.cmx utils/tbl.cmx \
     typing/subst.cmx typing/printtyp.cmx typing/primitive.cmx typing/path.cmx \
     typing/mtype.cmx utils/misc.cmx parsing/location.cmx \
     typing/includecore.cmx typing/includeclass.cmx typing/ident.cmx \
     typing/env.cmx typing/ctype.cmx typing/cmt_format.cmx utils/clflags.cmx \
-    typing/includemod.cmi
+    parsing/asttypes.cmi typing/includemod.cmi
 typing/includemod.cmi : typing/types.cmi typing/typedtree.cmi \
     typing/path.cmi parsing/location.cmi typing/includecore.cmi \
-    typing/ident.cmi typing/env.cmi typing/ctype.cmi
+    typing/ident.cmi typing/env.cmi typing/ctype.cmi parsing/asttypes.cmi
 typing/mtype.cmo : typing/types.cmi typing/subst.cmi typing/path.cmi \
     utils/misc.cmi parsing/location.cmi typing/ident.cmi typing/env.cmi \
     typing/ctype.cmi utils/clflags.cmi typing/btype.cmi parsing/asttypes.cmi \
@@ -415,10 +571,10 @@ typing/typedtreeIter.cmx : typing/typedtree.cmx utils/misc.cmx \
     parsing/asttypes.cmi typing/typedtreeIter.cmi
 typing/typedtreeIter.cmi : typing/typedtree.cmi parsing/asttypes.cmi
 typing/typedtreeMap.cmo : typing/typedtree.cmi utils/misc.cmi \
-    typing/typedtreeMap.cmi
+    parsing/asttypes.cmi typing/typedtreeMap.cmi
 typing/typedtreeMap.cmx : typing/typedtree.cmx utils/misc.cmx \
-    typing/typedtreeMap.cmi
-typing/typedtreeMap.cmi : typing/typedtree.cmi
+    parsing/asttypes.cmi typing/typedtreeMap.cmi
+typing/typedtreeMap.cmi : typing/typedtree.cmi parsing/asttypes.cmi
 typing/typemod.cmo : utils/warnings.cmi typing/typetexp.cmi typing/types.cmi \
     typing/typedtree.cmi typing/typedecl.cmi typing/typecore.cmi \
     typing/typeclass.cmi typing/subst.cmi typing/stypes.cmi \
@@ -526,15 +682,15 @@ bytecomp/bytesections.cmo : utils/config.cmi bytecomp/bytesections.cmi
 bytecomp/bytesections.cmx : utils/config.cmx bytecomp/bytesections.cmi
 bytecomp/bytesections.cmi :
 bytecomp/cmo_format.cmi : bytecomp/lambda.cmi typing/ident.cmi
-bytecomp/cmo_load.cmo : bytecomp/symtable.cmi bytecomp/opcodes.cmo \
-    utils/misc.cmi bytecomp/meta.cmi typing/ident.cmi typing/env.cmi \
-    bytecomp/dll.cmi utils/consistbl.cmi utils/config.cmi \
-    bytecomp/cmo_format.cmi bytecomp/cmo_load.cmi
-bytecomp/cmo_load.cmx : bytecomp/symtable.cmx bytecomp/opcodes.cmx \
-    utils/misc.cmx bytecomp/meta.cmx typing/ident.cmx typing/env.cmx \
-    bytecomp/dll.cmx utils/consistbl.cmx utils/config.cmx \
-    bytecomp/cmo_format.cmi bytecomp/cmo_load.cmi
-bytecomp/cmo_load.cmi : bytecomp/cmo_format.cmi
+bytecomp/cmo_load.cmo : bytecomp/symtable.cmi typing/path.cmi \
+    bytecomp/opcodes.cmo utils/misc.cmi bytecomp/meta.cmi typing/ident.cmi \
+    typing/env.cmi bytecomp/dll.cmi utils/consistbl.cmi utils/config.cmi \
+    bytecomp/cmo_format.cmi parsing/asttypes.cmi bytecomp/cmo_load.cmi
+bytecomp/cmo_load.cmx : bytecomp/symtable.cmx typing/path.cmx \
+    bytecomp/opcodes.cmx utils/misc.cmx bytecomp/meta.cmx typing/ident.cmx \
+    typing/env.cmx bytecomp/dll.cmx utils/consistbl.cmx utils/config.cmx \
+    bytecomp/cmo_format.cmi parsing/asttypes.cmi bytecomp/cmo_load.cmi
+bytecomp/cmo_load.cmi : bytecomp/cmo_format.cmi parsing/asttypes.cmi
 bytecomp/debuginfo.cmo : parsing/location.cmi bytecomp/lambda.cmi \
     bytecomp/debuginfo.cmi
 bytecomp/debuginfo.cmx : parsing/location.cmx bytecomp/lambda.cmx \
@@ -696,12 +852,21 @@ bytecomp/translobj.cmx : typing/primitive.cmx utils/misc.cmx \
     utils/config.cmx utils/clflags.cmx typing/btype.cmx parsing/asttypes.cmi \
     bytecomp/translobj.cmi
 bytecomp/translobj.cmi : bytecomp/lambda.cmi typing/ident.cmi typing/env.cmi
+bytecomp/translquote.cmo : typing/types.cmi typing/typedtree.cmi \
+    typing/path.cmi utils/misc.cmi parsing/longident.cmi parsing/location.cmi \
+    bytecomp/lambda.cmi typing/env.cmi typing/ctype.cmi parsing/asttypes.cmi \
+    bytecomp/translquote.cmi
+bytecomp/translquote.cmx : typing/types.cmx typing/typedtree.cmx \
+    typing/path.cmx utils/misc.cmx parsing/longident.cmx parsing/location.cmx \
+    bytecomp/lambda.cmx typing/env.cmx typing/ctype.cmx parsing/asttypes.cmi \
+    bytecomp/translquote.cmi
+bytecomp/translquote.cmi : typing/typedtree.cmi bytecomp/lambda.cmi
 bytecomp/translstatic.cmo : typing/typedtree.cmi bytecomp/translcore.cmi \
-    typing/tast_mapper.cmi typing/path.cmi bytecomp/lambda.cmi \
-    parsing/asttypes.cmi bytecomp/translstatic.cmi
+    bytecomp/lambda.cmi typing/ident.cmi parsing/asttypes.cmi \
+    bytecomp/translstatic.cmi
 bytecomp/translstatic.cmx : typing/typedtree.cmx bytecomp/translcore.cmx \
-    typing/tast_mapper.cmx typing/path.cmx bytecomp/lambda.cmx \
-    parsing/asttypes.cmi bytecomp/translstatic.cmi
+    bytecomp/lambda.cmx typing/ident.cmx parsing/asttypes.cmi \
+    bytecomp/translstatic.cmi
 bytecomp/translstatic.cmi : typing/typedtree.cmi bytecomp/lambda.cmi
 bytecomp/typeopt.cmo : typing/types.cmi typing/typedtree.cmi \
     typing/predef.cmi typing/path.cmi bytecomp/lambda.cmi typing/ident.cmi \
@@ -1972,7 +2137,7 @@ driver/compile.cmo : utils/warnings.cmi typing/typemod.cmi \
     typing/includemod.cmi typing/env.cmi bytecomp/emitcode.cmi \
     driver/compmisc.cmi driver/compenv.cmi bytecomp/cmo_load.cmi \
     utils/clflags.cmi utils/ccomp.cmi bytecomp/bytegen.cmi \
-    parsing/builtin_attributes.cmi driver/compile.cmi
+    parsing/builtin_attributes.cmi parsing/asttypes.cmi driver/compile.cmi
 driver/compile.cmx : utils/warnings.cmx typing/typemod.cmx \
     typing/typedtree.cmx typing/typecore.cmx bytecomp/translstatic.cmx \
     bytecomp/translmod.cmx utils/timings.cmx bytecomp/symtable.cmx \
@@ -1983,7 +2148,7 @@ driver/compile.cmx : utils/warnings.cmx typing/typemod.cmx \
     typing/includemod.cmx typing/env.cmx bytecomp/emitcode.cmx \
     driver/compmisc.cmx driver/compenv.cmx bytecomp/cmo_load.cmx \
     utils/clflags.cmx utils/ccomp.cmx bytecomp/bytegen.cmx \
-    parsing/builtin_attributes.cmx driver/compile.cmi
+    parsing/builtin_attributes.cmx parsing/asttypes.cmi driver/compile.cmi
 driver/compile.cmi :
 driver/compmisc.cmo : typing/typemod.cmi utils/misc.cmi \
     parsing/longident.cmi parsing/location.cmi typing/ident.cmi \

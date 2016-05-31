@@ -459,6 +459,8 @@ let expression sub exp =
                            sub.expr sub exp)
     | Texp_assert exp -> Pexp_assert (sub.expr sub exp)
     | Texp_lazy exp -> Pexp_lazy (sub.expr sub exp)
+    | Texp_quote exp -> Pexp_quote (sub.expr sub exp)
+    | Texp_escape exp -> Pexp_escape (sub.expr sub exp)
     | Texp_object (cl, _) ->
         Pexp_object (sub.class_structure sub cl)
     | Texp_pack (mexpr) ->

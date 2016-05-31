@@ -114,7 +114,7 @@ module rec Case : sig
   val pattern : Loc.t -> Name.t list -> (Var.t list -> Pat.t * Exp.t) -> t
 
   val guarded :
-    Loc.t -> Name.t list -> (Var.t list -> Pat.t * Exp.t * Exp.t) -> t
+    Loc.t -> Name.t list -> (Var.t list -> Pat.t * Exp.t option * Exp.t) -> t
 
 end
 
