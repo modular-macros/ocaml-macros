@@ -576,7 +576,26 @@ and quote_expression transl stage e =
       let cond = quote_expression transl stage cond in
       let body = quote_expression transl stage body in
       apply loc Exp.while_ [quote_loc loc; cond; body]
-  | Texp_for _ -> assert false (* TODO *)
+  | Texp_for(_, pat, low, high, dir, body) -> begin
+      let low = quote_expression transl stage low in
+      let high = quote_expression transl stage high in
+      let dir =
+        match dir with
+        | Asttype.Upto -> true_
+        | Astype.Downto -> false_
+      in
+      match pat with
+      | Tpat_var(id, name) ->
+          let name = quote_name name.loc name in
+          let body = quote_expression transl stage case.c_rhs in
+          apply loc Exp.for_simple
+                  [quote_loc loc; name; low; high; dir; func [id] body]
+      | pat ->
+          let pat = quote_pattern pat in
+          let body = quote_expression transl stage body in
+          apply loc Exp.for_nonbinding
+                  [quote_loc loc; pat; low; high; dir; body]
+    end
   | Texp_send(obj, meth, _) ->
       let obj = quote_expression transl stage obj in
       let meth = quote_method meth in
