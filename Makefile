@@ -238,13 +238,6 @@ install:
 	   $(INSTALL_COMPLIBDIR)
 	cp expunge $(INSTALL_LIBDIR)/expunge$(EXE)
 	cp toplevel/topdirs.cmi $(INSTALL_LIBDIR)
-# NNN typing/trx.ml needs its own interface (since it looks up identifiers
-# in itself)
-# Although typing/trx.cmi is already copied, see above, it is copied
-# into $((COMPLIBDIR). We need trx.cmi in the standard .cmi search path.
-	cp typing/trx.cmi $(INSTALL_LIBDIR)
-# BTW, trx.cmo is part of ocamlcommon.cma
-# NNN end
 	cd tools; $(MAKE) install
 	-cd man; $(MAKE) install
 	for i in $(OTHERLIBRARIES); do \

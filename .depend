@@ -151,160 +151,6 @@ parsing/printast.cmi : parsing/parsetree.cmi
 parsing/syntaxerr.cmo : parsing/location.cmi parsing/syntaxerr.cmi
 parsing/syntaxerr.cmx : parsing/location.cmx parsing/syntaxerr.cmi
 parsing/syntaxerr.cmi : parsing/location.cmi
-stdlib/arg.cmo : stdlib/arg.cmi
-stdlib/arg.cmx : stdlib/arg.cmi
-stdlib/arg.cmi :
-stdlib/array.cmo : stdlib/array.cmi
-stdlib/array.cmx : stdlib/array.cmi
-stdlib/array.cmi :
-stdlib/arrayLabels.cmo : stdlib/arrayLabels.cmi
-stdlib/arrayLabels.cmx : stdlib/arrayLabels.cmi
-stdlib/arrayLabels.cmi :
-stdlib/buffer.cmo : stdlib/buffer.cmi
-stdlib/buffer.cmx : stdlib/buffer.cmi
-stdlib/buffer.cmi :
-stdlib/bytes.cmo : stdlib/bytes.cmi
-stdlib/bytes.cmx : stdlib/bytes.cmi
-stdlib/bytes.cmi :
-stdlib/bytesLabels.cmo : stdlib/bytesLabels.cmi
-stdlib/bytesLabels.cmx : stdlib/bytesLabels.cmi
-stdlib/bytesLabels.cmi :
-stdlib/callback.cmo : stdlib/callback.cmi
-stdlib/callback.cmx : stdlib/callback.cmi
-stdlib/callback.cmi :
-stdlib/camlinternalAST.cmi :
-stdlib/camlinternalFormat.cmo : stdlib/camlinternalFormat.cmi
-stdlib/camlinternalFormat.cmx : stdlib/camlinternalFormat.cmi
-stdlib/camlinternalFormat.cmi :
-stdlib/camlinternalFormatBasics.cmo : stdlib/camlinternalFormatBasics.cmi
-stdlib/camlinternalFormatBasics.cmx : stdlib/camlinternalFormatBasics.cmi
-stdlib/camlinternalFormatBasics.cmi :
-stdlib/camlinternalLazy.cmo : stdlib/camlinternalLazy.cmi
-stdlib/camlinternalLazy.cmx : stdlib/camlinternalLazy.cmi
-stdlib/camlinternalLazy.cmi :
-stdlib/camlinternalMod.cmo : stdlib/camlinternalMod.cmi
-stdlib/camlinternalMod.cmx : stdlib/camlinternalMod.cmi
-stdlib/camlinternalMod.cmi :
-stdlib/camlinternalOO.cmo : stdlib/camlinternalOO.cmi
-stdlib/camlinternalOO.cmx : stdlib/camlinternalOO.cmi
-stdlib/camlinternalOO.cmi :
-stdlib/camlinternalQuote.cmo : stdlib/camlinternalQuote.cmi
-stdlib/camlinternalQuote.cmx : stdlib/camlinternalQuote.cmi
-stdlib/camlinternalQuote.cmi :
-stdlib/char.cmo : stdlib/char.cmi
-stdlib/char.cmx : stdlib/char.cmi
-stdlib/char.cmi :
-stdlib/complex.cmo : stdlib/complex.cmi
-stdlib/complex.cmx : stdlib/complex.cmi
-stdlib/complex.cmi :
-stdlib/digest.cmo : stdlib/digest.cmi
-stdlib/digest.cmx : stdlib/digest.cmi
-stdlib/digest.cmi :
-stdlib/ephemeron.cmo : stdlib/ephemeron.cmi
-stdlib/ephemeron.cmx : stdlib/ephemeron.cmi
-stdlib/ephemeron.cmi :
-stdlib/filename.cmo : stdlib/filename.cmi
-stdlib/filename.cmx : stdlib/filename.cmi
-stdlib/filename.cmi :
-stdlib/format.cmo : stdlib/format.cmi
-stdlib/format.cmx : stdlib/format.cmi
-stdlib/format.cmi :
-stdlib/gc.cmo : stdlib/gc.cmi
-stdlib/gc.cmx : stdlib/gc.cmi
-stdlib/gc.cmi :
-stdlib/genlex.cmo : stdlib/genlex.cmi
-stdlib/genlex.cmx : stdlib/genlex.cmi
-stdlib/genlex.cmi :
-stdlib/hashtbl.cmo : stdlib/hashtbl.cmi
-stdlib/hashtbl.cmx : stdlib/hashtbl.cmi
-stdlib/hashtbl.cmi :
-stdlib/int32.cmo : stdlib/int32.cmi
-stdlib/int32.cmx : stdlib/int32.cmi
-stdlib/int32.cmi :
-stdlib/int64.cmo : stdlib/int64.cmi
-stdlib/int64.cmx : stdlib/int64.cmi
-stdlib/int64.cmi :
-stdlib/lazy.cmo : stdlib/lazy.cmi
-stdlib/lazy.cmx : stdlib/lazy.cmi
-stdlib/lazy.cmi :
-stdlib/lexing.cmo : stdlib/lexing.cmi
-stdlib/lexing.cmx : stdlib/lexing.cmi
-stdlib/lexing.cmi :
-stdlib/list.cmo : stdlib/list.cmi
-stdlib/list.cmx : stdlib/list.cmi
-stdlib/list.cmi :
-stdlib/listLabels.cmo : stdlib/listLabels.cmi
-stdlib/listLabels.cmx : stdlib/listLabels.cmi
-stdlib/listLabels.cmi :
-stdlib/map.cmo : stdlib/map.cmi
-stdlib/map.cmx : stdlib/map.cmi
-stdlib/map.cmi :
-stdlib/marshal.cmo : stdlib/marshal.cmi
-stdlib/marshal.cmx : stdlib/marshal.cmi
-stdlib/marshal.cmi :
-stdlib/moreLabels.cmo : stdlib/moreLabels.cmi
-stdlib/moreLabels.cmx : stdlib/moreLabels.cmi
-stdlib/moreLabels.cmi :
-stdlib/nativeint.cmo : stdlib/nativeint.cmi
-stdlib/nativeint.cmx : stdlib/nativeint.cmi
-stdlib/nativeint.cmi :
-stdlib/obj.cmo : stdlib/obj.cmi
-stdlib/obj.cmx : stdlib/obj.cmi
-stdlib/obj.cmi :
-stdlib/oo.cmo : stdlib/oo.cmi
-stdlib/oo.cmx : stdlib/oo.cmi
-stdlib/oo.cmi :
-stdlib/parsing.cmo : stdlib/parsing.cmi
-stdlib/parsing.cmx : stdlib/parsing.cmi
-stdlib/parsing.cmi :
-stdlib/pervasives.cmo : stdlib/pervasives.cmi
-stdlib/pervasives.cmx : stdlib/pervasives.cmi
-stdlib/pervasives.cmi :
-stdlib/printexc.cmo : stdlib/printexc.cmi
-stdlib/printexc.cmx : stdlib/printexc.cmi
-stdlib/printexc.cmi :
-stdlib/printf.cmo : stdlib/printf.cmi
-stdlib/printf.cmx : stdlib/printf.cmi
-stdlib/printf.cmi :
-stdlib/queue.cmo : stdlib/queue.cmi
-stdlib/queue.cmx : stdlib/queue.cmi
-stdlib/queue.cmi :
-stdlib/random.cmo : stdlib/random.cmi
-stdlib/random.cmx : stdlib/random.cmi
-stdlib/random.cmi :
-stdlib/scanf.cmo : stdlib/scanf.cmi
-stdlib/scanf.cmx : stdlib/scanf.cmi
-stdlib/scanf.cmi :
-stdlib/set.cmo : stdlib/set.cmi
-stdlib/set.cmx : stdlib/set.cmi
-stdlib/set.cmi :
-stdlib/sort.cmo : stdlib/sort.cmi
-stdlib/sort.cmx : stdlib/sort.cmi
-stdlib/sort.cmi :
-stdlib/stack.cmo : stdlib/stack.cmi
-stdlib/stack.cmx : stdlib/stack.cmi
-stdlib/stack.cmi :
-stdlib/stdLabels.cmo : stdlib/stdLabels.cmi
-stdlib/stdLabels.cmx : stdlib/stdLabels.cmi
-stdlib/stdLabels.cmi :
-stdlib/std_exit.cmo :
-stdlib/std_exit.cmx :
-stdlib/stream.cmo : stdlib/stream.cmi
-stdlib/stream.cmx : stdlib/stream.cmi
-stdlib/stream.cmi :
-stdlib/string.cmo : stdlib/string.cmi
-stdlib/string.cmx : stdlib/string.cmi
-stdlib/string.cmi :
-stdlib/stringLabels.cmo : stdlib/stringLabels.cmi
-stdlib/stringLabels.cmx : stdlib/stringLabels.cmi
-stdlib/stringLabels.cmi :
-stdlib/sys.cmi :
-stdlib/uchar.cmo : stdlib/uchar.cmi
-stdlib/uchar.cmx : stdlib/uchar.cmi
-stdlib/uchar.cmi :
-stdlib/weak.cmo : stdlib/weak.cmi
-stdlib/weak.cmx : stdlib/weak.cmi
-stdlib/weak.cmi :
 typing/annot.cmi : parsing/location.cmi
 typing/btype.cmo : typing/types.cmi typing/path.cmi utils/misc.cmi \
     typing/ident.cmi parsing/asttypes.cmi typing/btype.cmi
@@ -636,6 +482,162 @@ typing/untypeast.cmx : typing/typedtree.cmx typing/path.cmx \
 typing/untypeast.cmi : typing/typedtree.cmi typing/path.cmi \
     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
     parsing/asttypes.cmi
+stdlib/arg.cmo : stdlib/arg.cmi
+stdlib/arg.cmx : stdlib/arg.cmi
+stdlib/arg.cmi :
+stdlib/array.cmo : stdlib/array.cmi
+stdlib/array.cmx : stdlib/array.cmi
+stdlib/array.cmi :
+stdlib/arrayLabels.cmo : stdlib/arrayLabels.cmi
+stdlib/arrayLabels.cmx : stdlib/arrayLabels.cmi
+stdlib/arrayLabels.cmi :
+stdlib/buffer.cmo : stdlib/buffer.cmi
+stdlib/buffer.cmx : stdlib/buffer.cmi
+stdlib/buffer.cmi :
+stdlib/bytes.cmo : stdlib/bytes.cmi
+stdlib/bytes.cmx : stdlib/bytes.cmi
+stdlib/bytes.cmi :
+stdlib/bytesLabels.cmo : stdlib/bytesLabels.cmi
+stdlib/bytesLabels.cmx : stdlib/bytesLabels.cmi
+stdlib/bytesLabels.cmi :
+stdlib/callback.cmo : stdlib/callback.cmi
+stdlib/callback.cmx : stdlib/callback.cmi
+stdlib/callback.cmi :
+stdlib/camlinternalAST.cmi :
+stdlib/camlinternalFormat.cmo : stdlib/camlinternalFormat.cmi
+stdlib/camlinternalFormat.cmx : stdlib/camlinternalFormat.cmi
+stdlib/camlinternalFormat.cmi :
+stdlib/camlinternalFormatBasics.cmo : stdlib/camlinternalFormatBasics.cmi
+stdlib/camlinternalFormatBasics.cmx : stdlib/camlinternalFormatBasics.cmi
+stdlib/camlinternalFormatBasics.cmi :
+stdlib/camlinternalLazy.cmo : stdlib/camlinternalLazy.cmi
+stdlib/camlinternalLazy.cmx : stdlib/camlinternalLazy.cmi
+stdlib/camlinternalLazy.cmi :
+stdlib/camlinternalMod.cmo : stdlib/camlinternalMod.cmi
+stdlib/camlinternalMod.cmx : stdlib/camlinternalMod.cmi
+stdlib/camlinternalMod.cmi :
+stdlib/camlinternalOO.cmo : stdlib/camlinternalOO.cmi
+stdlib/camlinternalOO.cmx : stdlib/camlinternalOO.cmi
+stdlib/camlinternalOO.cmi :
+stdlib/camlinternalQuote.cmo : stdlib/camlinternalQuote.cmi
+stdlib/camlinternalQuote.cmx : stdlib/camlinternalQuote.cmi
+stdlib/camlinternalQuote.cmi :
+stdlib/char.cmo : stdlib/char.cmi
+stdlib/char.cmx : stdlib/char.cmi
+stdlib/char.cmi :
+stdlib/complex.cmo : stdlib/complex.cmi
+stdlib/complex.cmx : stdlib/complex.cmi
+stdlib/complex.cmi :
+stdlib/digest.cmo : stdlib/digest.cmi
+stdlib/digest.cmx : stdlib/digest.cmi
+stdlib/digest.cmi :
+stdlib/ephemeron.cmo : stdlib/ephemeron.cmi
+stdlib/ephemeron.cmx : stdlib/ephemeron.cmi
+stdlib/ephemeron.cmi :
+stdlib/filename.cmo : stdlib/filename.cmi
+stdlib/filename.cmx : stdlib/filename.cmi
+stdlib/filename.cmi :
+stdlib/format.cmo : stdlib/format.cmi
+stdlib/format.cmx : stdlib/format.cmi
+stdlib/format.cmi :
+stdlib/gc.cmo : stdlib/gc.cmi
+stdlib/gc.cmx : stdlib/gc.cmi
+stdlib/gc.cmi :
+stdlib/genlex.cmo : stdlib/genlex.cmi
+stdlib/genlex.cmx : stdlib/genlex.cmi
+stdlib/genlex.cmi :
+stdlib/hashtbl.cmo : stdlib/hashtbl.cmi
+stdlib/hashtbl.cmx : stdlib/hashtbl.cmi
+stdlib/hashtbl.cmi :
+stdlib/int32.cmo : stdlib/int32.cmi
+stdlib/int32.cmx : stdlib/int32.cmi
+stdlib/int32.cmi :
+stdlib/int64.cmo : stdlib/int64.cmi
+stdlib/int64.cmx : stdlib/int64.cmi
+stdlib/int64.cmi :
+stdlib/lazy.cmo : stdlib/lazy.cmi
+stdlib/lazy.cmx : stdlib/lazy.cmi
+stdlib/lazy.cmi :
+stdlib/lexing.cmo : stdlib/lexing.cmi
+stdlib/lexing.cmx : stdlib/lexing.cmi
+stdlib/lexing.cmi :
+stdlib/list.cmo : stdlib/list.cmi
+stdlib/list.cmx : stdlib/list.cmi
+stdlib/list.cmi :
+stdlib/listLabels.cmo : stdlib/listLabels.cmi
+stdlib/listLabels.cmx : stdlib/listLabels.cmi
+stdlib/listLabels.cmi :
+stdlib/map.cmo : stdlib/map.cmi
+stdlib/map.cmx : stdlib/map.cmi
+stdlib/map.cmi :
+stdlib/marshal.cmo : stdlib/marshal.cmi
+stdlib/marshal.cmx : stdlib/marshal.cmi
+stdlib/marshal.cmi :
+stdlib/moreLabels.cmo : stdlib/moreLabels.cmi
+stdlib/moreLabels.cmx : stdlib/moreLabels.cmi
+stdlib/moreLabels.cmi :
+stdlib/nativeint.cmo : stdlib/nativeint.cmi
+stdlib/nativeint.cmx : stdlib/nativeint.cmi
+stdlib/nativeint.cmi :
+stdlib/obj.cmo : stdlib/obj.cmi
+stdlib/obj.cmx : stdlib/obj.cmi
+stdlib/obj.cmi :
+stdlib/oo.cmo : stdlib/oo.cmi
+stdlib/oo.cmx : stdlib/oo.cmi
+stdlib/oo.cmi :
+stdlib/parsing.cmo : stdlib/parsing.cmi
+stdlib/parsing.cmx : stdlib/parsing.cmi
+stdlib/parsing.cmi :
+stdlib/pervasives.cmo : stdlib/pervasives.cmi
+stdlib/pervasives.cmx : stdlib/pervasives.cmi
+stdlib/pervasives.cmi :
+stdlib/printexc.cmo : stdlib/printexc.cmi
+stdlib/printexc.cmx : stdlib/printexc.cmi
+stdlib/printexc.cmi :
+stdlib/printf.cmo : stdlib/printf.cmi
+stdlib/printf.cmx : stdlib/printf.cmi
+stdlib/printf.cmi :
+stdlib/queue.cmo : stdlib/queue.cmi
+stdlib/queue.cmx : stdlib/queue.cmi
+stdlib/queue.cmi :
+stdlib/random.cmo : stdlib/random.cmi
+stdlib/random.cmx : stdlib/random.cmi
+stdlib/random.cmi :
+stdlib/scanf.cmo : stdlib/scanf.cmi
+stdlib/scanf.cmx : stdlib/scanf.cmi
+stdlib/scanf.cmi :
+stdlib/set.cmo : stdlib/set.cmi
+stdlib/set.cmx : stdlib/set.cmi
+stdlib/set.cmi :
+stdlib/sort.cmo : stdlib/sort.cmi
+stdlib/sort.cmx : stdlib/sort.cmi
+stdlib/sort.cmi :
+stdlib/stack.cmo : stdlib/stack.cmi
+stdlib/stack.cmx : stdlib/stack.cmi
+stdlib/stack.cmi :
+stdlib/stdLabels.cmo : stdlib/stdLabels.cmi
+stdlib/stdLabels.cmx : stdlib/stdLabels.cmi
+stdlib/stdLabels.cmi :
+stdlib/std_exit.cmo :
+stdlib/std_exit.cmx :
+stdlib/stream.cmo : stdlib/stream.cmi
+stdlib/stream.cmx : stdlib/stream.cmi
+stdlib/stream.cmi :
+stdlib/string.cmo : stdlib/string.cmi
+stdlib/string.cmx : stdlib/string.cmi
+stdlib/string.cmi :
+stdlib/stringLabels.cmo : stdlib/stringLabels.cmi
+stdlib/stringLabels.cmx : stdlib/stringLabels.cmi
+stdlib/stringLabels.cmi :
+stdlib/sys.cmo : stdlib/sys.cmi
+stdlib/sys.cmx : stdlib/sys.cmi
+stdlib/sys.cmi :
+stdlib/uchar.cmo : stdlib/uchar.cmi
+stdlib/uchar.cmx : stdlib/uchar.cmi
+stdlib/uchar.cmi :
+stdlib/weak.cmo : stdlib/weak.cmi
+stdlib/weak.cmx : stdlib/weak.cmi
+stdlib/weak.cmi :
 bytecomp/bytegen.cmo : typing/types.cmi bytecomp/switch.cmi typing/subst.cmi \
     typing/primitive.cmi utils/misc.cmi bytecomp/matching.cmi \
     bytecomp/lambda.cmi bytecomp/instruct.cmi typing/ident.cmi \

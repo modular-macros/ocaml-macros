@@ -1485,7 +1485,6 @@ let transl_value_decl env loc valdecl =
   match valdecl.pval_prim with
     [] when Env.is_in_signature env ->
       { val_type = ty; val_kind = Val_reg; Types.val_loc = loc;
-        val_stage = 0; (* TODO: should use global stage *)
         val_attributes = valdecl.pval_attributes }
   | [] ->
       raise (Error(valdecl.pval_loc, Val_in_structure))
@@ -1513,7 +1512,6 @@ let transl_value_decl env loc valdecl =
       && prim.prim_native_name = ""
       then raise(Error(valdecl.pval_type.ptyp_loc, Missing_native_external));
       { val_type = ty; val_kind = Val_prim prim; Types.val_loc = loc;
-        val_stage = 0; (* TODO: should use global stage *)
         val_attributes = valdecl.pval_attributes }
   in
   let (id, newenv) =

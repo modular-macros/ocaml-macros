@@ -598,7 +598,6 @@ let rec push_defaults loc bindings cases partial =
             ({exp with exp_type = pat.pat_type; exp_desc =
               Texp_ident (Path.Pident param, mknoloc (Longident.Lident name),
                           {val_type = pat.pat_type; val_kind = Val_reg;
-                           val_stage = 0; (* TODO: should use global stage *)
                            val_attributes = [];
                            Types.val_loc = Location.none;
                           })},
@@ -1058,8 +1057,8 @@ and transl_exp0 e =
           cl_env = e.exp_env;
           cl_attributes = [];
          }
-  | Texp_quote e -> assert false (* TODO: should use global stage *)
-  | Texp_escape e -> assert false (* TODO: should use global stage *)
+  | Texp_quote _ -> Lconst (Const_base (Const_string ("Hello quote", None)))
+  | Texp_escape _ -> assert false (* TODO: should use global stage *)
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
 

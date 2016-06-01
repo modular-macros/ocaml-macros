@@ -158,6 +158,8 @@ let iter_expression f e =
     | Pexp_newtype (_, e)
     | Pexp_poly (e, _)
     | Pexp_lazy e
+    | Pexp_quote e
+    | Pexp_escape e
     | Pexp_assert e
     | Pexp_setinstvar (_, e)
     | Pexp_send (e, _)
@@ -1908,6 +1910,13 @@ let proper_exp_loc exp =
   in
   aux exp.exp_extra
 
+(* Increase or decrease phase of environment *)
+let with_phase_up env =
+  Env.with_phase (Env.cur_phase env + 1) env
+
+let with_phase_down env =
+  Env.with_phase (Env.cur_phase env - 1) env
+
 (* Typing of expressions *)
 
 let unify_exp env exp expected_ty =
@@ -2808,6 +2817,28 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env;
       }
+  | Pexp_quote e ->
+      let ty = newgenvar() in
+      let to_unify = Predef.type_expr ty in
+      unify_exp_types loc env to_unify ty_expected;
+      let body = type_expect (with_phase_down env) e ty in
+      re {
+          exp_desc = Texp_quote body;
+          exp_loc = loc; exp_extra = [];
+          exp_type = instance env ty_expected;
+          exp_attributes = sexp.pexp_attributes;
+          exp_env = env }
+  | Pexp_escape e ->
+      let body =
+        type_expect (with_phase_up env) e
+               (Predef.type_expr ty_expected)
+      in
+        re {
+          exp_desc = Texp_escape body;
+          exp_loc = loc; exp_extra = [];
+          exp_type = instance env ty_expected;
+          exp_attributes = sexp.pexp_attributes;
+          exp_env = env }
   | Pexp_object s ->
       let desc, sign, meths = !type_object env loc s in
       rue {

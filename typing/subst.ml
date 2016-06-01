@@ -326,7 +326,6 @@ let class_type s cty =
 let value_description s descr =
   { val_type = type_expr s descr.val_type;
     val_kind = descr.val_kind;
-    val_stage = descr.val_stage;
     val_loc = loc s descr.val_loc;
     val_attributes = attrs s descr.val_attributes;
    }
