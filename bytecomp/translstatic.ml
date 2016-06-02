@@ -22,12 +22,7 @@ let rec module_let_kind m =
   | Tmod_constraint (m,_,_,_) -> module_let_kind m
   | _ -> Strict
 
-let rec transl_implementation module_name str (* module coercion unhandled *) =
-  let module_id = Ident.create_persistent module_name in
-  let body = transl_structure [] str.str_items in
-  Lprim (Psetglobal module_id, [body])
-
-and transl_structure fields = function
+let rec transl_structure fields = function
   | [] ->
       Lprim(Pmakeblock (0, Immutable, None),
         List.map (fun id ->
@@ -66,4 +61,9 @@ and transl_module m =
   | _ -> lambda_unit
     (* might result in segfaults if these unsupported constructions are used
      * with static code in them *)
+
+let transl_implementation module_name str (* module coercion unhandled *) =
+  let module_id = Ident.create_persistent module_name in
+  let body = transl_structure [] str.str_items in
+  Lprim (Psetglobal module_id, [body])
 
