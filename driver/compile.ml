@@ -99,7 +99,9 @@ let implementation ppf sourcefile outputprefix =
       Symtable.patch_object code reloc;
       Symtable.check_global_initialized reloc;
       Symtable.update_global_table ();
+      Printf.fprintf stderr "before reify\n%!";
       ignore ((Meta.reify_bytecode code code_size) ());
+      Printf.fprintf stderr "after reify\n%!";
       Symtable.reset ();
       let bytecode =
         (typedtree, coercion)

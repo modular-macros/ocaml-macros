@@ -673,6 +673,8 @@ let rec cut n l =
 
 let try_ids = Hashtbl.create 8
 
+let transl_splices = ref false
+
 let rec transl_exp e =
   List.iter (Translattribute.check_attribute e) e.exp_attributes;
   let eval_once =
@@ -1057,8 +1059,8 @@ and transl_exp0 e =
           cl_env = e.exp_env;
           cl_attributes = [];
          }
-  | Texp_quote _ -> Lconst (Const_base (Const_string ("Hello quote", None)))
-  | Texp_escape _ -> assert false (* TODO: should use global stage *)
+  | Texp_quote _ -> Lconst (Const_base (Const_int 42))
+  | Texp_escape _ -> lambda_unit (* TODO: use splice record from Translstatic *)
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
 
