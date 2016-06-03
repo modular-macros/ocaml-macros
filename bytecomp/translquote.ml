@@ -3,6 +3,7 @@ open Asttypes
 open Types
 open Typedtree
 open Lambda
+open Path
 
 let camlinternalQuote =
   lazy
@@ -10,11 +11,12 @@ let camlinternalQuote =
              "CamlinternalQuote" Env.initial_safe_string with
      | exception Not_found ->
          fatal_error "Module CamlinternalQuote unavailable."
-     | env -> ident, env)
+     | env -> env)
 
 let combinator modname field =
   lazy
-    (let (ident, env) = Lazy.force camlinternalQuote in
+    (let env = Lazy.force camlinternalQuote in
+     let ident = "CamlinternalQuote" in
      let lid = Longident.Ldot(Longident.Lident modname, field) in
      match Env.lookup_value lid env with
      | (Path.Pdot(Path.Pdot(Pident ident, _, pos1), _, pos2), _) ->
@@ -22,10 +24,10 @@ let combinator modname field =
                [Lprim(Pfield pos1,
                      [Lprim(Pgetglobal ident, [])])])
      | _ ->
-         fatal_error
+         fatal_error @@
            "Primitive CamlinternalQuote."^modname^"."^field^" not found."
      | exception Not_found ->
-        fatal_error
+        fatal_error @@
           "Primitive CamlinternalQuote."^modname^"."^field^" not found.")
 
 module Loc = struct
@@ -80,14 +82,101 @@ module Pat = struct
   let exception_ = combinator "Pat" "exception"
 end
 
-module rec Case = struct
+module rec Case : sig
+
+  val nonbinding : lambda
+
+  val simple : lambda
+
+  val pattern : lambda
+
+  val guarded :
+    lambda -> lambda list -> (lambda list -> lambda * lambda option * lambda) -> lambda
+
+end = struct
   let nonbinding = combinator "Case" "nonbinding"
   let simple = combinator "Case" "simple"
   let pattern = combinator "Case" "pattern"
   let guarded = combinator "Case" "guarded"
 end
 
-and Exp = struct
+and Exp : sig
+
+  val var : lambda
+
+  val ident : lambda
+
+  val constant : lambda
+
+  val let_nonbinding : lambda
+
+  val let_simple : lambda
+
+  val let_rec_simple : lambda
+
+  val let_ : lambda
+
+  val fun_nonbinding : lambda
+
+  val fun_simple : lambda
+
+  val fun_ : lambda
+
+  val function_ : lambda
+
+  val apply : lambda
+
+  val match_ : lambda
+
+  val try_ : lambda
+
+  val tuple : lambda
+
+  val construct : lambda
+
+  val variant : lambda
+
+  val record : lambda
+
+  val field : lambda
+
+  val setfield : lambda
+
+  val array : lambda
+
+  val ifthenelse : lambda
+
+  val sequence : lambda
+
+  val while_ : lambda
+
+  val for_nonbinding : lambda
+
+  val for_simple : lambda
+
+  val send : lambda
+
+  val assert_ : lambda
+
+  val lazy_ : lambda
+
+  val open_ : lambda
+
+  val quote : lambda
+
+  val escape : lambda
+
+  module Closed : sig
+
+    type exp = lambda
+
+    val close : lambda
+
+    val open_ : lambda
+
+  end
+
+end = struct
   let var = combinator "Exp" "var"
   let ident = combinator "Exp" "ident"
   let constant = combinator "Exp" "constant"
@@ -169,7 +258,7 @@ let func ids body =
 let bind id def body =
   Llet(Strict, id, def, body)
 
-let quote_loc (loc : Location.t) =
+let quote_loc (loc : lambda) =
   if loc = Location.none then use Loc.none
   else apply Location.none Loc.unmarshal [marshal loc]
 

@@ -674,6 +674,8 @@ let rec cut n l =
 let try_ids = Hashtbl.create 8
 
 let transl_splices = ref false
+let splice_array = ref ([||] : Parsetree.expression array)
+let splice_index = ref 0
 
 let rec transl_exp e =
   List.iter (Translattribute.check_attribute e) e.exp_attributes;
@@ -1059,8 +1061,18 @@ and transl_exp0 e =
           cl_env = e.exp_env;
           cl_attributes = [];
          }
-  | Texp_quote _ -> Lconst (Const_base (Const_int 42))
-  | Texp_escape _ -> lambda_unit (* TODO: use splice record from Translstatic *)
+  | Texp_quote e -> Translquote.quote_expression (transl_exp e.exp_env) e
+  | Texp_escape e ->
+      if !transl_splices then
+        let parsetree = Array.get !splice_array !splice_index in
+        incr splice_index;
+        let lam =
+          transl_exp @@
+          Typecore.type_expression e.exp_env parsetree
+        in
+        lam
+      else
+        lambda_unit
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
 

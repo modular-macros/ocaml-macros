@@ -23,6 +23,9 @@ open Lambda
 (** If [true], then [transl_exp] will use the splice array to replace splices.
    *)
 val transl_splices: bool ref
+
+(** Splice array to be filled by the by the execution of static code. *)
+val splice_array: Parsetree.expression array ref
 val transl_exp: expression -> lambda
 val transl_apply: ?should_be_tailcall:bool
                   -> ?inlined:inline_attribute

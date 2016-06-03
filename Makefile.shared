@@ -78,7 +78,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
 COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/typeopt.cmo bytecomp/switch.cmo bytecomp/matching.cmo \
   bytecomp/translobj.cmo bytecomp/translattribute.cmo \
-  bytecomp/translcore.cmo \
+  bytecomp/translquote.cmo bytecomp/translcore.cmo \
   bytecomp/translclass.cmo bytecomp/translmod.cmo \
   bytecomp/translstatic.cmo \
   bytecomp/simplif.cmo bytecomp/runtimedef.cmo \
@@ -92,7 +92,8 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/printinstr.cmo bytecomp/opcodes.cmo bytecomp/emitcode.cmo \
   bytecomp/bytesections.cmo bytecomp/dll.cmo bytecomp/symtable.cmo \
   bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
-  driver/errors.cmo bytecomp/cmo_load.cmo driver/compile.cmo
+  driver/errors.cmo bytecomp/cmo_load.cmo bytecomp/runstatic.cmo \
+  driver/compile.cmo
 
 INTEL_ASM=\
   asmcomp/x86_proc.cmo \

@@ -86,23 +86,9 @@ let implementation ppf sourcefile outputprefix =
       let sstat_lam =
         print_if ppf (ref true) Printlambda.lambda @@
         Simplif.simplify_lambda stat_lam in
-      let (init_code, fun_code) = Bytegen.compile_phrase sstat_lam in
-      (* Execute static code *)
-      let (code, code_size, reloc, _) =
-        Emitcode.to_memory init_code fun_code
-      in
-      Symtable.init_static ();
-      Cmo_load.load_deps ppf Asttypes.Static reloc
-        (fun () -> ())
-        (fun () -> ())
-        (fun exn -> raise exn);
-      Symtable.patch_object code reloc;
-      Symtable.check_global_initialized reloc;
-      Symtable.update_global_table ();
-      Printf.fprintf stderr "before reify\n%!";
-      ignore ((Meta.reify_bytecode code code_size) ());
-      Printf.fprintf stderr "after reify\n%!";
-      Symtable.reset ();
+      let splices = Runstatic.run_static ppf sstat_lam in
+      Translcore.transl_splices := true;
+      Translcore.splice_array := splices;
       let bytecode =
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))
