@@ -45,6 +45,8 @@ and ident_int64 = ident_create "int64"
 and ident_lazy_t = ident_create "lazy_t"
 and ident_string = ident_create "string"
 and ident_extension_constructor = ident_create "extension_constructor"
+and ident_bytes = ident_create "bytes"
+and ident_expr = ident_create "expr"
 
 let path_int = Pident ident_int
 and path_char = Pident ident_char
@@ -62,6 +64,8 @@ and path_int64 = Pident ident_int64
 and path_lazy_t = Pident ident_lazy_t
 and path_string = Pident ident_string
 and path_extension_constructor = Pident ident_extension_constructor
+and path_bytes = Pident ident_bytes
+and path_expr  = Pident ident_expr
 
 let type_int = newgenty (Tconstr(path_int, [], ref Mnil))
 and type_char = newgenty (Tconstr(path_char, [], ref Mnil))
@@ -80,6 +84,8 @@ and type_lazy_t t = newgenty (Tconstr(path_lazy_t, [t], ref Mnil))
 and type_string = newgenty (Tconstr(path_string, [], ref Mnil))
 and type_extension_constructor =
       newgenty (Tconstr(path_extension_constructor, [], ref Mnil))
+and type_bytes = newgenty (Tconstr(path_bytes, [], ref Mnil))
+and type_expr t = newgenty (Tconstr(path_expr, [t], ref Mnil))
 
 let ident_match_failure = ident_create_predef_exn "Match_failure"
 and ident_out_of_memory = ident_create_predef_exn "Out_of_memory"
@@ -145,16 +151,6 @@ and ident_nil = ident_create "[]"
 and ident_cons = ident_create "::"
 and ident_none = ident_create "None"
 and ident_some = ident_create "Some"
-
-(* NNN ident_create "code" must be placed at the end of all other
-   ident creation expressions, to make sure that creating ident_code
-   does not shift the timestamps of other standard idents like 
-   Eof, etc. Otherwise, binary compatibility with OCaml breaks,
-   and we have to do the expensive bootstrapping.
-*)
-let ident_expr = ident_create "expr"    (* NNN *)
-let path_expr  = Pident ident_expr      (* NNN *)
-let type_expr t = newgenty (Tconstr(path_expr, [t], ref Mnil)) (* NNN *)
 
 let common_initial_env add_type add_extension empty_env =
   let decl_bool =

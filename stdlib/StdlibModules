@@ -31,6 +31,7 @@ STDLIB_MODULES=\
   camlinternalLazy \
   camlinternalMod \
   camlinternalOO \
+  camlinternalQuote \
   char \
   complex \
   digest \

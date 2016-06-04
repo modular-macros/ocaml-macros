@@ -40,7 +40,6 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/pprintast.cmo \
   parsing/ast_mapper.cmo
 
-# NNN (trx)
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
   typing/btype.cmo typing/oprint.cmo \

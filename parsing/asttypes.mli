@@ -15,7 +15,7 @@
 
 (** Auxiliary AST types used by parsetree and typedtree. *)
 
-type constant = CamlinternalAST.constant =
+type constant =
     Const_int of int
   | Const_char of char
   | Const_string of string * string option
@@ -26,9 +26,9 @@ type constant = CamlinternalAST.constant =
 
 type static_flag = Nonstatic | Static
 
-type rec_flag = CamlinternalAST.rec_flag = Nonrecursive | Recursive
+type rec_flag = Nonrecursive | Recursive
 
-type direction_flag = CamlinternalAST.direction_flag = Upto | Downto
+type direction_flag = Upto | Downto
 
 (* Order matters, used in polymorphic comparison *)
 type private_flag = Private | Public
@@ -37,9 +37,9 @@ type mutable_flag = Immutable | Mutable
 
 type virtual_flag = Virtual | Concrete
 
-type override_flag = CamlinternalAST.override_flag = Override | Fresh
+type override_flag = Override | Fresh
 
-type closed_flag = CamlinternalAST.closed_flag = Closed | Open
+type closed_flag = Closed | Open
 
 type label = string
 

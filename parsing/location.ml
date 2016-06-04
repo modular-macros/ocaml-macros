@@ -19,7 +19,7 @@ let absname = ref false
     (* This reference should be in Clflags, but it would create an additional
        dependency and make bootstrapping Camlp4 more difficult. *)
 
-type t = CamlinternalAST.location =
+type t =
   { loc_start: position; loc_end: position; loc_ghost: bool };;
 
 let in_file name =

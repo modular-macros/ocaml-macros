@@ -117,6 +117,8 @@ let print_out_value ppf tree =
     | Oval_printer f -> f ppf
     | Oval_tuple tree_list ->
         fprintf ppf "@[<1>(%a)@]" (print_tree_list print_tree_1 ",") tree_list
+    | Oval_expr exp ->
+        fprintf ppf "@[<1><< %a >>@]" Pprintast.expression exp
     | tree -> fprintf ppf "@[<1>(%a)@]" (cautious print_tree_1) tree
   and print_fields first ppf =
     function

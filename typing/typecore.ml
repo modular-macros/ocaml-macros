@@ -2968,7 +2968,6 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                      sexp.pexp_attributes) ::
                       exp.exp_extra;
       }
-
   | Pexp_extension ({ txt = ("ocaml.extension_constructor"
                              |"extension_constructor"); _ },
                     payload) ->
@@ -2992,6 +2991,30 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       end
   | Pexp_extension ext ->
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
+  | Pexp_quote sbody ->
+      let ty = newgenvar() in
+      let to_unify = Predef.type_expr ty in
+      unify_exp_types loc env to_unify ty_expected;
+      let body = with_stage_up (fun () -> type_expect env sbody ty) in
+      re {
+          exp_desc = Texp_quote body;
+          exp_loc = loc; exp_extra = [];
+          exp_type = instance env ty_expected;
+          exp_attributes = sexp.pexp_attributes;
+          exp_env = env }
+  | Pexp_escape sbody ->
+      let body =
+        with_stage_down loc env
+          (fun () ->
+             type_expect env sbody
+               (Predef.type_expr ty_expected))
+      in
+        re {
+          exp_desc = Texp_escape body;
+          exp_loc = loc; exp_extra = [];
+          exp_type = instance env ty_expected;
+          exp_attributes = sexp.pexp_attributes;
+          exp_env = env }
 
   | Pexp_unreachable ->
       re { exp_desc = Texp_unreachable;

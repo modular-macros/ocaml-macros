@@ -75,10 +75,10 @@ module Pat = struct
   let variant = combinator "Pat" "variant"
   let record = combinator "Pat" "record"
   let array = combinator "Pat" "array"
-  let or_ = combinator "Pat" "or"
-  let type_ = combinator "Pat" "type"
-  let lazy_ = combinator "Pat" "lazy"
-  let exception_ = combinator "Pat" "exception"
+  let or_ = combinator "Pat" "or_"
+  let type_ = combinator "Pat" "type_"
+  let lazy_ = combinator "Pat" "lazy_"
+  let exception_ = combinator "Pat" "exception_"
 end
 
 module Case = struct
@@ -133,7 +133,19 @@ let apply loc comb args =
 let string s =
   Lconst (Const_base (Const_string(s, None)))
 
-let marshal x =
+let marshal_loc (x : Location.t) =
+  let s = Marshal.to_string x [] in
+    string s
+
+let marshal_name (x : string loc) =
+  let s = Marshal.to_string x [] in
+    string s
+
+let marshal_constant (x : constant) =
+  let s = Marshal.to_string x [] in
+    string s
+
+let marshal_ident (x : Longident.t loc) =
   let s = Marshal.to_string x [] in
     string s
 
@@ -165,21 +177,36 @@ let pair (x, y) =
 let triple (x, y, z) =
   Lprim(Pmakeblock(0, Immutable), [x; y; z])
 
-let func ids body =
-  Lfunction(Curried, ids, body)
+let func id body =
+  Lfunction(Curried, [id], body)
+
+let list_func ids body =
+  let rec loop list_id = function
+    | [] -> body
+    | [id] ->
+        Llet(Alias, id, Lprim(Pfield 0, [Lvar list_id]), body)
+    | id :: ids ->
+        let tail_id = Ident.create "tl" in
+        Llet(Alias, id, Lprim(Pfield 0, [Lvar list_id]),
+          Llet(Alias, tail_id, Lprim(Pfield 1, [Lvar list_id]),
+               loop tail_id ids))
+  in
+  let list_id = Ident.create "list" in
+  let body = loop list_id ids in
+  Lfunction(Curried, [list_id], body)
 
 let bind id def body =
   Llet(Strict, id, def, body)
 
 let quote_loc (loc : lambda) =
   if loc = Location.none then use Loc.none
-  else apply Location.none Loc.unmarshal [marshal loc]
+  else apply Location.none Loc.unmarshal [marshal_loc loc]
 
 let quote_constant loc (const : Asttypes.constant) =
-  apply loc Constant.unmarshal [marshal const]
+  apply loc Constant.unmarshal [marshal_constant const]
 
 let quote_name loc (str : string loc) =
-  apply loc Name.unmarshal [marshal str]
+  apply loc Name.unmarshal [marshal_name str]
 
 let quote_variant loc (variant : label) =
   apply loc Variant.of_string [string variant]
@@ -199,9 +226,17 @@ let quote_label loc lbl =
 let lid_of_path p =
   let rec loop = function
     | Path.Pident id ->
-      if Ident.global id then Longident.Lident (Ident.name id)
-      else raise Exit
-    | Path.Pdot(p, s, _) -> Longident.Ldot(loop p, s)
+        if Ident.global id then Longident.Lident (Ident.name id)
+        else begin
+          match
+            List.find (fun (bname, bid) -> Ident.equal id bid)
+                      Predef.builtin_idents
+          with
+          | name, _ -> Longident.Lident name
+          | exception Not_found -> raise Exit
+        end
+    | Path.Pdot(p, s, _) ->
+        Longident.Ldot(loop p, s)
     | Path.Papply _ -> raise Exit
   in
     match loop p with
@@ -224,7 +259,8 @@ let quote_variant_constructor env loc constr =
     | Some (Longident.Ldot(lid, _)) -> Longident.Ldot(lid, constr.cstr_name)
     | Some (Longident.Lapply _) -> assert false
   in
-  apply loc Identifier.unmarshal [marshal lid]
+  let lid = mkloc lid loc in
+  apply loc Identifier.unmarshal [marshal_ident lid]
 
 let quote_record_label env loc lbl =
   let lid =
@@ -234,7 +270,8 @@ let quote_record_label env loc lbl =
     | Some (Longident.Ldot(lid, _)) -> Longident.Ldot(lid, lbl.lbl_name)
     | Some (Longident.Lapply _) -> assert false
   in
-  apply loc Identifier.unmarshal [marshal lid]
+  let lid = mkloc lid loc in
+  apply loc Identifier.unmarshal [marshal_ident lid]
 
 let rec quote_pattern p =
   let env = p.pat_env in
@@ -256,6 +293,9 @@ let rec quote_pattern p =
       let args =
         match args with
         | [] -> None
+        | [arg] ->
+            let arg = quote_pattern arg in
+            Some arg
         | _ :: _ ->
             let args = List.map quote_pattern args in
             Some (apply loc Pat.tuple [quote_loc loc; list args])
@@ -306,7 +346,7 @@ let rec case_binding exn transl stage case : case_binding =
       | Tpat_var(id, name), false ->
           let name = quote_name name.loc name in
           let body = quote_expression transl stage case.c_rhs in
-          Simple(name, func [id] body)
+          Simple(name, func id body)
       | _ ->
           match pat_bound_idents pat with
           | [] ->
@@ -339,7 +379,7 @@ let rec case_binding exn transl stage case : case_binding =
                   (bind exp_id exp
                     (pair (Lvar pat_id, Lvar exp_id)))
               in
-              Pattern(list names, func ids body)
+              Pattern(list names, list_func ids body)
     end
   | Some guard ->
       let id_names = pat_bound_idents case.c_lhs in
@@ -363,7 +403,7 @@ let rec case_binding exn transl stage case : case_binding =
             (bind exp_id exp
               (triple (Lvar pat_id, Lvar guard_id, Lvar exp_id))))
       in
-      Guarded(list names, func ids body)
+      Guarded(list names, list_func ids body)
 
 and quote_case_binding loc cb =
   match cb with
@@ -390,7 +430,7 @@ and quote_nonrecursive_let transl stage vbs body =
           let name = quote_name name.loc name in
           let exp = quote_expression transl stage exp in
           apply loc Exp.let_simple
-                [quote_loc loc; name; exp; func [id] body]
+                [quote_loc loc; name; exp; func id body]
       | _ ->
           match pat_bound_idents pat with
           | [] ->
@@ -414,7 +454,7 @@ and quote_nonrecursive_let transl stage vbs body =
                     (pair (Lvar pat_id, Lvar body_id)))
               in
               apply loc Exp.let_pattern
-                    [quote_loc loc; list names; exp; func ids body])
+                    [quote_loc loc; list names; exp; list_func ids body])
     vbs (quote_expression transl stage body)
 
 and quote_recursive_let transl stage loc vbs body =
@@ -441,7 +481,8 @@ and quote_recursive_let transl stage loc vbs body =
       (bind body_id (quote_expression transl stage body)
         (pair (Lvar exps_id, Lvar body_id)))
   in
-  apply loc Exp.let_rec_simple [quote_loc loc; list names; func ids body]
+  apply loc Exp.let_rec_simple
+        [quote_loc loc; list names; list_func ids body]
 
 and quote_expression transl stage e =
   let env = e.exp_env in
@@ -450,7 +491,8 @@ and quote_expression transl stage e =
   | Texp_ident(path, _, _) -> begin
       match lid_of_path path with
       | Some lid ->
-          let lid = apply loc Identifier.unmarshal [marshal lid] in
+          let lid = mkloc lid loc in
+          let lid = apply loc Identifier.unmarshal [marshal_ident lid] in
           apply loc Exp.ident [quote_loc loc; lid]
       | None ->
           match path with
@@ -478,10 +520,10 @@ and quote_expression transl stage e =
           apply loc Exp.fun_nonbinding [quote_loc loc; label; pat; exp]
       | [Simple(name, body)] ->
           let label = quote_label loc label in
-          apply loc Exp.fun_simple [quote_loc loc; name; label; body]
+          apply loc Exp.fun_simple [quote_loc loc; name; label; none; body]
       | [Pattern(names, body)] ->
           let label = quote_label loc label in
-          apply loc Exp.fun_pattern [quote_loc loc; names; label; body]
+          apply loc Exp.fun_pattern [quote_loc loc; names; label; none; body]
       | cases ->
           let cases = List.map (quote_case_binding loc) cases in
           apply loc Exp.function_ [quote_loc loc; list cases]
@@ -518,6 +560,9 @@ and quote_expression transl stage e =
       let args =
         match args with
         | [] -> None
+        | [arg] ->
+            let arg = quote_expression transl stage arg in
+            Some arg
         | _ :: _ ->
             let args = List.map (quote_expression transl stage) args in
             Some (apply loc Pat.tuple [quote_loc loc; list args])
@@ -581,7 +626,7 @@ and quote_expression transl stage e =
       let name = quote_name name.loc name in
       let body = quote_expression transl stage body in
       apply loc Exp.for_
-            [quote_loc loc; name; low; high; dir; func [id] body]
+            [quote_loc loc; name; low; high; dir; func id body]
   | Texp_send(obj, meth, _) ->
       let obj = quote_expression transl stage obj in
       let meth = quote_method loc meth in
