@@ -21,6 +21,90 @@ include Makefile.shared
 SHELL=/bin/sh
 MKDIR=mkdir -p
 
+OCAMLBUILDBYTE=$(WITH_OCAMLBUILD:=.byte)
+OCAMLBUILDNATIVE=$(WITH_OCAMLBUILD:=.native)
+
+OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
+
+INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
+	 -I toplevel
+
+UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
+  utils/clflags.cmo utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
+  utils/consistbl.cmo
+
+PARSING=parsing/location.cmo parsing/longident.cmo \
+  parsing/ast_helper.cmo \
+  parsing/syntaxerr.cmo parsing/parser.cmo \
+  parsing/lexer.cmo parsing/parse.cmo parsing/printast.cmo \
+  parsing/pprintast.cmo \
+  parsing/ast_mapper.cmo
+
+# NNN (trx)
+TYPING=typing/ident.cmo typing/path.cmo \
+  typing/primitive.cmo typing/types.cmo \
+  typing/btype.cmo typing/oprint.cmo \
+  typing/subst.cmo typing/predef.cmo \
+  typing/datarepr.cmo typing/cmi_format.cmo typing/env.cmo \
+  typing/typedtree.cmo typing/printtyped.cmo typing/ctype.cmo \
+  typing/printtyp.cmo typing/includeclass.cmo \
+  typing/mtype.cmo typing/envaux.cmo typing/includecore.cmo \
+  typing/typedtreeIter.cmo typing/typedtreeMap.cmo typing/cmt_format.cmo \
+  typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
+  typing/stypes.cmo typing/typecore.cmo \
+  typing/typedecl.cmo typing/typeclass.cmo \
+  typing/typemod.cmo
+
+COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
+  bytecomp/typeopt.cmo bytecomp/switch.cmo bytecomp/matching.cmo \
+  bytecomp/translobj.cmo bytecomp/translquote.cmo bytecomp/translcore.cmo \
+  bytecomp/translclass.cmo bytecomp/translmod.cmo \
+  bytecomp/simplif.cmo bytecomp/runtimedef.cmo \
+  driver/pparse.cmo driver/main_args.cmo \
+  driver/compenv.cmo driver/compmisc.cmo
+
+COMMON=$(UTILS) $(PARSING) $(TYPING) $(COMP)
+
+BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
+  bytecomp/printinstr.cmo bytecomp/opcodes.cmo bytecomp/emitcode.cmo \
+  bytecomp/bytesections.cmo bytecomp/dll.cmo bytecomp/symtable.cmo \
+  bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
+  driver/errors.cmo driver/compile.cmo
+
+ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
+  asmcomp/cmm.cmo asmcomp/printcmm.cmo \
+  asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
+  asmcomp/clambda.cmo asmcomp/printclambda.cmo asmcomp/compilenv.cmo \
+  asmcomp/closure.cmo asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
+  asmcomp/printmach.cmo asmcomp/selectgen.cmo asmcomp/selection.cmo \
+  asmcomp/comballoc.cmo \
+  asmcomp/CSEgen.cmo asmcomp/CSE.cmo \
+  asmcomp/liveness.cmo \
+  asmcomp/spill.cmo asmcomp/split.cmo \
+  asmcomp/interf.cmo asmcomp/coloring.cmo \
+  asmcomp/reloadgen.cmo asmcomp/reload.cmo \
+  asmcomp/deadcode.cmo \
+  asmcomp/printlinear.cmo asmcomp/linearize.cmo \
+  asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
+  asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
+  asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
+  driver/opterrors.cmo driver/optcompile.cmo
+
+TOPLEVEL=toplevel/genprintval.cmo toplevel/toploop.cmo \
+  toplevel/trace.cmo toplevel/topdirs.cmo toplevel/topmain.cmo
+
+BYTESTART=driver/main.cmo
+
+OPTSTART=driver/optmain.cmo
+
+TOPLEVELSTART=toplevel/topstart.cmo
+
+NATTOPOBJS=$(UTILS) $(PARSING) $(TYPING) $(COMP) $(ASMCOMP) \
+  toplevel/genprintval.cmo toplevel/opttoploop.cmo toplevel/opttopdirs.cmo \
+  toplevel/opttopmain.cmo toplevel/opttopstart.cmo
+
+PERVASIVES=$(STDLIB_MODULES) outcometree topdirs toploop
+
 # For users who don't read the INSTALL file
 defaultentry:
 	@echo "Please refer to the installation instructions in file INSTALL."

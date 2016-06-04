@@ -134,13 +134,13 @@ and Exp : sig
 
   val let_rec_simple : Loc.t -> Name.t list -> (Var.t list -> t list * t) -> t
 
-  val let_ : Loc.t -> Name.t list -> t -> (Var.t list -> Pat.t * t) -> t
+  val let_pattern : Loc.t -> Name.t list -> t -> (Var.t list -> Pat.t * t) -> t
 
   val fun_nonbinding : Loc.t -> Label.t -> Pat.t -> t -> t
 
   val fun_simple : Loc.t -> Name.t -> Label.t -> t option -> (Var.t -> t) -> t
 
-  val fun_ :
+  val fun_pattern :
     Loc.t -> Name.t list -> Label.t -> t option ->
     (Var.t list -> Pat.t * t) -> t
 
@@ -172,9 +172,7 @@ and Exp : sig
 
   val while_ : Loc.t -> t -> t -> t
 
-  val for_nonbinding : Loc.t -> Pat.t -> t -> t -> bool -> t -> t
-
-  val for_simple : Loc.t -> Name.t -> t -> t -> bool -> (Var.t -> t) -> t
+  val for_ : Loc.t -> Name.t -> t -> t -> bool -> (Var.t -> t) -> t
 
   val send : Loc.t -> t -> Method.t -> t
 
@@ -190,14 +188,12 @@ and Exp : sig
 
   module Closed : sig
 
-    type exp = t
-
     type t
 
-    val close : exp -> t
-
-    val open_ : t -> exp
-
   end
+
+  val to_closed : t -> Closed.t
+
+  val of_closed : Closed.t -> t
 
 end

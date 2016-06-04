@@ -1,3 +1,5 @@
+open Typedtree
+open Lambda
 
-val quote_expression :
-  (Typedtree.expression -> Lambda.lambda) -> Typedtree.expression -> Lambda.lambda
+val quote_expression : (expression -> lambda) -> expression -> lambda
+

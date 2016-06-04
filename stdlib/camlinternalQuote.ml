@@ -416,15 +416,13 @@ module ExpRepr : sig
 
   module Closed : sig
 
-    type exp = t
-
     type t
 
-    val close : exp -> t
-
-    val open_ : t -> exp
-
   end
+
+  val to_closed : t -> Closed.t
+
+  val of_closed : Closed.t -> t
 
 end  = struct
 
@@ -477,36 +475,34 @@ end  = struct
   (* Check that the code is closed and return the closed code *)
   module Closed = struct
 
-    type exp = t
-
     (* The closed code is AST *)
     type t = expression
 
-    (* The same as close_code but return the closedness check as a thunk
-       rather than performing it.
-       This is useful for debugging and for showing the code
-    *)
-    let close_delay_check exp =
-        match Heap.choose exp.heap with
-        | None -> (exp.exp, fun () -> ())
-        | Some var ->
-          (exp.exp, fun () ->
-            Format.fprintf Format.str_formatter
-            "The code built at %a is not closed: \
-             identifier %s bound at %a is free"
-            Loc.print exp.exp.pexp_loc (Var.txt var)
-            Loc.print (Var.loc var);
-            failwith (Format.flush_str_formatter ()))
-
-    let close exp =
-      let exp, check = close_delay_check exp in
-      check (); exp
-
-    let open_ exp =
-      let heap = Heap.empty in
-        { heap; exp }
-
   end
+
+  (* The same as close_code but return the closedness check as a thunk
+     rather than performing it.
+     This is useful for debugging and for showing the code
+  *)
+  let close_delay_check exp =
+      match Heap.choose exp.heap with
+      | None -> (exp.exp, fun () -> ())
+      | Some var ->
+        (exp.exp, fun () ->
+          Format.fprintf Format.str_formatter
+          "The code built at %a is not closed: \
+           identifier %s bound at %a is free"
+          Loc.print exp.exp.pexp_loc (Var.txt var)
+          Loc.print (Var.loc var);
+          failwith (Format.flush_str_formatter ()))
+
+  let to_closed exp =
+    let exp, check = close_delay_check exp in
+    check (); exp
+
+  let of_closed exp =
+    let heap = Heap.empty in
+      { heap; exp }
 
 end
 
@@ -676,8 +672,8 @@ module Binding : sig
 
   val guarded :
     Loc.t -> string loc list ->
-    (Var.t list -> PatRepr.t * ExpRepr.t option * ExpRepr.t) ->
-    Var.t Heap.t * pattern * expression option * expression
+    (Var.t list -> PatRepr.t * ExpRepr.t * ExpRepr.t) ->
+    Var.t Heap.t * pattern * expression * expression
 
 end = struct
 
@@ -744,7 +740,7 @@ end = struct
         let vars = List.map (Var.generate mark prio) names in
         let pat, guard, exp = f vars in
         let pat = PatRepr.check_bindings loc vars pat in
-        let heap, guard = accum_option ExpRepr.merge loc Heap.empty guard in
+        let heap, guard = ExpRepr.merge loc Heap.empty guard in
         let heap, exp = ExpRepr.merge loc heap exp in
         (Heap.remove heap prio, pat, guard, exp))
 
@@ -891,7 +887,7 @@ module Case = struct
 
   let guarded loc names f =
     let heap, lhs, guard, rhs = Binding.guarded loc names f in
-      mk heap lhs guard rhs
+      mk heap lhs (Some guard) rhs
 
 end
 
@@ -903,6 +899,10 @@ module Exp = struct
   type t = ExpRepr.t
 
   module Closed = ExpRepr.Closed
+
+  let to_closed = ExpRepr.to_closed
+
+  let of_closed = ExpRepr.of_closed
 
   open ExpRepr
 
@@ -938,7 +938,7 @@ module Exp = struct
     let vbs = List.map (fun (pat, exp) -> mk_vb loc pat exp) defs in
       mk loc heap (Pexp_let(Recursive, vbs, body))
 
-  let let_ loc names def f =
+  let let_pattern loc names def f =
     let heap, pat, body = Binding.pattern loc names f in
     let heap, def = merge loc heap def in
     let vb = mk_vb loc pat def in
@@ -954,7 +954,7 @@ module Exp = struct
     let heap, default = accum_option merge loc heap default in
       mk loc heap (Pexp_fun (label, default, pat, exp))
 
-  let fun_ loc names label default f =
+  let fun_pattern loc names label default f =
     let heap, pat, exp = Binding.pattern loc names f in
     let heap, default = accum_option merge loc heap default in
       mk loc heap (Pexp_fun(label, default, pat, exp))
@@ -1024,15 +1024,7 @@ module Exp = struct
     let heap, body = merge loc heap body in
       mk loc heap (Pexp_while(cond, body))
 
-  let for_nonbinding loc pat low high dir body =
-    let dir = if dir then CamlinternalAST.Upto else CamlinternalAST.Downto in
-    let pat = PatRepr.nonbinding loc pat in
-    let heap, low = merge loc Heap.empty low in
-    let heap, high = merge loc heap high in
-    let heap, body = merge loc heap body in
-      mk loc heap (Pexp_for (pat, low, high, dir, body))
-
-  let for_simple loc name low high dir f =
+  let for_ loc name low high dir f =
     let dir = if dir then CamlinternalAST.Upto else CamlinternalAST.Downto in
     let heap, pat, body = Binding.simple loc name f in
     let heap, low = merge loc heap low in

@@ -482,6 +482,13 @@ typing/untypeast.cmx : typing/typedtree.cmx typing/path.cmx \
 typing/untypeast.cmi : typing/typedtree.cmi typing/path.cmi \
     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
     parsing/asttypes.cmi
+bytecomp/translmod.cmi : typing/typedtree.cmi typing/primitive.cmi \
+    parsing/location.cmi bytecomp/lambda.cmi typing/ident.cmi
+bytecomp/translobj.cmi : bytecomp/lambda.cmi typing/ident.cmi typing/env.cmi
+bytecomp/translquote.cmi : typing/typedtree.cmi parsing/location.cmi \
+    bytecomp/lambda.cmi typing/ident.cmi parsing/asttypes.cmi
+bytecomp/typeopt.cmi : typing/typedtree.cmi typing/path.cmi \
+    bytecomp/lambda.cmi
 bytecomp/bytegen.cmo : typing/types.cmi bytecomp/switch.cmi typing/subst.cmi \
     typing/primitive.cmi utils/misc.cmi bytecomp/matching.cmi \
     bytecomp/lambda.cmi bytecomp/instruct.cmi typing/ident.cmi \
@@ -707,23 +714,12 @@ bytecomp/translobj.cmx : typing/primitive.cmx utils/misc.cmx \
     parsing/longident.cmx bytecomp/lambda.cmx typing/ident.cmx typing/env.cmx \
     utils/config.cmx utils/clflags.cmx typing/btype.cmx parsing/asttypes.cmi \
     bytecomp/translobj.cmi
-bytecomp/translobj.cmi : bytecomp/lambda.cmi typing/ident.cmi typing/env.cmi
-bytecomp/translquote.cmo : typing/types.cmi typing/typedtree.cmi \
-    typing/path.cmi utils/misc.cmi parsing/longident.cmi parsing/location.cmi \
-    bytecomp/lambda.cmi typing/env.cmi typing/ctype.cmi parsing/asttypes.cmi \
-    bytecomp/translquote.cmi
-bytecomp/translquote.cmx : typing/types.cmx typing/typedtree.cmx \
-    typing/path.cmx utils/misc.cmx parsing/longident.cmx parsing/location.cmx \
-    bytecomp/lambda.cmx typing/env.cmx typing/ctype.cmx parsing/asttypes.cmi \
-    bytecomp/translquote.cmi
-bytecomp/translquote.cmi : typing/typedtree.cmi bytecomp/lambda.cmi
-bytecomp/translstatic.cmo : typing/typedtreeIter.cmi typing/typedtree.cmi \
-    bytecomp/translcore.cmi bytecomp/lambda.cmi typing/ident.cmi \
-    parsing/asttypes.cmi bytecomp/translstatic.cmi
-bytecomp/translstatic.cmx : typing/typedtreeIter.cmx typing/typedtree.cmx \
-    bytecomp/translcore.cmx bytecomp/lambda.cmx typing/ident.cmx \
-    parsing/asttypes.cmi bytecomp/translstatic.cmi
-bytecomp/translstatic.cmi : typing/typedtree.cmi bytecomp/lambda.cmi
+bytecomp/translquote.cmo : utils/misc.cmi \
+    parsing/longident.cmi bytecomp/lambda.cmi typing/ident.cmi typing/env.cmi \
+    parsing/asttypes.cmi bytecomp/translquote.cmi parsing/longident.cmi
+bytecomp/translquote.cmx : utils/misc.cmi \
+    parsing/longident.cmi bytecomp/lambda.cmi typing/ident.cmi typing/env.cmi \
+    parsing/asttypes.cmi bytecomp/translquote.cmi parsing/longident.cmi
 bytecomp/typeopt.cmo : typing/types.cmi typing/typedtree.cmi \
     typing/predef.cmi typing/path.cmi bytecomp/lambda.cmi typing/ident.cmi \
     typing/env.cmi typing/ctype.cmi bytecomp/typeopt.cmi
