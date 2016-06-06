@@ -618,7 +618,7 @@ and expression ctxt f x =
     | Pexp_quote e ->
         pp f "@[<2><<@ %a@ >>@]" (expression ctxt)  e
     | Pexp_escape e ->
-        pp f "@[<2>$%a>>@]" (simple_expr ctxt)  e
+        pp f "@[<2>$%a@]" (simple_expr ctxt)  e
     | Pexp_extension e -> (extension ctxt) ctxt f e
     | Pexp_unreachable -> pp f "."
     | _ -> expression1 ctxt f x
