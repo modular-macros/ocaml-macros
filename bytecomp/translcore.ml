@@ -1061,7 +1061,7 @@ and transl_exp0 e =
           cl_env = e.exp_env;
           cl_attributes = [];
          }
-  | Texp_quote e -> Translquote.quote_expression (transl_exp e.exp_env) e
+  | Texp_quote e -> Translquote.quote_expression transl_exp e
   | Texp_escape e ->
       if !transl_splices then
         let parsetree = Array.get !splice_array !splice_index in

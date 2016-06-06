@@ -2817,21 +2817,20 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env;
       }
-  | Pexp_quote e ->
+  | Pexp_quote sbody ->
       let ty = newgenvar() in
       let to_unify = Predef.type_expr ty in
       unify_exp_types loc env to_unify ty_expected;
-      let body = type_expect (with_phase_down env) e ty in
+      let body = type_expect (with_phase_up env) sbody ty in
       re {
           exp_desc = Texp_quote body;
           exp_loc = loc; exp_extra = [];
           exp_type = instance env ty_expected;
           exp_attributes = sexp.pexp_attributes;
           exp_env = env }
-  | Pexp_escape e ->
+  | Pexp_escape sbody ->
       let body =
-        type_expect (with_phase_up env) e
-               (Predef.type_expr ty_expected)
+        type_expect (with_phase_down env) sbody (Predef.type_expr ty_expected)
       in
         re {
           exp_desc = Texp_escape body;
@@ -2839,6 +2838,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           exp_type = instance env ty_expected;
           exp_attributes = sexp.pexp_attributes;
           exp_env = env }
+
   | Pexp_object s ->
       let desc, sign, meths = !type_object env loc s in
       rue {
@@ -2991,31 +2991,6 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       end
   | Pexp_extension ext ->
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
-  | Pexp_quote sbody ->
-      let ty = newgenvar() in
-      let to_unify = Predef.type_expr ty in
-      unify_exp_types loc env to_unify ty_expected;
-      let body = with_stage_up (fun () -> type_expect env sbody ty) in
-      re {
-          exp_desc = Texp_quote body;
-          exp_loc = loc; exp_extra = [];
-          exp_type = instance env ty_expected;
-          exp_attributes = sexp.pexp_attributes;
-          exp_env = env }
-  | Pexp_escape sbody ->
-      let body =
-        with_stage_down loc env
-          (fun () ->
-             type_expect env sbody
-               (Predef.type_expr ty_expected))
-      in
-        re {
-          exp_desc = Texp_escape body;
-          exp_loc = loc; exp_extra = [];
-          exp_type = instance env ty_expected;
-          exp_attributes = sexp.pexp_attributes;
-          exp_env = env }
-
   | Pexp_unreachable ->
       re { exp_desc = Texp_unreachable;
            exp_loc = loc; exp_extra = [];

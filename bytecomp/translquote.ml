@@ -3,7 +3,6 @@ open Asttypes
 open Types
 open Typedtree
 open Lambda
-open Path
 
 let camlinternalQuote =
   lazy
@@ -35,12 +34,16 @@ module Loc = struct
 end
 
 module Name = struct
+  (*
   let mk = combinator "Name" "mk"
+  *)
   let unmarshal = combinator "Name" "unmarshal"
 end
 
 module Var = struct
+  (*
   let name = combinator "Var" "name"
+  *)
 end
 
 module Constant = struct
@@ -69,14 +72,18 @@ module Pat = struct
   let var = combinator "Pat" "var"
   let alias = combinator "Pat" "alias"
   let constant = combinator "Pat" "constant"
+  (*
   let interval = combinator "Pat" "interval"
+  *)
   let tuple = combinator "Pat" "tuple"
   let construct = combinator "Pat" "construct"
   let variant = combinator "Pat" "variant"
   let record = combinator "Pat" "record"
   let array = combinator "Pat" "array"
   let or_ = combinator "Pat" "or_"
+  (*
   let type_ = combinator "Pat" "type_"
+  *)
   let lazy_ = combinator "Pat" "lazy_"
   let exception_ = combinator "Pat" "exception_"
 end
@@ -117,10 +124,14 @@ module Exp = struct
   let send = combinator "Exp" "send"
   let assert_ = combinator "Exp" "assert_"
   let lazy_ = combinator "Exp" "lazy_"
+  (*
   let open_ = combinator "Exp" "open_"
+  *)
   let quote = combinator "Exp" "quote"
   let escape = combinator "Exp" "escape"
+  (*
   let to_closed = combinator "Exp" "to_closed"
+  *)
 end
 
 let use comb =
@@ -128,7 +139,14 @@ let use comb =
 
 let apply loc comb args =
   let comb = Lazy.force comb in
-    Lapply (comb, args, loc)
+  Lapply
+  { ap_func = comb;
+    ap_args = args;
+    ap_loc = loc;
+    ap_should_be_tailcall = false;
+    ap_inlined = Default_inline;
+    ap_specialised = Default_specialise;
+  }
 
 let string s =
   Lconst (Const_base (Const_string(s, None)))
@@ -155,7 +173,7 @@ let false_ = Lconst(Const_pointer 0)
 
 let none =  Lconst(Const_pointer 0)
 
-let some x = Lprim(Pmakeblock(0, Immutable), [x])
+let some x = Lprim(Pmakeblock(0, Immutable, None), [x])
 
 let option opt =
   match opt with
@@ -164,7 +182,7 @@ let option opt =
 
 let nil = Lconst(Const_pointer 0)
 
-let cons hd tl = Lprim(Pmakeblock(0, Immutable), [hd; tl])
+let cons hd tl = Lprim(Pmakeblock(0, Immutable, None), [hd; tl])
 
 let rec list l =
   match l with
@@ -172,33 +190,43 @@ let rec list l =
   | hd :: tl -> cons hd (list tl)
 
 let pair (x, y) =
-  Lprim(Pmakeblock(0, Immutable), [x; y])
+  Lprim(Pmakeblock(0, Immutable, None), [x; y])
 
 let triple (x, y, z) =
-  Lprim(Pmakeblock(0, Immutable), [x; y; z])
+  Lprim(Pmakeblock(0, Immutable, None), [x; y; z])
 
 let func id body =
-  Lfunction(Curried, [id], body)
+  Lfunction {
+    kind = Curried;
+    params = [id];
+    body = body;
+    attr = default_function_attribute;
+  }
 
 let list_func ids body =
   let rec loop list_id = function
     | [] -> body
     | [id] ->
-        Llet(Alias, id, Lprim(Pfield 0, [Lvar list_id]), body)
+        Llet(Alias, Pgenval, id, Lprim(Pfield 0, [Lvar list_id]), body)
     | id :: ids ->
         let tail_id = Ident.create "tl" in
-        Llet(Alias, id, Lprim(Pfield 0, [Lvar list_id]),
-          Llet(Alias, tail_id, Lprim(Pfield 1, [Lvar list_id]),
+        Llet(Alias, Pgenval, id, Lprim(Pfield 0, [Lvar list_id]),
+          Llet(Alias, Pgenval, tail_id, Lprim(Pfield 1, [Lvar list_id]),
                loop tail_id ids))
   in
   let list_id = Ident.create "list" in
   let body = loop list_id ids in
-  Lfunction(Curried, [list_id], body)
+  Lfunction {
+    kind = Curried;
+    params = [list_id];
+    body = body;
+    attr = default_function_attribute;
+  }
 
 let bind id def body =
-  Llet(Strict, id, def, body)
+  Llet(Strict, Pgenval, id, def, body)
 
-let quote_loc (loc : lambda) =
+let quote_loc (loc : Location.t) =
   if loc = Location.none then use Loc.none
   else apply Location.none Loc.unmarshal [marshal_loc loc]
 
@@ -219,9 +247,11 @@ let quote_method loc (meth : Typedtree.meth) =
   in
   apply loc Method.of_string [string name]
 
-let quote_label loc lbl =
-  if lbl = "" then use Label.none
-  else apply loc Label.of_string [string lbl]
+let quote_label loc = function
+  | Nolabel -> use Label.none
+  | Labelled lbl | Optional lbl ->
+    if lbl = "" then use Label.none
+    else apply loc Label.of_string [string lbl]
 
 let lid_of_path p =
   let rec loop = function
@@ -229,7 +259,7 @@ let lid_of_path p =
         if Ident.global id then Longident.Lident (Ident.name id)
         else begin
           match
-            List.find (fun (bname, bid) -> Ident.equal id bid)
+            List.find (fun (_, bid) -> Ident.equal id bid)
                       Predef.builtin_idents
           with
           | name, _ -> Longident.Lident name
@@ -530,10 +560,10 @@ and quote_expression transl stage e =
     end
   | Texp_apply(fn, args) ->
       let fn = quote_expression transl stage fn in
-      let args = List.filter (fun (_, exp, _) -> exp <> None) args in
+      let args = List.filter (fun (_, exp) -> exp <> None) args in
       let args =
         List.map
-          (fun (lbl, exp, _) ->
+          (fun (lbl, exp) ->
              match exp with
              | None -> assert false
              | Some exp ->
@@ -646,11 +676,14 @@ and quote_expression transl stage e =
         apply loc Exp.escape [quote_loc loc; exp]
       end else transl exp
   | Texp_new _ | Texp_instvar _ | Texp_setinstvar _ | Texp_override _
-  | Texp_letmodule _ | Texp_object _ | Texp_pack _ ->
+  | Texp_letmodule _ | Texp_object _ | Texp_pack _ | Texp_unreachable
+  | Texp_letexception _ | Texp_extension_constructor _ ->
       fatal_error "Expression cannot be quoted"
 
 let quote_expression transl exp =
   quote_expression transl 0 exp
 
+(*
 let transl_close_expression loc lam =
   apply loc Exp.to_closed [lam]
+*)

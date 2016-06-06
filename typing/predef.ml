@@ -45,7 +45,6 @@ and ident_int64 = ident_create "int64"
 and ident_lazy_t = ident_create "lazy_t"
 and ident_string = ident_create "string"
 and ident_extension_constructor = ident_create "extension_constructor"
-and ident_bytes = ident_create "bytes"
 and ident_expr = ident_create "expr"
 
 let path_int = Pident ident_int
@@ -64,7 +63,6 @@ and path_int64 = Pident ident_int64
 and path_lazy_t = Pident ident_lazy_t
 and path_string = Pident ident_string
 and path_extension_constructor = Pident ident_extension_constructor
-and path_bytes = Pident ident_bytes
 and path_expr  = Pident ident_expr
 
 let type_int = newgenty (Tconstr(path_int, [], ref Mnil))
@@ -84,7 +82,6 @@ and type_lazy_t t = newgenty (Tconstr(path_lazy_t, [t], ref Mnil))
 and type_string = newgenty (Tconstr(path_string, [], ref Mnil))
 and type_extension_constructor =
       newgenty (Tconstr(path_extension_constructor, [], ref Mnil))
-and type_bytes = newgenty (Tconstr(path_bytes, [], ref Mnil))
 and type_expr t = newgenty (Tconstr(path_expr, [t], ref Mnil))
 
 let ident_match_failure = ident_create_predef_exn "Match_failure"
