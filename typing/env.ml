@@ -230,6 +230,13 @@ let copy_local ~from env =
 let cur_phase env = env.cur_env_phase
 and with_phase phase env = {env with cur_env_phase = phase}
 
+(* Increase or decrease phase of environment *)
+let with_phase_up env =
+  with_phase (cur_phase env + 1) env
+
+let with_phase_down env =
+  with_phase (cur_phase env - 1) env
+
 let same_constr = ref (fun _ _ _ -> assert false)
 
 (* Helper to decide whether to report an identifier shadowing

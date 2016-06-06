@@ -46,6 +46,8 @@ val cur_phase: t -> phase
 
 (** Returns a new environment with a new phase value. *)
 val with_phase: phase -> t -> t
+val with_phase_down: t -> t
+val with_phase_up: t -> t
 
 type type_descriptions =
     constructor_description list * label_description list

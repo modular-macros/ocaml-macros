@@ -124,8 +124,11 @@ let rec insert_splice_array module_id splice_ids = function
       Lletrec (vbs, insert_splice_array module_id splice_ids rem)
   | Lprim (Pmakeblock _, _) as block ->
       let splice_body =
-        Lprim (Pmakearray (Pgenarray, Mutable),
-          List.map (fun id -> Lvar id) (List.rev splice_ids))
+        Lprim (Pmakearray (Paddrarray, Mutable),
+          List.map
+          (fun id ->
+            Translquote.transl_close_expression Location.none (Lvar id))
+          (List.rev splice_ids))
       in
       Lsequence (
         Lprim (Psetglobal module_id, [block]),

@@ -1068,7 +1068,7 @@ and transl_exp0 e =
         incr splice_index;
         let lam =
           transl_exp @@
-          Typecore.type_expression e.exp_env parsetree
+          Typecore.type_expression (Env.with_phase_down e.exp_env) parsetree
         in
         lam
       else

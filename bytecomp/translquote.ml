@@ -4,12 +4,14 @@ open Types
 open Typedtree
 open Lambda
 
+let stdmod_name = "^CamlinternalQuote"
+
 let camlinternalQuote =
   lazy
     (match Env.open_pers_signature
-             "CamlinternalQuote" Env.initial_safe_string with
+       stdmod_name Env.initial_safe_string with
      | exception Not_found ->
-         fatal_error "Module CamlinternalQuote unavailable."
+         fatal_error @@ "Module " ^ stdmod_name ^ " unavailable."
      | env -> env)
 
 let combinator modname field =
@@ -23,10 +25,12 @@ let combinator modname field =
                      [Lprim(Pgetglobal ident, [])])])
      | _ ->
          fatal_error @@
-           "Primitive CamlinternalQuote."^modname^"."^field^" not found."
+           "Primitive " ^ stdmod_name ^ "." ^ modname ^ "." ^ field
+           ^ " not found."
      | exception Not_found ->
         fatal_error @@
-          "Primitive CamlinternalQuote."^modname^"."^field^" not found.")
+          "Primitive " ^ stdmod_name ^ "." ^ modname ^ "." ^ field
+          ^" not found.")
 
 module Loc = struct
   let none = combinator "Loc" "none"
