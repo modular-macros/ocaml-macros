@@ -129,9 +129,7 @@ module Exp = struct
   *)
   let quote = combinator "Exp" "quote"
   let escape = combinator "Exp" "escape"
-  (*
   let to_closed = combinator "Exp" "to_closed"
-  *)
 end
 
 let use comb =
@@ -683,7 +681,6 @@ and quote_expression transl stage e =
 let quote_expression transl exp =
   quote_expression transl 0 exp
 
-(*
 let transl_close_expression loc lam =
   apply loc Exp.to_closed [lam]
-*)
+
