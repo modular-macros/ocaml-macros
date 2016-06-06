@@ -53,6 +53,14 @@ module Label : sig
 
 end
 
+module ArgLabel : sig
+
+  type t
+
+  val unmarshal : string -> t
+
+end
+
 module Variant : sig
 
   type t
@@ -136,17 +144,17 @@ and Exp : sig
 
   val let_pattern : Loc.t -> Name.t list -> t -> (Var.t list -> Pat.t * t) -> t
 
-  val fun_nonbinding : Loc.t -> Label.t -> Pat.t -> t -> t
+  val fun_nonbinding : Loc.t -> ArgLabel.t -> Pat.t -> t -> t
 
-  val fun_simple : Loc.t -> Name.t -> Label.t -> t option -> (Var.t -> t) -> t
+  val fun_simple : Loc.t -> Name.t -> ArgLabel.t -> t option -> (Var.t -> t) -> t
 
   val fun_pattern :
-    Loc.t -> Name.t list -> Label.t -> t option ->
+    Loc.t -> Name.t list -> ArgLabel.t -> t option ->
     (Var.t list -> Pat.t * t) -> t
 
   val function_ : Loc.t -> Case.t list -> t
 
-  val apply : Loc.t -> t -> (Label.t * t) list -> t
+  val apply : Loc.t -> t -> (ArgLabel.t * t) list -> t
 
   val match_ : Loc.t -> t -> Case.t list -> t
 

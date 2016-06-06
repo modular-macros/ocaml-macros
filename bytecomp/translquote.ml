@@ -54,9 +54,15 @@ module Identifier = struct
   let unmarshal = combinator "Ident" "unmarshal"
 end
 
+(*
 module Label = struct
   let none = combinator "Label" "none"
   let of_string = combinator "Label" "of_string"
+end
+*)
+
+module ArgLabel = struct
+  let unmarshal = combinator "ArgLabel" "unmarshal"
 end
 
 module Variant = struct
@@ -157,11 +163,15 @@ let marshal_name (x : string loc) =
   let s = Marshal.to_string x [] in
     string s
 
-let marshal_constant (x : constant) =
+let marshal_constant (x : CamlinternalAST.constant) =
   let s = Marshal.to_string x [] in
     string s
 
 let marshal_ident (x : Longident.t loc) =
+  let s = Marshal.to_string x [] in
+    string s
+
+let marshal_arg_label (x : Asttypes.arg_label) =
   let s = Marshal.to_string x [] in
     string s
 
@@ -229,6 +239,17 @@ let quote_loc (loc : Location.t) =
   else apply Location.none Loc.unmarshal [marshal_loc loc]
 
 let quote_constant loc (const : Asttypes.constant) =
+  let const : CamlinternalAST.constant =
+    let open CamlinternalAST in
+    match const with
+    | Const_int x -> Pconst_integer (string_of_int x, None)
+    | Const_char x -> Pconst_char x
+    | Const_string (x,y) -> Pconst_string (x,y)
+    | Const_float x -> Pconst_float (x, None)
+    | Const_int32 x -> Pconst_integer (Int32.to_string x, Some 'l')
+    | Const_int64 x -> Pconst_integer (Int64.to_string x, Some 'L')
+    | Const_nativeint x -> Pconst_integer (Nativeint.to_string x, Some 'n')
+  in
   apply loc Constant.unmarshal [marshal_constant const]
 
 let quote_name loc (str : string loc) =
@@ -245,11 +266,15 @@ let quote_method loc (meth : Typedtree.meth) =
   in
   apply loc Method.of_string [string name]
 
+(*
 let quote_label loc = function
-  | Nolabel -> use Label.none
-  | Labelled lbl | Optional lbl ->
-    if lbl = "" then use Label.none
-    else apply loc Label.of_string [string lbl]
+  | "" -> use Label.none
+  | lbl ->
+    apply loc Label.of_string [string lbl]
+*)
+
+let quote_arg_label loc (lbl : Asttypes.arg_label) =
+  apply loc ArgLabel.unmarshal [marshal_arg_label lbl]
 
 let lid_of_path p =
   let rec loop = function
@@ -544,13 +569,13 @@ and quote_expression transl stage e =
       let cbs = List.map (case_binding false transl stage) cases in
       match cbs with
       | [Non_binding(pat, exp)] ->
-          let label = quote_label loc label in
+          let label = quote_arg_label loc label in
           apply loc Exp.fun_nonbinding [quote_loc loc; label; pat; exp]
       | [Simple(name, body)] ->
-          let label = quote_label loc label in
+          let label = quote_arg_label loc label in
           apply loc Exp.fun_simple [quote_loc loc; name; label; none; body]
       | [Pattern(names, body)] ->
-          let label = quote_label loc label in
+          let label = quote_arg_label loc label in
           apply loc Exp.fun_pattern [quote_loc loc; names; label; none; body]
       | cases ->
           let cases = List.map (quote_case_binding loc) cases in
@@ -565,7 +590,7 @@ and quote_expression transl stage e =
              match exp with
              | None -> assert false
              | Some exp ->
-                 let lbl = quote_label loc lbl in
+                 let lbl = quote_arg_label loc lbl in
                  let exp = quote_expression transl stage exp in
                    pair (lbl, exp))
           args

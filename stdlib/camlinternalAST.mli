@@ -1,12 +1,23 @@
 
 type constant =
-    Const_int of int
-  | Const_char of char
-  | Const_string of string * string option
-  | Const_float of string
-  | Const_int32 of int32
-  | Const_int64 of int64
-  | Const_nativeint of nativeint
+    Pconst_integer of string * char option
+  (* 3 3l 3L 3n
+
+     Suffixes [g-z][G-Z] are accepted by the parser.
+     Suffixes except 'l', 'L' and 'n' are rejected by the typechecker
+  *)
+  | Pconst_char of char
+  (* 'c' *)
+  | Pconst_string of string * string option
+  (* "constant"
+     {delim|other constant|delim}
+  *)
+  | Pconst_float of string * char option
+  (* 3.4 2e5 1.4e-4
+
+     Suffixes [g-z][G-Z] are accepted by the parser.
+     Suffixes are rejected by the typechecker.
+  *)
 
 type rec_flag = Nonrecursive | Recursive
 
@@ -17,6 +28,11 @@ type override_flag = Override | Fresh
 type closed_flag = Closed | Open
 
 type label = string
+
+type arg_label =
+    Nolabel
+  | Labelled of string (*  label:T -> ... *)
+  | Optional of string (* ?label:T -> ... *)
 
 type location = {
   loc_start: Lexing.position;
@@ -81,10 +97,10 @@ and ('a, 'b, 'c, 'd) expression_desc =
       * ('a, 'b, 'c, 'd) expression
   | Pexp_function of ('a, 'b, 'c, 'd) case list
   | Pexp_fun of
-      label * ('a, 'b, 'c, 'd) expression option
+      arg_label * ('a, 'b, 'c, 'd) expression option
       * ('a, 'b, 'c, 'd) pattern * ('a, 'b, 'c, 'd) expression
   | Pexp_apply of
-      ('a, 'b, 'c, 'd) expression * (label * ('a, 'b, 'c, 'd) expression) list
+      ('a, 'b, 'c, 'd) expression * (arg_label * ('a, 'b, 'c, 'd) expression) list
   | Pexp_match of
       ('a, 'b, 'c, 'd) expression * ('a, 'b, 'c, 'd) case list
   | Pexp_try of ('a, 'b, 'c, 'd) expression * ('a, 'b, 'c, 'd) case list
@@ -115,6 +131,7 @@ and ('a, 'b, 'c, 'd) expression_desc =
   | Pexp_setinstvar of string loc * ('a, 'b, 'c, 'd) expression
   | Pexp_override of (string loc * ('a, 'b, 'c, 'd) expression) list
   | Pexp_letmodule of string loc * 'c * ('a, 'b, 'c, 'd) expression
+  | Pexp_letexception of extension_constructor * ('a, 'b, 'c, 'd) expression
   | Pexp_assert of ('a, 'b, 'c, 'd) expression
   | Pexp_lazy of ('a, 'b, 'c, 'd) expression
   | Pexp_poly of ('a, 'b, 'c, 'd) expression * 'b option
@@ -125,6 +142,7 @@ and ('a, 'b, 'c, 'd) expression_desc =
   | Pexp_quote of ('a, 'b, 'c, 'd) expression
   | Pexp_escape of ('a, 'b, 'c, 'd) expression
   | Pexp_extension of 'a
+  | Pexp_unreachable
 
 and ('a, 'b, 'c, 'd) case =
   {

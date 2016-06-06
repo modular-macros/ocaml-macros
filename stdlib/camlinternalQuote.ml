@@ -781,6 +781,15 @@ module Label = struct
 
 end
 
+module ArgLabel = struct
+
+  type t = CamlinternalAST.arg_label
+
+  let unmarshal (s : string) : t =
+    Marshal.from_string s 0
+
+end
+
 module Variant = struct
 
   type t = string
