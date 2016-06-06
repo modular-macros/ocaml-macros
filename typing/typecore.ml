@@ -2821,7 +2821,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let ty = newgenvar() in
       let to_unify = Predef.type_expr ty in
       unify_exp_types loc env to_unify ty_expected;
-      let body = type_expect (with_phase_up env) sbody ty in
+      let body = type_expect (with_phase_down env) sbody ty in
       re {
           exp_desc = Texp_quote body;
           exp_loc = loc; exp_extra = [];
@@ -2830,7 +2830,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           exp_env = env }
   | Pexp_escape sbody ->
       let body =
-        type_expect (with_phase_down env) sbody (Predef.type_expr ty_expected)
+        type_expect (with_phase_up env) sbody (Predef.type_expr ty_expected)
       in
         re {
           exp_desc = Texp_escape body;
