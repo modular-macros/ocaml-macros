@@ -699,7 +699,7 @@ and quote_expression transl stage e =
       apply loc Exp.quote [quote_loc loc; exp]
   | Texp_escape exp ->
       if stage > 0 then begin
-        let exp = quote_expression transl (stage + 1) exp in
+        let exp = quote_expression transl (stage - 1) exp in
         apply loc Exp.escape [quote_loc loc; exp]
       end else transl exp
   | Texp_new _ | Texp_instvar _ | Texp_setinstvar _ | Texp_override _
