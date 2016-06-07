@@ -20,3 +20,5 @@
 (* module coercion not handled *)
 val transl_implementation : string -> Typedtree.structure -> Lambda.lambda
 
+val transl_toplevel_definition : Typedtree.structure -> Lambda.lambda
+

@@ -4,14 +4,20 @@ open Types
 open Typedtree
 open Lambda
 
-let stdmod_name = "^CamlinternalQuote"
+let stdmod_name = "CamlinternalQuote"
+
+let lifted_path = ref false
+
+let stdmod_path () =
+  if !lifted_path then "^" ^ stdmod_name
+  else stdmod_name
 
 let camlinternalQuote =
   lazy
     (match Env.open_pers_signature
-       stdmod_name Env.initial_safe_string with
+       (stdmod_path ()) Env.initial_safe_string with
      | exception Not_found ->
-         fatal_error @@ "Module " ^ stdmod_name ^ " unavailable."
+         fatal_error @@ "Module " ^ stdmod_path () ^ " unavailable."
      | env -> env)
 
 let combinator modname field =
@@ -25,11 +31,11 @@ let combinator modname field =
                      [Lprim(Pgetglobal ident, [])])])
      | _ ->
          fatal_error @@
-           "Primitive " ^ stdmod_name ^ "." ^ modname ^ "." ^ field
+           "Primitive " ^ stdmod_path () ^ "." ^ modname ^ "." ^ field
            ^ " not found."
      | exception Not_found ->
         fatal_error @@
-          "Primitive " ^ stdmod_name ^ "." ^ modname ^ "." ^ field
+          "Primitive " ^ stdmod_path () ^ "." ^ modname ^ "." ^ field
           ^" not found.")
 
 module Loc = struct
@@ -622,7 +628,7 @@ and quote_expression transl stage e =
             Some arg
         | _ :: _ ->
             let args = List.map (quote_expression transl stage) args in
-            Some (apply loc Pat.tuple [quote_loc loc; list args])
+            Some (apply loc Exp.tuple [quote_loc loc; list args])
       in
       apply loc Exp.construct [quote_loc loc; constr; option args]
   | Texp_variant(variant, argo) ->

@@ -253,6 +253,25 @@ let execute_phrase print_outcome ppf phr =
       let sg' = Typemod.simplify_signature sg in
       ignore (Includemod.signatures oldenv sg sg');
       Typecore.force_delayed_checks ();
+      let slam = Translstatic.transl_toplevel_definition str in
+      let splices =
+        begin try
+          toplevel_env := newenv;
+          let res = load_lambda ppf slam in
+          match res with
+          | Result v ->
+              v
+          | Exception exn ->
+              toplevel_env := oldenv;
+              if exn = Out_of_memory then Gc.full_major ();
+              raise exn
+        with x ->
+          toplevel_env := oldenv;
+          raise x
+        end
+      in
+      Translcore.transl_splices := true;
+      Translcore.splice_array := (Obj.obj splices : Parsetree.expression array);
       let lam = Translmod.transl_toplevel_definition str in
       Warnings.check_fatal ();
       begin try
@@ -267,7 +286,7 @@ let execute_phrase print_outcome ppf phr =
                   | [ { str_desc =
                           (Tstr_eval (exp, _)
                           |Tstr_value
-                              (Asttypes.Nonstatic,
+                              (_,
                                Asttypes.Nonrecursive,
                                [{vb_pat = {pat_desc=Tpat_any};
                                  vb_expr = exp}
@@ -281,12 +300,7 @@ let execute_phrase print_outcome ppf phr =
                       Ophr_eval (outv, ty)
 
                   (* when phrase is empty or is a static binding, no printing *)
-                  | []
-                  | [ { str_desc =
-                          Tstr_value
-                            (Asttypes.Static, _, _)
-                      }
-                    ] ->
+                  | [] ->
                       Ophr_signature []
                   | _ -> Ophr_signature (pr_item newenv sg'))
               else Ophr_signature []

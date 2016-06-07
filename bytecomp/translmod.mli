@@ -38,6 +38,7 @@ val transl_package_flambda:
 
 val toplevel_name: Ident.t -> string
 val nat_toplevel_name: Ident.t -> Ident.t * int
+val close_toplevel_term: lambda * unit -> lambda
 
 val primitive_declarations: Primitive.description list ref
 
