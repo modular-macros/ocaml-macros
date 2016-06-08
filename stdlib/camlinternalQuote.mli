@@ -33,6 +33,10 @@ module Constant : sig
 
   val unmarshal : string -> t
 
+  val integer : int -> t
+
+  val floating : float -> t
+
 end
 
 module Ident : sig

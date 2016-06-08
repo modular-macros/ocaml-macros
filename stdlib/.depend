@@ -43,10 +43,10 @@ camlinternalOO.cmo : sys.cmi string.cmi obj.cmi map.cmi list.cmi char.cmi \
 camlinternalOO.cmx : sys.cmx string.cmx obj.cmx map.cmx list.cmx char.cmx \
     array.cmx camlinternalOO.cmi
 camlinternalOO.cmi : obj.cmi
-camlinternalQuote.cmo : string.cmi marshal.cmi map.cmi list.cmi lexing.cmi \
-    format.cmi camlinternalAST.cmi camlinternalQuote.cmi
-camlinternalQuote.cmx : string.cmx marshal.cmx map.cmx list.cmx lexing.cmx \
-    format.cmx camlinternalAST.cmi camlinternalQuote.cmi
+camlinternalQuote.cmo : marshal.cmi map.cmi list.cmi lexing.cmi format.cmi \
+    camlinternalAST.cmi camlinternalQuote.cmi
+camlinternalQuote.cmx : marshal.cmx map.cmx list.cmx lexing.cmx format.cmx \
+    camlinternalAST.cmi camlinternalQuote.cmi
 camlinternalQuote.cmi :
 char.cmo : char.cmi
 char.cmx : char.cmi
@@ -62,6 +62,9 @@ ephemeron.cmo : sys.cmi random.cmi obj.cmi lazy.cmi hashtbl.cmi array.cmi \
 ephemeron.cmx : sys.cmx random.cmx obj.cmx lazy.cmx hashtbl.cmx array.cmx \
     ephemeron.cmi
 ephemeron.cmi : hashtbl.cmi
+expr.cmo : camlinternalQuote.cmi camlinternalAST.cmi expr.cmi
+expr.cmx : camlinternalQuote.cmx camlinternalAST.cmi expr.cmi
+expr.cmi :
 filename.cmo : sys.cmi string.cmi random.cmi printf.cmi lazy.cmi buffer.cmi \
     filename.cmi
 filename.cmx : sys.cmx string.cmx random.cmx printf.cmx lazy.cmx buffer.cmx \
@@ -219,10 +222,10 @@ camlinternalOO.cmo : sys.cmi string.cmi obj.cmi map.cmi list.cmi char.cmi \
     array.cmi camlinternalOO.cmi
 camlinternalOO.p.cmx : sys.cmx string.cmx obj.cmx map.cmx list.cmx char.cmx \
     array.cmx camlinternalOO.cmi
-camlinternalQuote.cmo : string.cmi marshal.cmi map.cmi list.cmi lexing.cmi \
-    format.cmi camlinternalAST.cmi camlinternalQuote.cmi
-camlinternalQuote.p.cmx : string.cmx marshal.cmx map.cmx list.cmx lexing.cmx \
-    format.cmx camlinternalAST.cmi camlinternalQuote.cmi
+camlinternalQuote.cmo : marshal.cmi map.cmi list.cmi lexing.cmi format.cmi \
+    camlinternalAST.cmi camlinternalQuote.cmi
+camlinternalQuote.p.cmx : marshal.cmx map.cmx list.cmx lexing.cmx format.cmx \
+    camlinternalAST.cmi camlinternalQuote.cmi
 char.cmo : char.cmi
 char.p.cmx : char.cmi
 complex.cmo : complex.cmi
@@ -233,6 +236,8 @@ ephemeron.cmo : sys.cmi random.cmi obj.cmi lazy.cmi hashtbl.cmi array.cmi \
     ephemeron.cmi
 ephemeron.p.cmx : sys.cmx random.cmx obj.cmx lazy.cmx hashtbl.cmx array.cmx \
     ephemeron.cmi
+expr.cmo : camlinternalQuote.cmi camlinternalAST.cmi expr.cmi
+expr.p.cmx : camlinternalQuote.cmx camlinternalAST.cmi expr.cmi
 filename.cmo : sys.cmi string.cmi random.cmi printf.cmi lazy.cmi buffer.cmi \
     filename.cmi
 filename.p.cmx : sys.cmx string.cmx random.cmx printf.cmx lazy.cmx buffer.cmx \

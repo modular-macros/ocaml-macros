@@ -68,4 +68,5 @@ STDLIB_MODULES=\
   stringLabels \
   sys \
   uchar \
-  weak
+  weak \
+  expr

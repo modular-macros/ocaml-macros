@@ -756,6 +756,14 @@ module Constant = struct
   let unmarshal (s : string) : t =
     Marshal.from_string s 0
 
+  let integer i =
+    let open CamlinternalAST in
+    Pconst_integer (string_of_int i, None)
+
+  let floating f =
+    let open CamlinternalAST in
+    Pconst_float (string_of_float f, None)
+
 end
 
 module Ident = struct

@@ -41,6 +41,7 @@ OTHERS=list.cmo char.cmo bytes.cmo string.cmo sys.cmo \
   camlinternalLazy.cmo lazy.cmo stream.cmo \
   buffer.cmo camlinternalFormat.cmo printf.cmo \
   format.cmo camlinternalQuote.cmo \
+  expr.cmo \
   arg.cmo printexc.cmo gc.cmo \
   digest.cmo random.cmo hashtbl.cmo weak.cmo \
   uchar.cmo scanf.cmo callback.cmo \
