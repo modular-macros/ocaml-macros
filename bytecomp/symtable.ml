@@ -317,7 +317,6 @@ let init_toplevel () =
 (* Initialize the linker for running static code *)
 
 let init_static () =
-  ignore (init_toplevel ());
   (* Add lifting symbol to all global identifiers *)
   let add_lifted_key k x tbl =
     Tbl.add (Ident.create_persistent @@ "^" ^ Ident.name k) x tbl

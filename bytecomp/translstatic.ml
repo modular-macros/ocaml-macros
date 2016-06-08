@@ -138,10 +138,7 @@ let rec insert_splice_array module_id splice_ids = function
 let transl_implementation module_name str (* module coercion unhandled *) =
   let module_id = Ident.create_persistent module_name in
   Translcore.set_transl_splices None;
-  let backup = !Translquote.lifted_path in
-  Translquote.lifted_path := true;
   let (mod_body, splice_ids) = transl_structure [] str.str_items in
-  Translquote.lifted_path := backup;
   insert_splice_array module_id splice_ids mod_body
 
 let toploop_ident = Ident.create_persistent "Toploop"
@@ -223,12 +220,9 @@ let transl_toplevel_definition str =
   | [] -> lambda_unit
   | item :: _ -> (* Only first item handled! *)
     Translcore.set_transl_splices None;
-    let backup = !Translquote.lifted_path in
-    Translquote.lifted_path := false;
     let (def_body, splice_ids) =
       transl_toplevel_item_and_close item
     in
-    Translquote.lifted_path := backup;
     insert_splice_array_toplevel splice_ids def_body
 
 
