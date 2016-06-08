@@ -87,8 +87,7 @@ let implementation ppf sourcefile outputprefix =
         print_if ppf (ref true) Printlambda.lambda @@
         Simplif.simplify_lambda stat_lam in
       let splices = Runstatic.run_static ppf sstat_lam in
-      Translcore.transl_splices := true;
-      Translcore.splice_array := splices;
+      Translcore.set_transl_splices (Some (ref splices));
       let bytecode =
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))

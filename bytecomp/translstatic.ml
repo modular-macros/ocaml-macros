@@ -137,7 +137,7 @@ let rec insert_splice_array module_id splice_ids = function
 
 let transl_implementation module_name str (* module coercion unhandled *) =
   let module_id = Ident.create_persistent module_name in
-  Translcore.transl_splices := false;
+  Translcore.set_transl_splices None;
   let backup = !Translquote.lifted_path in
   Translquote.lifted_path := true;
   let (mod_body, splice_ids) = transl_structure [] str.str_items in
@@ -222,7 +222,7 @@ let transl_toplevel_definition str =
   match str.str_items with
   | [] -> lambda_unit
   | item :: _ -> (* Only first item handled! *)
-    Translcore.transl_splices := false;
+    Translcore.set_transl_splices None;
     let backup = !Translquote.lifted_path in
     Translquote.lifted_path := false;
     let (def_body, splice_ids) =

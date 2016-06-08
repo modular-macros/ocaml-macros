@@ -270,8 +270,8 @@ let execute_phrase print_outcome ppf phr =
           raise x
         end
       in
-      Translcore.transl_splices := true;
-      Translcore.splice_array := (Obj.obj splices : Parsetree.expression array);
+      Translcore.set_transl_splices
+        (Some (ref (Obj.obj splices : Parsetree.expression array)));
       let lam = Translmod.transl_toplevel_definition str in
       Warnings.check_fatal ();
       begin try
