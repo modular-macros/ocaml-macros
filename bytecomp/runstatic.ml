@@ -26,9 +26,7 @@ let run_static ppf lam =
   Symtable.patch_object code reloc;
   Symtable.check_global_initialized reloc;
   Symtable.update_global_table ();
-  Printf.fprintf stderr "before reify\n%!";
   let splices = (Meta.reify_bytecode code code_size) () in
-  Printf.fprintf stderr "after reify\n%!";
   Symtable.reset ();
   (Obj.obj splices : Parsetree.expression array)
 

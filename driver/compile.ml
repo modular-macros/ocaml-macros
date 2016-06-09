@@ -84,7 +84,7 @@ let implementation ppf sourcefile outputprefix =
       let stat_lam =
         Translstatic.transl_implementation modulename typedtree in
       let sstat_lam =
-        print_if ppf (ref true) Printlambda.lambda @@
+        print_if ppf Clflags.dump_parsetree Printlambda.lambda @@
         Simplif.simplify_lambda stat_lam in
       let splices = Runstatic.run_static ppf sstat_lam in
       Translcore.set_transl_splices (Some (ref splices));
