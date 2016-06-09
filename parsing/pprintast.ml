@@ -512,7 +512,7 @@ and expression ctxt f x =
         (* pp f "@[<2>let %a%a in@;<1 -2>%a@]" (\*no identation here, a new line*\) *)
         (*   rec_flag rf *)
         pp f "@[<2>%a in@;<1 -2>%a@]"
-          (bindings reset_ctxt) (rf,l)
+          (bindings reset_ctxt) (Nonstatic, rf,l)
           (expression ctxt) e
     | Pexp_apply (e, l) ->
         begin if not (sugar_expr ctxt f x) then
@@ -619,7 +619,7 @@ and expression ctxt f x =
         pp f "@[<2><<@ %a@ >>@]" (expression ctxt)  e
     | Pexp_escape e ->
         pp f "@[<2>$%a@]" (simple_expr ctxt)  e
-    | Pexp_extension e -> (extension ctxt) ctxt f e
+    | Pexp_extension e -> extension ctxt f e
     | Pexp_unreachable -> pp f "."
     | _ -> expression1 ctxt f x
 
@@ -875,7 +875,7 @@ and class_expr ctxt f x =
           (class_expr ctxt) e
     | Pcl_let (rf, l, ce) ->
         pp f "%a@ in@ %a"
-          (bindings ctxt) (rf,l)
+          (bindings ctxt) (Nonstatic, rf,l)
           (class_expr ctxt) ce
     | Pcl_apply (ce, l) ->
         pp f "((%a)@ %a)" (* Cf: #7200 *)
