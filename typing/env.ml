@@ -168,9 +168,12 @@ type type_descriptions =
 let in_signature_flag = 0x01
 let implicit_coercion_flag = 0x02
 
+type stage = int
+
 type t = {
   values: (Path.t * value_description) EnvTbl.t;
   phases: (Path.t * phase) EnvTbl.t;
+  stages: (Path.t * stage) EnvTbl.t;
   constrs: constructor_description EnvTbl.t;
   labels: label_description EnvTbl.t;
   types: (Path.t * (type_declaration * type_descriptions)) EnvTbl.t;
@@ -185,6 +188,7 @@ type t = {
   gadt_instances: (int * TypeSet.t ref) list;
   flags: int;
   cur_env_phase: phase;
+  cur_env_stage: stage;
 }
 
 and module_components =
@@ -201,6 +205,7 @@ and module_components_repr =
 and structure_components = {
   mutable comp_values: (string, (value_description * int)) Tbl.t;
   mutable comp_phases: (string, (phase * int)) Tbl.t;
+  mutable comp_stages: (string, (stage * int)) Tbl.t;
   mutable comp_constrs: (string, (constructor_description * int) list) Tbl.t;
   mutable comp_labels: (string, (label_description * int) list) Tbl.t;
   mutable comp_types:
@@ -237,6 +242,16 @@ let with_phase_up env =
 let with_phase_down env =
   with_phase (cur_phase env - 1) env
 
+let cur_stage env = env.cur_env_stage
+and with_stage stage env = {env with cur_env_stage = stage}
+
+(* Increase or decrease stage of environment *)
+let with_stage_up env =
+  with_stage (cur_stage env + 1) env
+
+let with_stage_down env =
+  with_stage (cur_stage env - 1) env
+
 let same_constr = ref (fun _ _ _ -> assert false)
 
 (* Helper to decide whether to report an identifier shadowing
@@ -271,11 +286,12 @@ let empty = {
   labels = EnvTbl.empty; types = EnvTbl.empty;
   modules = EnvTbl.empty; modtypes = EnvTbl.empty;
   components = EnvTbl.empty; classes = EnvTbl.empty;
-  cltypes = EnvTbl.empty; phases = EnvTbl.empty;
+  cltypes = EnvTbl.empty;
+  phases = EnvTbl.empty; stages = EnvTbl.empty;
   summary = Env_empty; local_constraints = PathMap.empty; gadt_instances = [];
   flags = 0;
   functor_args = Ident.empty;
-  cur_env_phase = 0;
+  cur_env_phase = 0; cur_env_stage = 0;
  }
 
 let in_signature b env =
@@ -593,6 +609,10 @@ let find_value =
 and find_phase path env =
   try
     find (fun env -> env.phases) (fun sc -> sc.comp_phases) path env
+  with Not_found -> 0
+and find_stage path env =
+  try
+    find (fun env -> env.stages) (fun sc -> sc.comp_stages) path env
   with Not_found -> 0
 and find_type_full =
   find (fun env -> env.types) (fun sc -> sc.comp_types)
@@ -1402,6 +1422,7 @@ and components_of_module_maker (env, sub, path, mty) =
       let c =
         { comp_values = Tbl.empty;
           comp_phases = Tbl.empty;
+          comp_stages = Tbl.empty;
           comp_constrs = Tbl.empty;
           comp_labels = Tbl.empty; comp_types = Tbl.empty;
           comp_modules = Tbl.empty; comp_modtypes = Tbl.empty;
@@ -1491,6 +1512,7 @@ and components_of_module_maker (env, sub, path, mty) =
         Structure_comps {
           comp_values = Tbl.empty;
           comp_phases = Tbl.empty;
+          comp_stages = Tbl.empty;
           comp_constrs = Tbl.empty;
           comp_labels = Tbl.empty;
           comp_types = Tbl.empty;
@@ -1531,6 +1553,18 @@ and store_value ?check slot id path decl env renv =
   { env with
     values = EnvTbl.add slot (fun x -> `Value x) id (path, decl)
         env.values renv.values;
+    phases = (
+      if env.cur_env_phase = 0 then env.phases
+      else
+        EnvTbl.add None (fun x -> x) id (path, env.cur_env_phase)
+        env.phases renv.phases
+    );
+    stages = (
+      if env.cur_env_stage = 0 then env.stages
+      else
+        EnvTbl.add None (fun x -> x) id (path, env.cur_env_stage)
+        env.stages renv.stages
+    );
     summary = Env_value(env.summary, id, decl) }
 
 and store_phase id path phase env renv =
@@ -1538,6 +1572,14 @@ and store_phase id path phase env renv =
     phases =
       EnvTbl.add None (fun x -> x) id (path, phase) env.phases renv.phases;
   }
+
+(*
+and store_stage id path stage env renv =
+  { env with
+    stages =
+      EnvTbl.add None (fun x -> x) id (path, stage) env.stages renv.stages;
+  }
+*)
 
 and store_type ~check slot id path info env renv =
   let loc = info.type_loc in
@@ -1689,6 +1731,11 @@ let add_value ?check id desc env =
 
 let add_phase id phase env =
   store_phase id (Pident id) phase env env
+
+(*
+let add_stage id stage env =
+  store_stage id (Pident id) stage env env
+*)
 
 let add_type ~check id info env =
   store_type ~check None id (Pident id) info env env

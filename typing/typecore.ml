@@ -1435,14 +1435,10 @@ let add_pattern_variables ?check ?check_as env =
   (List.fold_right
      (fun (id, ty, _name, loc, as_var) env ->
        let check = if as_var then check_as else check in
-       let env = Env.add_value ?check id
+       Env.add_value ?check id
          {val_type = ty; val_kind = Val_reg; Types.val_loc = loc;
           val_attributes = [];
          } env
-       in
-       if Env.cur_phase env <> 0 then
-         Env.add_phase id (Env.cur_phase env) env
-       else env
      )
      pv env,
    get_ref module_variables)
@@ -2814,7 +2810,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let ty = newgenvar() in
       let to_unify = Predef.type_expr ty in
       unify_exp_types loc env to_unify ty_expected;
-      let body = type_expect (Env.with_phase_down env) sbody ty in
+      let body =
+        type_expect
+        (Env.with_stage_up (Env.with_phase_down env))
+        sbody ty in
       re {
           exp_desc = Texp_quote body;
           exp_loc = loc; exp_extra = [];
@@ -2823,7 +2822,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           exp_env = env }
   | Pexp_escape sbody ->
       let body =
-        type_expect (Env.with_phase_up env) sbody (Predef.type_expr ty_expected)
+        type_expect
+        (let env = Env.with_phase_up env in
+          if Env.cur_stage env = 0 then env else Env.with_stage_down env)
+        sbody (Predef.type_expr ty_expected)
       in
         re {
           exp_desc = Texp_escape body;
