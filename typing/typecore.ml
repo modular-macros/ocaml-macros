@@ -1949,7 +1949,12 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         if phase <> Env.cur_phase env then
           raise (Error (loc, env, Phase (path, phase, Env.cur_phase env)));
         let stage = Env.find_stage path env in
-        if stage <> Env.cur_stage env then
+        let rec global = function
+        | Path.Pident id -> Ident.global id
+        | Path.Pdot (p, _, _) -> global p
+        | Path.Papply (p, p') -> global p && global p'
+        in
+        if stage <> Env.cur_stage env && not (global path) then
           raise (Error (loc, env, Staging (path, stage, Env.cur_stage env)));
         if !Clflags.annotations then begin
           let dloc = desc.Types.val_loc in
