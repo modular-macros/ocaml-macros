@@ -77,6 +77,7 @@ type error =
   | Not_an_extension_constructor
   | Literal_overflow of string
   | Unknown_literal of string * char
+  | Phase of Path.t * int * int
   | Staging of Path.t * int * int
 
 exception Error of Location.t * Env.t * error
@@ -1946,7 +1947,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         (* Raise exception if staging error *)
         let phase = Env.find_phase path env in
         if phase <> Env.cur_phase env then
-          raise (Error (loc, env, Staging (path, phase, Env.cur_phase env)));
+          raise (Error (loc, env, Phase (path, phase, Env.cur_phase env)));
+        let stage = Env.find_stage path env in
+        if stage <> Env.cur_stage env then
+          raise (Error (loc, env, Staging (path, stage, Env.cur_stage env)));
         if !Clflags.annotations then begin
           let dloc = desc.Types.val_loc in
           let annot =
@@ -4404,9 +4408,12 @@ let report_error env ppf = function
                    integers of type %s" ty
   | Unknown_literal (n, m) ->
       fprintf ppf "Unknown modifier '%c' for literal %s%c" m n m
-  | Staging (p, phase, expect_phase) ->
+  | Phase (p, phase, expect_phase) ->
       fprintf ppf "Attempt to use value %a of phase %d in an \
                    environment of phase %d" path p phase expect_phase
+  | Staging (p, stage, expect_stage) ->
+      fprintf ppf "Attempt to use value %a of stage %d in an \
+                   environment of stage %d" path p stage expect_stage
 
 
 let report_error env ppf err =
