@@ -113,11 +113,27 @@ let unlift_string name =
     String.sub name 1 (String.length name - 1)
   else name
 
+let lift_string name =
+  if String.length name > 1 && name.[0] == '^' then
+    name
+  else
+    "^" ^ name
+
 let rec unlift = function
-  | Pident s as id ->
+  | Pident s ->
       if Ident.persistent s then
         Pident (Ident.create_persistent @@ unlift_string @@ Ident.name s)
       else
-        id
+        Pident (Ident.create @@ unlift_string @@ Ident.name s)
   | Pdot (p, a, b) -> Pdot(unlift p, a, b)
   | Papply (p, a) -> Papply(unlift p, a)
+
+let rec lift = function
+  | Pident s ->
+      if Ident.persistent s then
+        Pident (Ident.create_persistent @@ lift_string @@ Ident.name s)
+      else
+        Pident (Ident.create @@ lift_string @@ Ident.name s)
+  | Pdot (p, a, b) -> Pdot (lift p, a, b)
+  | Papply (p, a) -> Papply (lift p, a)
+

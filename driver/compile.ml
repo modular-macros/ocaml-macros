@@ -82,9 +82,9 @@ let implementation ppf sourcefile outputprefix =
     end else begin
       (* Run static code *)
       let stat_lam =
-        Translstatic.transl_implementation modulename typedtree in
+        Translstatic.transl_implementation modulename typedtree coercion in
       let sstat_lam =
-        print_if ppf Clflags.dump_parsetree Printlambda.lambda @@
+        print_if ppf Clflags.dump_lambda Printlambda.lambda @@
         Simplif.simplify_lambda stat_lam in
       let splices = Runstatic.run_static ppf sstat_lam in
       Translcore.set_transl_splices (Some (ref splices));

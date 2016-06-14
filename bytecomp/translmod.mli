@@ -40,6 +40,12 @@ val toplevel_name: Ident.t -> string
 val nat_toplevel_name: Ident.t -> Ident.t * int
 val close_toplevel_term: lambda * unit -> lambda
 
+(* Used in translmod *)
+val transl_structure: IdentSet.elt list -> module_coercion -> Path.t option
+  -> Asttypes.static_flag -> (structure_item -> lambda -> lambda) -> Env.t
+  -> structure_item list -> lambda * int
+val field_path: Path.t option -> Ident.t -> Path.t option
+
 val primitive_declarations: Primitive.description list ref
 
 type error =

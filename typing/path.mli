@@ -51,5 +51,11 @@ val is_lifted: t -> bool
 val unlift: t -> t
 
 (** Removes the lifting symbol in path (if any) iff the path begins with a
-    persistent identifier (see [Ident]). *)
+    persistent identifier (see [Ident]). WARNING: creates a fresh identifier if
+    called on a non-global path. *)
 val unlift_string: string -> string
+
+(** Lifts a path if it is not already lifted. WARNING: creates a new fresh
+   identifier if called on a non-global path. *)
+val lift: t -> t
+
