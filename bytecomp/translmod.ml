@@ -576,21 +576,25 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
             Lletrec(class_bindings, body), size
       | Tstr_include incl ->
           let ids = bound_value_identifiers incl.incl_type in
-          let modl = incl.incl_mod in
-          let mid = Ident.create "include" in
-          let rec rebind_idents pos newfields = function
-              [] ->
-                transl_structure newfields cc rootpath static_flag
-                  item_postproc final_env rem
-            | id :: ids ->
-                let body, size =
-                  rebind_idents (pos + 1) (id :: newfields) ids
-                in
-                Llet(Alias, Pgenval, id, Lprim(Pfield pos, [Lvar mid]), body), size
-          in
-          let body, size = rebind_idents 0 fields ids in
-          Llet(pure_module modl, Pgenval, mid, transl_module Tcoerce_none None static_flag modl,
-               body), size
+          if static_flag = Static then
+            transl_structure (List.map (fun _ -> Ident.create_persistent "0") ids @ fields)
+            cc rootpath static_flag item_postproc final_env rem
+          else
+            let modl = incl.incl_mod in
+            let mid = Ident.create "include" in
+            let rec rebind_idents pos newfields = function
+                [] ->
+                  transl_structure newfields cc rootpath static_flag
+                    item_postproc final_env rem
+              | id :: ids ->
+                  let body, size =
+                    rebind_idents (pos + 1) (id :: newfields) ids
+                  in
+                  Llet(Alias, Pgenval, id, Lprim(Pfield pos, [Lvar mid]), body), size
+            in
+            let body, size = rebind_idents 0 fields ids in
+            Llet(pure_module modl, Pgenval, mid, transl_module Tcoerce_none None static_flag modl,
+                 body), size
 
       | Tstr_modtype _
       | Tstr_open _
