@@ -60,13 +60,15 @@ let transl_type_extension env rootpath tyext body =
 
 (* Compile a coercion *)
 
+let zero_lam =
+  Lconst (Const_base (Const_int 0))
+
 let rec apply_coercion static_flag strict restr arg =
   match restr with
     Tcoerce_none ->
       arg
   | Tcoerce_structure _ when static_flag = Static ->
-      Printf.fprintf stderr "lolilol\n%!";
-      Lconst (Const_base (Const_int 0))
+      zero_lam
   | Tcoerce_structure(pos_cc_list, id_pos_list) ->
       name_lambda strict arg (fun id ->
         let get_field pos = Lprim(Pfield pos,[Lvar id]) in
@@ -76,8 +78,7 @@ let rec apply_coercion static_flag strict restr arg =
         in
         wrap_id_pos_list static_flag id_pos_list get_field lam)
   | Tcoerce_functor _ when static_flag = Static ->
-      Printf.fprintf stderr "lolilol\n%!";
-      Lconst (Const_base (Const_int 0))
+      zero_lam
   | Tcoerce_functor(cc_arg, cc_res) ->
       let param = Ident.create "funarg" in
       name_lambda strict arg (fun id ->
@@ -97,11 +98,9 @@ let rec apply_coercion static_flag strict restr arg =
       if static_flag = Nonstatic then
         transl_primitive pc_loc pc_desc pc_env pc_type None
       else
-        (Printf.fprintf stderr "lolilol\n%!";
-        Lconst (Const_base (Const_int 0)))
+        zero_lam
   | Tcoerce_alias _ when static_flag = Static ->
-      Printf.fprintf stderr "lolilol\n%!";
-      Lconst (Const_base (Const_int 0))
+      zero_lam
   | Tcoerce_alias (path, cc) ->
       name_lambda strict arg
         (fun _ -> apply_coercion static_flag Alias cc (transl_normal_path path))
@@ -396,7 +395,7 @@ let rec transl_module cc rootpath static_flag mexp =
               | _ ->
                   fatal_error "Translmod.transl_module")
             cc
-      | Tmod_functor _ -> Printf.fprintf stderr "lolilol\n%!"; Lconst (Const_base (Const_int 0))
+      | Tmod_functor _ -> zero_lam
       | Tmod_apply(funct, arg, ccarg) ->
           let inlined_attribute, funct =
             Translattribute.get_and_remove_inlined_attribute_on_module funct
@@ -426,7 +425,7 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
           Tcoerce_none ->
             Lprim(Pmakeblock(0, Immutable, None),
                   List.map (fun id ->
-                    if Ident.name id = "0" then Lconst(Const_base(Const_int 0))
+                    if Ident.name id = "0" then zero_lam
                     else Lvar id)
                     (List.rev fields)),
               List.length fields
@@ -439,7 +438,7 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
             let v = Array.of_list (List.rev fields) in
             let get_field pos =
               let id = v.(pos) in
-              if Ident.name id = "0" then Lconst (Const_base (Const_int 0))
+              if Ident.name id = "0" then zero_lam
               else Lvar id
             and ids = List.fold_right IdentSet.add fields IdentSet.empty in
             let lam =
@@ -451,7 +450,7 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
                           if static_flag = Nonstatic then
                             transl_primitive p.pc_loc
                               p.pc_desc p.pc_env p.pc_type None
-                          else (Printf.fprintf stderr "lolilol\n%!"; Lconst (Const_base (Const_int 0)))
+                          else zero_lam
                       | _ -> apply_coercion static_flag Strict cc (get_field pos))
                     pos_cc_list))
             and id_pos_list =
@@ -476,6 +475,7 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
          body),
       size
   | item :: rem ->
+      let (item_lam, size) =
       match item.str_desc with
       | Tstr_eval (expr, _) ->
           if static_flag = Nonstatic then
@@ -528,12 +528,12 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
       | Tstr_module mb ->
           let id = mb.mb_id in
           let body, size =
-            transl_structure (Ident.create_persistent "0" :: fields) cc rootpath static_flag
+            transl_structure
+              ((if static_flag = Static then Ident.create_persistent "0" else id) :: fields) cc rootpath static_flag
               item_postproc final_env rem in
           let module_body =
             if static_flag = Static then
-              (Printf.fprintf stderr "lolilol\n%!";
-              Lconst (Const_base (Const_int 0)))
+              zero_lam
             else
               transl_module Tcoerce_none (field_path rootpath id) static_flag mb.mb_expr
           in
@@ -602,6 +602,8 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
       | Tstr_attribute _ ->
           transl_structure fields cc rootpath static_flag
             item_postproc final_env rem
+      in
+      (item_postproc item item_lam, size)
 
 and pure_module m =
   match m.mod_desc with
