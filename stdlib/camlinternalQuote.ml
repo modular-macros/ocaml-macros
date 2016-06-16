@@ -1080,3 +1080,6 @@ module Exp = struct
       mk loc heap (Pexp_escape exp)
 
 end
+
+external ast_to_expr : Exp.t -> 'a expr = "%identity"
+

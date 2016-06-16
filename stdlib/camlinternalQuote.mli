@@ -211,3 +211,6 @@ and Exp : sig
   val of_closed : Closed.t -> t
 
 end
+
+val ast_to_expr : Exp.t -> 'a expr
+
