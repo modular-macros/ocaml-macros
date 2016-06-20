@@ -93,7 +93,7 @@ let loadfile ppf name =
    the debuggee. *)
 
 let rec eval_path = function
-    Pident id -> Symtable.get_global_value id
+    Pident id -> Symtable.get_global_value (0,id)
   | Pdot(p, _, pos) -> Obj.field (eval_path p) pos
   | Papply _ -> fatal_error "Loadprinter.eval_path"
 

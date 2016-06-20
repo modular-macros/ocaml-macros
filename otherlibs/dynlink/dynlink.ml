@@ -225,8 +225,8 @@ let load_compunit ic file_name file_digest compunit =
   Bytes.unsafe_set code (compunit.cu_codesize + 7) '\000';
   let initial_symtable = Symtable.current_state() in
   begin try
-    Symtable.patch_object code compunit.cu_reloc;
-    Symtable.check_global_initialized compunit.cu_reloc;
+    Symtable.patch_object 0 code compunit.cu_reloc;
+    Symtable.check_global_initialized 0 compunit.cu_reloc;
     Symtable.update_global_table()
   with Symtable.Error error ->
     let new_error =

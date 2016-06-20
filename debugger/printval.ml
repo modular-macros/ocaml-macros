@@ -53,7 +53,7 @@ module EvalPath =
     let rec eval_path env = function
       Pident id ->
         begin try
-          Debugcom.Remote_value.global (Symtable.get_global_position id)
+          Debugcom.Remote_value.global (Symtable.get_global_position (0,id))
         with Symtable.Error _ ->
           raise Error
         end

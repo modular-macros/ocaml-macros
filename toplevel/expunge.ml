@@ -33,15 +33,17 @@ let to_keep = ref StringSet.empty
 
 let negate = Sys.argv.(3) = "-v"
 
-let keep =
-  if negate then fun name -> is_exn name || not (StringSet.mem name !to_keep)
-  else fun name -> is_exn name || (StringSet.mem name !to_keep)
+let keep p =
+  if p = 0 then
+    if negate then fun name -> is_exn name || not (StringSet.mem name !to_keep)
+    else fun name -> is_exn name || (StringSet.mem name !to_keep)
+  else fun _ -> false
 
 let expunge_map tbl =
-  Symtable.filter_global_map (fun id -> keep (Ident.name id)) tbl
+  Symtable.filter_global_map (fun (p,id) -> keep p (Ident.name id)) tbl
 
 let expunge_crcs tbl =
-  List.filter (fun (unit, _crc) -> keep unit) tbl
+  List.filter (fun (unit, _crc) -> keep 0 unit) tbl
 
 let main () =
   let input_name = Sys.argv.(1) in
@@ -65,8 +67,9 @@ let main () =
     (fun (name, len) ->
       begin match name with
         "SYMB" ->
-          let global_map = (input_value ic : Symtable.global_map) in
-          output_value oc (expunge_map global_map)
+          let global_map = Symtable.saved_to_runtime
+            (input_value ic : Symtable.saved_global_map) in
+          output_value oc (Symtable.runtime_to_saved (expunge_map global_map))
       | "CRCS" ->
           let crcs = (input_value ic : (string * Digest.t option) list) in
           output_value oc (expunge_crcs crcs)

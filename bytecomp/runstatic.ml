@@ -23,8 +23,8 @@ let run_static ppf lam =
     (fun () -> ())
     (fun () -> ())
     (fun exn -> raise exn);
-  Symtable.patch_object code reloc;
-  Symtable.check_global_initialized reloc;
+  Symtable.patch_object 1 code reloc;
+  Symtable.check_global_initialized 1 reloc;
   Symtable.update_global_table ();
   Printf.fprintf stderr "before reify\n%!";
   let splices = (Meta.reify_bytecode code code_size) () in

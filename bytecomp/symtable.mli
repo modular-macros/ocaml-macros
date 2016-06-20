@@ -20,8 +20,9 @@ open Cmo_format
 (* Functions for batch linking *)
 
 val init: unit -> unit
-val patch_object: bytes -> (reloc_info * int) list -> unit
-val ls_patch_object: Misc.LongString.t -> (reloc_info * int) list -> unit
+val patch_object: Types.phase -> bytes -> (reloc_info * int) list -> unit
+val ls_patch_object: Types.phase -> Misc.LongString.t
+  -> (reloc_info * int) list -> unit
 val require_primitive: string -> unit
 val initial_global_table: unit -> Obj.t array
 val output_global_map: out_channel -> unit
@@ -35,18 +36,21 @@ val data_primitive_names: unit -> string
 val init_toplevel: unit -> (string * Digest.t option) list
 val init_static: unit -> unit
 val update_global_table: unit -> unit
-val get_global_value: Ident.t -> Obj.t
-val is_global_defined: Ident.t -> bool
-val assign_global_value: Ident.t -> Obj.t -> unit
-val get_global_position: Ident.t -> int
-val check_global_initialized: (reloc_info * int) list -> unit
+val get_global_value: Types.phase * Ident.t -> Obj.t
+val is_global_defined: Types.phase * Ident.t -> bool
+val assign_global_value: Types.phase * Ident.t -> Obj.t -> unit
+val get_global_position: Types.phase * Ident.t -> int
+val check_global_initialized: Types.phase -> (reloc_info * int) list -> unit
 
 type global_map
+type saved_global_map (* The symtable is converted to this type before saving *)
+val saved_to_runtime: saved_global_map -> global_map
+val runtime_to_saved: global_map -> saved_global_map
 
 val current_state: unit -> global_map
 val restore_state: global_map -> unit
 val hide_additions: global_map -> unit
-val filter_global_map: (Ident.t -> bool) -> global_map -> global_map
+val filter_global_map: (Types.phase * Ident.t -> bool) -> global_map -> global_map
 
 (* Error report *)
 

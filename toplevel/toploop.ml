@@ -57,7 +57,7 @@ let setvalue name v =
 let rec eval_path = function
   | Pident id ->
       if Ident.persistent id || Ident.global id then
-        Symtable.get_global_value id
+        Symtable.get_global_value (0 (* macros: not sure *), id)
       else begin
         let name = Translmod.toplevel_name id in
         try
@@ -156,11 +156,13 @@ let record_backtrace () =
   if Printexc.backtrace_status ()
   then backtrace := Some (Printexc.get_backtrace ())
 
-let load_lambda ppf lam =
+let load_lambda phase ppf lam =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
   let slam = Simplif.simplify_lambda lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
+  Printf.fprintf stderr "before check\n%!";
   let (init_code, fun_code) = Bytegen.compile_phrase slam in
+  Printf.fprintf stderr "before check\n%!";
   if !Clflags.dump_instr then
     fprintf ppf "%a%a@."
     Printinstr.instrlist init_code
@@ -168,11 +170,21 @@ let load_lambda ppf lam =
   let (code, code_size, reloc, events) =
     Emitcode.to_memory init_code fun_code
   in
+  Printf.fprintf stderr "before check\n%!";
   Meta.add_debug_info code code_size [| events |];
+  Printf.fprintf stderr "before check\n%!";
   let can_free = (fun_code = []) in
+  Printf.fprintf stderr "before check\n%!";
   let initial_symtable = Symtable.current_state() in
-  Symtable.patch_object code reloc;
-  Symtable.check_global_initialized reloc;
+  let nothing () = () in
+  Cmo_load.load_deps ppf
+    (if phase = 0 then Asttypes.Nonstatic else Asttypes.Static)
+    reloc nothing nothing (fun exn -> raise exn);
+  Printf.fprintf stderr "before check\n%!";
+  Symtable.patch_object phase code reloc;
+  Printf.fprintf stderr "before check\n%!";
+  Symtable.check_global_initialized phase reloc;
+  Printf.fprintf stderr "after check\n%!";
   Symtable.update_global_table();
   let initial_bindings = !toplevel_value_bindings in
   try
@@ -257,7 +269,7 @@ let execute_phrase print_outcome ppf phr =
       let splices =
         begin try
           toplevel_env := newenv;
-          let res = load_lambda ppf slam in
+          let res = load_lambda 1 ppf slam in
           match res with
           | Result v ->
               v
@@ -276,7 +288,7 @@ let execute_phrase print_outcome ppf phr =
       Warnings.check_fatal ();
       begin try
         toplevel_env := newenv;
-        let res = load_lambda ppf lam in
+        let res = load_lambda 0 ppf lam in
         let out_phr =
           match res with
           | Result v ->

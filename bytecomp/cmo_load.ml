@@ -57,7 +57,8 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
   | _ -> assert false
   in
   let new_reloc = List.map reloc_mapper compunit.cu_reloc in
-  Symtable.patch_object code new_reloc;
+  let phase = if fst dependency = Static then 1 else 0 in
+  Symtable.patch_object phase code new_reloc;
   Symtable.update_global_table();
   let events =
     if compunit.cu_debug = 0 then [| |]
@@ -104,9 +105,10 @@ and really_load_file recursive ppf name filename ic
       seek_in ic compunit_pos;
       let cu : compilation_unit = input_value ic in
       if recursive then
-        load_deps ppf (snd dependency) cu.cu_reloc
+        load_deps ppf (fst dependency) cu.cu_reloc
           before_ld after_ld on_failure;
-      load_compunit ic filename ppf cu before_ld after_ld on_failure dependency;
+      load_compunit ic filename ppf cu before_ld after_ld on_failure
+        dependency;
       true
     end else
       if buffer = Config.cma_magic_number then begin
@@ -136,11 +138,12 @@ and really_load_file recursive ppf name filename ic
   with Load_failed -> false
 
 and load_deps ppf static_flag reloc before_ld after_ld on_failure =
+  let phase = if static_flag = Static then 1 else 0 in
   match static_flag with
   | Nonstatic ->
     List.iter
       (function
-        | (Reloc_getglobal id, _) when not (Symtable.is_global_defined id) ->
+        | (Reloc_getglobal id, _) when not (Symtable.is_global_defined (phase,id)) ->
             let file = Ident.name id ^ ".cmo" in
             begin match try Some (Misc.find_in_path_uncap !Config.load_path
                                     file)
@@ -159,7 +162,7 @@ and load_deps ppf static_flag reloc before_ld after_ld on_failure =
   | Static ->
     List.iter
      (function
-       | (Reloc_getglobal id, _) when not (Symtable.is_global_defined id) ->
+       | (Reloc_getglobal id, _) when not (Symtable.is_global_defined (phase,id)) ->
            let name = Ident.name id in
            if Path.is_lifted (Path.Pident id) then
              let unlifted_name = Path.unlift_string @@ name in
