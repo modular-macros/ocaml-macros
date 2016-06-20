@@ -66,12 +66,14 @@ let is_global_defined id =
   Tbl.mem id (!global_table).num_tbl
 
 let slot_for_getglobal (phase, id) =
+  Printf.fprintf stderr "sfgg %s\n%!" (Ident.name id);
   try
     find_numtable !global_table (phase, id)
   with Not_found ->
     raise(Error(Undefined_global(Ident.name id)))
 
 let slot_for_setglobal id =
+  Printf.fprintf stderr "sfsg %s\n%!" (Ident.name (snd id));
   enter_numtable global_table id
 
 let slot_for_literal cst =
@@ -151,6 +153,7 @@ let init () =
         try List.assoc name Predef.builtin_values
         with Not_found -> fatal_error "Symtable.init" in
       let c = slot_for_setglobal (0, id) in
+      ignore (slot_for_setglobal (1, id));
       let cst = Const_block(Obj.object_tag,
                             [Const_base(Const_string (name, None));
                              Const_base(Const_int (-i-1))
@@ -196,21 +199,21 @@ let gen_patch_int str_set buff pos n =
   str_set buff (pos + 2) (Char.unsafe_chr (n asr 16));
   str_set buff (pos + 3) (Char.unsafe_chr (n asr 24))
 
-let gen_patch_object phase str_set buff patchlist =
+let gen_patch_object phase_get phase_set str_set buff patchlist =
   List.iter
     (function
         (Reloc_literal sc, pos) ->
           gen_patch_int str_set buff pos (slot_for_literal sc)
       | (Reloc_getglobal id, pos) ->
-          gen_patch_int str_set buff pos (slot_for_getglobal (phase, id))
+          gen_patch_int str_set buff pos (slot_for_getglobal (phase_get, id))
       | (Reloc_setglobal id, pos) ->
-          gen_patch_int str_set buff pos (slot_for_setglobal (phase, id))
+          gen_patch_int str_set buff pos (slot_for_setglobal (phase_set, id))
       | (Reloc_primitive name, pos) ->
           gen_patch_int str_set buff pos (num_of_prim name))
     patchlist
 
-let patch_object phase = gen_patch_object phase Bytes.unsafe_set
-let ls_patch_object phase = gen_patch_object phase LongString.set
+let patch_object phase_get phase_set = gen_patch_object phase_get phase_set Bytes.unsafe_set
+let ls_patch_object phase_get phase_set = gen_patch_object phase_get phase_set LongString.set
 
 (* Translate structured constants *)
 
@@ -308,7 +311,7 @@ let output_global_map oc =
 
 let saved_to_runtime id_numtable =
   { id_numtable with
-      num_tbl = map_keys (fun id -> Printf.fprintf stderr "adding phase 0 global: %s\n%!" (Ident.name id); (0, id)) id_numtable.num_tbl }
+      num_tbl = map_keys (fun id -> (0, id)) id_numtable.num_tbl }
 
 let runtime_to_saved numtable =
   { numtable with
@@ -347,21 +350,6 @@ let init_toplevel () =
   with Bytesections.Bad_magic_number | Not_found | Failure _ ->
     fatal_error "Toplevel bytecode executable is corrupted"
 
-(* Initialize the linker for running static code *)
-
-let init_static () =
-  (* Add lifting symbol to all global identifiers *)
-  let add_lifted_key (_,k) x tbl =
-    let t = Tbl.add (1, k) x tbl in
-    Tbl.add (1, Ident.create_persistent @@ "^" ^ Ident.name k) x t
-  in
-  let new_globals =
-    Tbl.fold add_lifted_key (!global_table).num_tbl (!global_table).num_tbl
-  in
-  global_table := { !global_table with
-    num_tbl = new_globals
-  }
-
 (* Find the value of a global identifier *)
 
 let get_global_position id = slot_for_getglobal id
@@ -370,6 +358,24 @@ let get_global_value id =
   (Meta.global_data()).(slot_for_getglobal id)
 let assign_global_value id v =
   (Meta.global_data()).(slot_for_getglobal id) <- v
+
+(* Initialize the linker for running static code *)
+
+let init_static () =
+  (* Add built-in exceptions to phase 1 *)
+  Array.iteri
+    (fun i name ->
+      let id =
+        try List.assoc name Predef.builtin_values
+        with Not_found -> fatal_error "Symtable.init" in
+      let c = slot_for_setglobal (1, id) in
+      let cst = Const_block(Obj.object_tag,
+                            [Const_base(Const_string (name, None));
+                             Const_base(Const_int (-i-1))
+                            ])
+      in
+      literal_table := (c, cst) :: !literal_table)
+    Runtimedef.builtin_exceptions
 
 (* Check that all globals referenced in the given patch list
    have been initialized already *)

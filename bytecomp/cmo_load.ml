@@ -49,7 +49,8 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
   let unlifted_name = compunit.cu_name in
   let reloc_mapper = match dependency with
   | (Static, Nonstatic) -> (function
-       | (Reloc_setglobal id, n) when Ident.name id = unlifted_name ->
+       | (Reloc_setglobal id, n) when Ident.name id = unlifted_name
+          && not (Array.mem (Ident.name id) Runtimedef.builtin_exceptions) ->
            (Reloc_setglobal (Ident.create_persistent @@ "^" ^ unlifted_name), n)
        | other -> other
   )
@@ -57,9 +58,13 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
   | _ -> assert false
   in
   let new_reloc = List.map reloc_mapper compunit.cu_reloc in
-  let phase = if fst dependency = Static then 1 else 0 in
-  Symtable.patch_object phase code new_reloc;
+  let phase_get = if snd dependency = Static then 1 else 0 in
+  let phase_set = if fst dependency = Static then 1 else 0 in
+  Printf.fprintf stderr "phase_get %d phase_set %d\n%!" phase_get phase_set;
+  Symtable.patch_object phase_get phase_set code new_reloc;
+  Printf.fprintf stderr "after patch\n%!";
   Symtable.update_global_table();
+  Printf.fprintf stderr "after update\n%!";
   let events =
     if compunit.cu_debug = 0 then [| |]
     else begin
@@ -98,6 +103,7 @@ let rec load_file recursive ppf dependency name before_ld after_ld
 
 and really_load_file recursive ppf name filename ic
     before_ld after_ld on_failure dependency =
+  Printf.fprintf stderr "loading %s\n%!" filename;
   let buffer = really_input_string ic (String.length Config.cmo_magic_number) in
   try
     if buffer = Config.cmo_magic_number then begin
@@ -105,10 +111,12 @@ and really_load_file recursive ppf name filename ic
       seek_in ic compunit_pos;
       let cu : compilation_unit = input_value ic in
       if recursive then
-        load_deps ppf (fst dependency) cu.cu_reloc
+        load_deps ppf (snd dependency) cu.cu_reloc
           before_ld after_ld on_failure;
+      Printf.fprintf stderr "after rec load_deps\n%!";
       load_compunit ic filename ppf cu before_ld after_ld on_failure
         dependency;
+      Printf.fprintf stderr "after load_compunit\n%!";
       true
     end else
       if buffer = Config.cma_magic_number then begin

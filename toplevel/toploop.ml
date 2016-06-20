@@ -181,7 +181,7 @@ let load_lambda phase ppf lam =
     (if phase = 0 then Asttypes.Nonstatic else Asttypes.Static)
     reloc nothing nothing (fun exn -> raise exn);
   Printf.fprintf stderr "before check\n%!";
-  Symtable.patch_object phase code reloc;
+  Symtable.patch_object phase phase code reloc;
   Printf.fprintf stderr "before check\n%!";
   Symtable.check_global_initialized phase reloc;
   Printf.fprintf stderr "after check\n%!";

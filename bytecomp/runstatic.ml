@@ -12,18 +12,32 @@
 (*                                                                        *)
 (**************************************************************************)
 
+let load_stdlib_static ppf =
+  let nothing () = () in
+  Cmo_load.load_file false ppf "stdlib.cma" nothing nothing
+    (fun exn -> raise exn)
+
 let run_static ppf lam =
   let (init_code, fun_code) = Bytegen.compile_phrase lam in
   let (code, code_size, reloc, _) =
     Emitcode.to_memory init_code fun_code
   in
   ignore (Symtable.init_toplevel ());
+  Printf.fprintf stderr "init_toplevel terminated\n%!";
   Symtable.init_static ();
+  Printf.fprintf stderr "init_static terminated\n%!";
+  (*
+  if load_stdlib_static ppf then
+    Printf.fprintf stderr "stdlib loaded!\n%!"
+  else
+    Printf.fprintf stderr "stdlib NOT loaded!\n%!"
+  ;
+  *)
   Cmo_load.load_deps ppf Asttypes.Static reloc
     (fun () -> ())
     (fun () -> ())
     (fun exn -> raise exn);
-  Symtable.patch_object 1 code reloc;
+  Symtable.patch_object 1 1 code reloc;
   Symtable.check_global_initialized 1 reloc;
   Symtable.update_global_table ();
   Printf.fprintf stderr "before reify\n%!";
