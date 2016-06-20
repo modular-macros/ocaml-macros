@@ -1,6 +1,8 @@
 open ^CamlinternalQuote
 open ^Pervasives
 
+let foo = 42
+
 static of_int i =
   ast_to_expr @@ Exp.constant (Loc.none) @@
   Constant.integer i
