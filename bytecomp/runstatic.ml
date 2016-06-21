@@ -22,8 +22,6 @@ let run_static ppf lam =
   let (code, code_size, reloc, _) =
     Emitcode.to_memory init_code fun_code
   in
-  ignore (Symtable.init_toplevel ());
-  Printf.fprintf stderr "init_toplevel terminated\n%!";
   Symtable.init_static ();
   Printf.fprintf stderr "init_static terminated\n%!";
   (*
@@ -37,7 +35,9 @@ let run_static ppf lam =
     (fun () -> ())
     (fun () -> ())
     (fun exn -> raise exn);
+  Printf.fprintf stderr "after load_deps\n%!";
   Symtable.patch_object 1 1 code reloc;
+  Printf.fprintf stderr "after patch\n%!";
   Symtable.check_global_initialized 1 reloc;
   Symtable.update_global_table ();
   Printf.fprintf stderr "before reify\n%!";

@@ -153,12 +153,14 @@ and load_deps ppf static_flag reloc before_ld after_ld on_failure =
       (function
         | (Reloc_getglobal id, _) when not (Symtable.is_global_defined (phase,id)) ->
             let file = Ident.name id ^ ".cmo" in
+            Printf.fprintf stderr "find_in_path_uncap %s\n%!" file;
             begin match try Some (Misc.find_in_path_uncap !Config.load_path
                                     file)
                   with Not_found -> None
             with
             | None -> ()
             | Some file ->
+                Printf.fprintf stderr "found it!\n%!";
                 if not (load_file
                     true ppf (Nonstatic, Nonstatic) file before_ld
                     after_ld on_failure) then

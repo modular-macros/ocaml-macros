@@ -93,7 +93,7 @@ let transl_implementation module_name str cc =
     Static transl_item_splices str.str_final_env str.str_items in
   insert_splice_array module_id !splice_ids mod_body
 
-let toploop_ident = Ident.create_persistent "^Toploop"
+let toploop_ident = Ident.create_persistent "Toploop"
 (*let toploop_getvalue_pos = 0 (* position of getvalue in module Toploop *)*)
 let toploop_setvalue_pos = 1 (* position of setvalue in module Toploop *)
 

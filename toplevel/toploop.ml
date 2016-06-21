@@ -501,7 +501,6 @@ let _ =
   Clflags.debug := true;
   Sys.interactive := true;
   let crc_intfs = Symtable.init_toplevel() in
-  Symtable.init_static (); (* for macros *)
   Compmisc.init_path false;
   List.iter
     (fun (name, crco) ->

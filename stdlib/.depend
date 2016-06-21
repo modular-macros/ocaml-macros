@@ -62,8 +62,8 @@ ephemeron.cmo : sys.cmi random.cmi obj.cmi lazy.cmi hashtbl.cmi array.cmi \
 ephemeron.cmx : sys.cmx random.cmx obj.cmx lazy.cmx hashtbl.cmx array.cmx \
     ephemeron.cmi
 ephemeron.cmi : hashtbl.cmi
-expr.cmo : camlinternalQuote.cmi expr.cmi
-expr.cmx : camlinternalQuote.cmx expr.cmi
+expr.cmo : expr.cmi
+expr.cmx : expr.cmi
 expr.cmi :
 filename.cmo : sys.cmi string.cmi random.cmi printf.cmi lazy.cmi buffer.cmi \
     filename.cmi
@@ -236,8 +236,8 @@ ephemeron.cmo : sys.cmi random.cmi obj.cmi lazy.cmi hashtbl.cmi array.cmi \
     ephemeron.cmi
 ephemeron.p.cmx : sys.cmx random.cmx obj.cmx lazy.cmx hashtbl.cmx array.cmx \
     ephemeron.cmi
-expr.cmo : camlinternalQuote.cmi expr.cmi
-expr.p.cmx : camlinternalQuote.cmx expr.cmi
+expr.cmo : expr.cmi
+expr.p.cmx : expr.cmi
 filename.cmo : sys.cmi string.cmi random.cmi printf.cmi lazy.cmi buffer.cmi \
     filename.cmi
 filename.p.cmx : sys.cmx string.cmx random.cmx printf.cmx lazy.cmx buffer.cmx \

@@ -153,7 +153,6 @@ let init () =
         try List.assoc name Predef.builtin_values
         with Not_found -> fatal_error "Symtable.init" in
       let c = slot_for_setglobal (0, id) in
-      ignore (slot_for_setglobal (1, id));
       let cst = Const_block(Obj.object_tag,
                             [Const_base(Const_string (name, None));
                              Const_base(Const_int (-i-1))
@@ -320,6 +319,10 @@ let runtime_to_saved numtable =
 
 (* Initialize the linker for toplevel use *)
 
+(* Find the value of a global identifier *)
+
+let get_global_position id = slot_for_getglobal id
+
 let init_toplevel () =
   Printf.fprintf stderr "init_toplevel called\n%!";
   try
@@ -346,13 +349,25 @@ let init_toplevel () =
       with Not_found -> [] in
     (* Done *)
     sect.close_reader();
+    (* Add lifted version of the `Toploop` module to phase 1 *)
+    let id = Ident.create_persistent "Toploop" in
+    let pos = get_global_position (0, id) in
+    global_table := { !global_table
+      with num_tbl = Tbl.add (1, id) pos !global_table.num_tbl };
+    (* Add built-in exceptions to phase 1 *)
+    Array.iter
+      (fun name ->
+        let id =
+          try List.assoc name Predef.builtin_values
+          with Not_found -> fatal_error "Symtable.init" in
+        let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
+        let pos = get_global_position (0, id) in
+        global_table := { !global_table with
+          num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
+      Runtimedef.builtin_exceptions;
     crcintfs
   with Bytesections.Bad_magic_number | Not_found | Failure _ ->
     fatal_error "Toplevel bytecode executable is corrupted"
-
-(* Find the value of a global identifier *)
-
-let get_global_position id = slot_for_getglobal id
 
 let get_global_value id =
   (Meta.global_data()).(slot_for_getglobal id)
@@ -362,19 +377,37 @@ let assign_global_value id v =
 (* Initialize the linker for running static code *)
 
 let init_static () =
+  begin try
+    let sect = read_sections () in
+    (* Locations of globals *)
+    global_table := saved_to_runtime
+      (Obj.magic (sect.read_struct "SYMB") : Ident.t numtable);
+    (* Primitives *)
+    let prims = sect.read_string "PRIM" in
+    c_prim_table := empty_numtable;
+    let pos = ref 0 in
+    while !pos < String.length prims do
+      let i = String.index_from prims !pos '\000' in
+      set_prim_table (String.sub prims !pos (i - !pos));
+      pos := i + 1
+    done;
+    (* DLL initialization *)
+    let dllpath = try sect.read_string "DLPT" with Not_found -> "" in
+    Dll.init_toplevel dllpath;
+    sect.close_reader()
+  with Bytesections.Bad_magic_number | Not_found | Failure _ ->
+    fatal_error "Toplevel bytecode executable is corrupted"
+  end;
   (* Add built-in exceptions to phase 1 *)
-  Array.iteri
-    (fun i name ->
+  Array.iter
+    (fun name ->
       let id =
         try List.assoc name Predef.builtin_values
         with Not_found -> fatal_error "Symtable.init" in
-      let c = slot_for_setglobal (1, id) in
-      let cst = Const_block(Obj.object_tag,
-                            [Const_base(Const_string (name, None));
-                             Const_base(Const_int (-i-1))
-                            ])
-      in
-      literal_table := (c, cst) :: !literal_table)
+      let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
+      let pos = get_global_position (0, id) in
+      global_table := { !global_table with
+        num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
     Runtimedef.builtin_exceptions
 
 (* Check that all globals referenced in the given patch list
