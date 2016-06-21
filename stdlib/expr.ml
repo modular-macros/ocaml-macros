@@ -15,3 +15,7 @@ static of_string s =
   ast_to_expr @@ Exp.constant (Loc.none) @@
   Constant.string s
 
+static rec of_list f = function
+  | [] -> << [] >>
+  | x :: xs -> << $(f x) :: $(of_list f xs) >>
+

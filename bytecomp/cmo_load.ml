@@ -60,11 +60,8 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
   let new_reloc = List.map reloc_mapper compunit.cu_reloc in
   let phase_get = if snd dependency = Static then 1 else 0 in
   let phase_set = if fst dependency = Static then 1 else 0 in
-  Printf.fprintf stderr "phase_get %d phase_set %d\n%!" phase_get phase_set;
   Symtable.patch_object phase_get phase_set code new_reloc;
-  Printf.fprintf stderr "after patch\n%!";
   Symtable.update_global_table();
-  Printf.fprintf stderr "after update\n%!";
   let events =
     if compunit.cu_debug = 0 then [| |]
     else begin
@@ -103,7 +100,6 @@ let rec load_file recursive ppf dependency name before_ld after_ld
 
 and really_load_file recursive ppf name filename ic
     before_ld after_ld on_failure dependency =
-  Printf.fprintf stderr "loading %s\n%!" filename;
   let buffer = really_input_string ic (String.length Config.cmo_magic_number) in
   try
     if buffer = Config.cmo_magic_number then begin
@@ -113,10 +109,8 @@ and really_load_file recursive ppf name filename ic
       if recursive then
         load_deps ppf (snd dependency) cu.cu_reloc
           before_ld after_ld on_failure;
-      Printf.fprintf stderr "after rec load_deps\n%!";
       load_compunit ic filename ppf cu before_ld after_ld on_failure
         dependency;
-      Printf.fprintf stderr "after load_compunit\n%!";
       true
     end else
       if buffer = Config.cma_magic_number then begin
@@ -153,14 +147,12 @@ and load_deps ppf static_flag reloc before_ld after_ld on_failure =
       (function
         | (Reloc_getglobal id, _) when not (Symtable.is_global_defined (phase,id)) ->
             let file = Ident.name id ^ ".cmo" in
-            Printf.fprintf stderr "find_in_path_uncap %s\n%!" file;
             begin match try Some (Misc.find_in_path_uncap !Config.load_path
                                     file)
                   with Not_found -> None
             with
             | None -> ()
             | Some file ->
-                Printf.fprintf stderr "found it!\n%!";
                 if not (load_file
                     true ppf (Nonstatic, Nonstatic) file before_ld
                     after_ld on_failure) then

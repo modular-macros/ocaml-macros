@@ -66,14 +66,12 @@ let is_global_defined id =
   Tbl.mem id (!global_table).num_tbl
 
 let slot_for_getglobal (phase, id) =
-  Printf.fprintf stderr "sfgg %s\n%!" (Ident.name id);
   try
     find_numtable !global_table (phase, id)
   with Not_found ->
     raise(Error(Undefined_global(Ident.name id)))
 
 let slot_for_setglobal id =
-  Printf.fprintf stderr "sfsg %s\n%!" (Ident.name (snd id));
   enter_numtable global_table id
 
 let slot_for_literal cst =
@@ -324,7 +322,6 @@ let runtime_to_saved numtable =
 let get_global_position id = slot_for_getglobal id
 
 let init_toplevel () =
-  Printf.fprintf stderr "init_toplevel called\n%!";
   try
     let sect = read_sections () in
     (* Locations of globals *)

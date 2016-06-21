@@ -23,7 +23,6 @@ let run_static ppf lam =
     Emitcode.to_memory init_code fun_code
   in
   Symtable.init_static ();
-  Printf.fprintf stderr "init_static terminated\n%!";
   (*
   if load_stdlib_static ppf then
     Printf.fprintf stderr "stdlib loaded!\n%!"
@@ -35,9 +34,7 @@ let run_static ppf lam =
     (fun () -> ())
     (fun () -> ())
     (fun exn -> raise exn);
-  Printf.fprintf stderr "after load_deps\n%!";
   Symtable.patch_object 1 1 code reloc;
-  Printf.fprintf stderr "after patch\n%!";
   Symtable.check_global_initialized 1 reloc;
   Symtable.update_global_table ();
   Printf.fprintf stderr "before reify\n%!";

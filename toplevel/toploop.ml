@@ -160,9 +160,7 @@ let load_lambda phase ppf lam =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
   let slam = Simplif.simplify_lambda lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
-  Printf.fprintf stderr "before check\n%!";
   let (init_code, fun_code) = Bytegen.compile_phrase slam in
-  Printf.fprintf stderr "before check\n%!";
   if !Clflags.dump_instr then
     fprintf ppf "%a%a@."
     Printinstr.instrlist init_code
@@ -170,21 +168,15 @@ let load_lambda phase ppf lam =
   let (code, code_size, reloc, events) =
     Emitcode.to_memory init_code fun_code
   in
-  Printf.fprintf stderr "before check\n%!";
   Meta.add_debug_info code code_size [| events |];
-  Printf.fprintf stderr "before check\n%!";
   let can_free = (fun_code = []) in
-  Printf.fprintf stderr "before check\n%!";
   let initial_symtable = Symtable.current_state() in
   let nothing () = () in
   Cmo_load.load_deps ppf
     (if phase = 0 then Asttypes.Nonstatic else Asttypes.Static)
     reloc nothing nothing (fun exn -> raise exn);
-  Printf.fprintf stderr "before check\n%!";
   Symtable.patch_object phase phase code reloc;
-  Printf.fprintf stderr "before check\n%!";
   Symtable.check_global_initialized phase reloc;
-  Printf.fprintf stderr "after check\n%!";
   Symtable.update_global_table();
   let initial_bindings = !toplevel_value_bindings in
   try
