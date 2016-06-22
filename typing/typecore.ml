@@ -1954,7 +1954,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         | Path.Pdot (p, _, _) -> global p
         | Path.Papply (p, p') -> global p && global p'
         in
-        if stage <> Env.cur_stage env && not (global path) then
+        if stage <> Env.cur_stage env && not (global path)
+            && not (Env.toplevel_splice env) then
           raise (Error (loc, env, Staging (path, stage, Env.cur_stage env)));
         if !Clflags.annotations then begin
           let dloc = desc.Types.val_loc in
@@ -2833,7 +2834,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let body =
         type_expect
         (let env = Env.with_phase_up env in
-          if Env.cur_stage env = 0 then env else Env.with_stage_down env)
+          if Env.cur_stage env = 0 then Env.with_tl_splice true env
+          else Env.with_stage_down (Env.with_tl_splice false env))
         sbody (Predef.type_expr ty_expected)
       in
         re {

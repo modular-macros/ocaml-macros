@@ -62,6 +62,9 @@ val with_stage: stage -> t -> t
 val with_stage_down: t -> t
 val with_stage_up: t -> t
 
+val toplevel_splice: t -> bool
+val with_tl_splice: bool -> t -> t
+
 type type_descriptions =
     constructor_description list * label_description list
 
