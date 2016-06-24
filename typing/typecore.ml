@@ -1913,6 +1913,9 @@ let unify_exp env exp expected_ty =
   let loc = proper_exp_loc exp in
   unify_exp_types loc env exp.exp_type expected_ty
 
+let ccross env exp =
+  Env.concat_cross_stage env exp.exp_env
+
 let rec type_exp ?recarg env sexp =
   (* We now delegate everything to type_expect *)
   type_expect ?recarg env sexp (newvar ())
@@ -1940,9 +1943,6 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
     unify_exp env (re exp) (instance env ty_expected);
     exp
   in
-  let ccross env exp =
-    Env.concat_cross_stage env exp.exp_env
-  in
   match sexp.pexp_desc with
   | Pexp_ident lid ->
       begin
@@ -1952,16 +1952,16 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           raise (Error (loc, env, Phase (path, phase, Env.cur_phase env)));
         let stage = Env.find_stage path env in
         let rec global = function
-        | Path.Pident id -> Ident.global id
+          | Path.Pident id -> Ident.global id
         | Path.Pdot (p, _, _) -> global p
         | Path.Papply (p, p') -> global p && global p'
         in
         let env =
-          if stage <> Env.cur_stage env && not (global path)
-              && not (Env.toplevel_splice env) then
-            raise (Error (loc, env, Staging (path, stage, Env.cur_stage env)))
-          else if Env.toplevel_splice env then
-            Env.add_cross_stage (Path.head path) env
+          if stage <> Env.cur_stage env && not (global path) then
+            if Env.toplevel_splice env then
+              Env.add_cross_stage (Location.mkloc (Path.head path) lid.loc) env
+            else
+              raise (Error (loc, env, Staging (path, stage, Env.cur_stage env)))
           else
             env
         in
@@ -2869,13 +2869,12 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         type_expect
         (Env.with_stage_up (Env.with_phase_down env))
         sbody ty in
-      assert (Env.cross_stage_ids env = []);
       re {
           exp_desc = Texp_quote body;
           exp_loc = loc; exp_extra = [];
           exp_type = instance env ty_expected;
           exp_attributes = sexp.pexp_attributes;
-          exp_env = env }
+          exp_env = ccross env body }
   | Pexp_escape sbody ->
       let body =
         type_expect
@@ -3092,6 +3091,12 @@ and type_function ?in_function loc attrs env ty_expected l caselist =
   if is_optional l && not_function ty_res then
     Location.prerr_warning (List.hd cases).c_lhs.pat_loc
       Warnings.Unerasable_optional_argument;
+  let env =
+    List.fold_left ccross env @@ List.concat @@
+    List.map
+      (fun c -> match c.c_guard with Some g -> [g;c.c_rhs] | None -> [c.c_rhs])
+      cases
+  in
   re {
   exp_desc = Texp_function(l,cases, partial);
     exp_loc = loc; exp_extra = [];
@@ -3786,7 +3791,8 @@ and type_construct env loc lid sarg ty_expected attrs =
     raise(Error(loc, env, Private_type ty_res));
   (* NOTE: shouldn't we call "re" on this final expression? -- AF *)
   { texp with
-    exp_desc = Texp_construct(lid, constr, args) }
+    exp_desc = Texp_construct(lid, constr, args);
+    exp_env = List.fold_left ccross env args }
 
 (* Typing of statements (expressions whose values are discarded) *)
 

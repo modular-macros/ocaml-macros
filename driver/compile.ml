@@ -87,6 +87,8 @@ let implementation ppf sourcefile outputprefix =
         print_if ppf Clflags.dump_lambda Printlambda.lambda @@
         Simplif.simplify_lambda stat_lam in
       let splices = Runstatic.run_static ppf sstat_lam in
+      if !Clflags.dump_parsetree then
+        Array.iter (Printast.expression 0 ppf) splices;
       Translcore.set_transl_splices (Some (ref splices));
       let bytecode =
         (typedtree, coercion)

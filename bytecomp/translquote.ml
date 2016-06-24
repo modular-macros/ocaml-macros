@@ -109,6 +109,7 @@ module Exp = struct
   let var = combinator "Exp" "var"
   let ident = combinator "Exp" "ident"
   let constant = combinator "Exp" "constant"
+  let local = combinator "Exp" "local"
   let let_nonbinding = combinator "Exp" "let_nonbinding"
   let let_simple = combinator "Exp" "let_simple"
   let let_rec_simple = combinator "Exp" "let_rec_simple"
@@ -261,6 +262,10 @@ let quote_name loc (str : string loc) =
 
 let quote_variant loc (variant : label) =
   apply loc Variant.of_string [string variant]
+
+let wrap_local loc id name body =
+  let name = quote_name name.loc name in
+  apply loc Exp.local [quote_loc loc; name; func id body]
 
 let quote_method loc (meth : Typedtree.meth) =
   let name =
@@ -554,7 +559,8 @@ and quote_expression transl stage e =
       | None ->
           match path with
           | Path.Pident id ->
-              if Env.find_stage path env <> Env.cur_stage env then
+              if Env.find_stage path env <> Env.cur_stage env
+                  && not (Env.toplevel_splice env) then
                 fatal_error "Quoting non-global identifier with different stage"
               else
                 apply loc Exp.var [quote_loc loc; Lvar id]

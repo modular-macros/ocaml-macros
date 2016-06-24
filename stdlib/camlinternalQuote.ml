@@ -941,6 +941,17 @@ module Exp = struct
   let constant loc const =
     mk loc Heap.empty (Pexp_constant const)
 
+  let local loc name f =
+    let heap, pat, body = Binding.simple loc name f in
+    let lid = { name with txt = CamlinternalAST.Lident name.txt } in
+    (*let def = mk loc Heap.empty (Pexp_ident lid) in*)
+    let def =
+      { pexp_loc = loc;
+        pexp_attributes = [];
+        pexp_desc = Pexp_ident lid; } in
+    let vb = mk_vb loc pat def in
+    mk loc heap (Pexp_let(Nonrecursive, [vb], body))
+
   let let_nonbinding loc pat def body =
     let pat = PatRepr.nonbinding loc pat in
     let heap, def = merge loc Heap.empty def in

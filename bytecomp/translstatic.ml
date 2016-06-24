@@ -19,6 +19,13 @@ open Asttypes
 (* ordered array of lambda blocks for stage-0 splices *)
 let item_splices = ref ([] : lambda list)
 
+let transl_toplevel_splice exp =
+  List.fold_left
+    (fun lam id -> Translquote.wrap_local exp.exp_loc id.txt
+      (Location.mkloc (Ident.name id.txt) id.loc) lam)
+    (Translcore.transl_exp exp)
+    (Env.cross_stage_ids exp.exp_env)
+
 module TranslSplicesIterator = struct
   open TypedtreeIter
   include DefaultIteratorArgument
@@ -29,7 +36,7 @@ module TranslSplicesIterator = struct
     match expr.exp_desc with
     | Texp_escape e ->
         if !depth = 0 then
-          let body = Translcore.transl_exp e in
+          let body = transl_toplevel_splice e in
           item_splices := !item_splices @ [body];
         else
           ()
@@ -78,7 +85,7 @@ let rec insert_splice_array module_id splice_ids = function
           List.map
           (fun id ->
             Translquote.transl_close_expression Location.none (Lvar id))
-          (List.rev splice_ids))
+          splice_ids)
       in
       Lsequence (
         Lprim (Psetglobal module_id, [block]),
@@ -141,6 +148,7 @@ let transl_toplevel_item item =
     Llet (Strict, Pgenval, splice_id, splice_lam, str_lam)
   in
   let lam = List.fold_left wrap_let item_lam item_splices_with_ids in
+  item_splices := [];
   splice_ids := !splice_ids @ List.map fst item_splices_with_ids;
   lam
 

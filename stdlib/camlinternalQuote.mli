@@ -142,6 +142,8 @@ and Exp : sig
 
   val constant : Loc.t -> Constant.t -> t
 
+  val local : Loc.t -> Name.t -> (Var.t -> t) ->  t
+
   val let_nonbinding : Loc.t -> Pat.t -> t -> t -> t
 
   val let_simple : Loc.t -> Name.t -> t -> (Var.t -> t) -> t

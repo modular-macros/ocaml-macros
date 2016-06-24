@@ -190,7 +190,7 @@ type t = {
   cur_env_phase: phase;
   cur_env_stage: stage;
   cur_env_toplevel_splice: bool;
-  cur_env_cross_stage: Ident.t list;
+  cur_env_cross_stage: Ident.t loc list;
 }
 
 and module_components =
