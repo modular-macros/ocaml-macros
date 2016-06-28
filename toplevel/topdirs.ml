@@ -110,6 +110,7 @@ let load_file recursive ppf name =
       may_trace := false;
       print_exception_outcome ppf exn
     )
+    0 false
 
 let dir_load ppf name = ignore (load_file false ppf name)
 

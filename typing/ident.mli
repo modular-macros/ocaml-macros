@@ -71,3 +71,29 @@ val iter: (t -> 'a -> unit) -> 'a tbl -> unit
 (* Idents for sharing keys *)
 
 val make_key_generator : unit -> (t -> t)
+
+(* Lifting symbol operations *)
+
+(** [lifted_string str] returns true iff the first character of [str] is a `^`
+    lifting symbol. *)
+val lifted_string: string -> bool
+
+(** [lift_string str] adds a lifting symbol to [str] if it is not already
+    present. *)
+val lift_string: string -> string
+
+(** [unlift_string str] removes the lifting symbol of [str] (if any). *)
+val unlift_string: string -> string
+
+(** [lifted id] returns true iff the first character of the string part of [id]
+    is a lifting symbol. *)
+val lifted: t -> bool
+
+(** [lift_persistent id] returns a persistend, lifted version of [id] if [id] is
+    not already lifted, otherwise returns [id]. *)
+val lift_persistent: t -> t
+
+(** [unlift_persistent id] returns a persistend, unlifted version of [id] if
+    [id] is not already unlifted, otherwise returns [id]. *)
+val unlift_persistent: t -> t
+

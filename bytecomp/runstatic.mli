@@ -20,6 +20,5 @@ open Lambda
     *)
 val run_static : Format.formatter -> lambda -> Parsetree.expression array
 
-(** Adds stdlib symbols to the set of phase-1 symbols. *)
-val load_stdlib_static : Format.formatter -> bool
+val load_static_deps : Format.formatter -> unit
 

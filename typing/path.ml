@@ -100,40 +100,13 @@ let is_constructor_typath p =
   | Regular _ -> false
   | _ -> true
 
-let rec is_lifted = function
-  | Pident id ->
-      let name = Ident.name id in
-      String.length name > 1 && name.[0] = '^' &&
-        'A' <= name.[1] && name.[1] <= 'Z'
-  | Pdot (p, _, _) -> is_lifted p
-  | Papply (p, _) -> is_lifted p
+let rec map_head f = function
+  | Pident id -> Pident (f id)
+  | Pdot (tl, s, pos) -> Pdot (map_head f tl, s, pos)
+  | Papply (a,b) -> Papply (a,b)
 
-let unlift_string name =
-  if String.length name > 1 && name.[0] == '^' then
-    String.sub name 1 (String.length name - 1)
-  else name
-
-let lift_string name =
-  if String.length name > 1 && name.[0] == '^' then
-    name
-  else
-    "^" ^ name
-
-let rec unlift = function
-  | Pident s ->
-      if Ident.persistent s then
-        Pident (Ident.create_persistent @@ unlift_string @@ Ident.name s)
-      else
-        Pident (Ident.create @@ unlift_string @@ Ident.name s)
-  | Pdot (p, a, b) -> Pdot(unlift p, a, b)
-  | Papply (p, a) -> Papply(unlift p, a)
-
-let rec lift = function
-  | Pident s ->
-      if Ident.persistent s then
-        Pident (Ident.create_persistent @@ lift_string @@ Ident.name s)
-      else
-        Pident (Ident.create @@ lift_string @@ Ident.name s)
-  | Pdot (p, a, b) -> Pdot (lift p, a, b)
-  | Papply (p, a) -> Papply (lift p, a)
+let rec lifted = function
+  | Pident id -> Ident.lifted id
+  | Pdot (tl,_,_) -> lifted tl
+  | Papply _ -> false
 

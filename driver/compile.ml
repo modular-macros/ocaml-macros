@@ -80,6 +80,8 @@ let implementation ppf sourcefile outputprefix =
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"))
     end else begin
+      (* Load static dependencies *)
+      Runstatic.load_static_deps ppf;
       (* Run static code *)
       let stat_lam =
         Translstatic.transl_implementation modulename typedtree coercion in

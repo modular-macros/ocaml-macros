@@ -172,10 +172,9 @@ let load_lambda phase ppf lam =
   let can_free = (fun_code = []) in
   let initial_symtable = Symtable.current_state() in
   let nothing () = () in
-  Cmo_load.load_deps ppf
-    (if phase = 0 then Asttypes.Nonstatic else Asttypes.Static)
-    reloc nothing nothing (fun exn -> raise exn);
-  Symtable.patch_object phase phase code reloc;
+  (if phase = 0 then Cmo_load.load_deps_static else Cmo_load.load_deps_runtime)
+    ppf reloc nothing nothing (fun exn -> raise exn);
+  Symtable.patch_object phase code reloc;
   Symtable.check_global_initialized phase reloc;
   Symtable.update_global_table();
   let initial_bindings = !toplevel_value_bindings in
@@ -546,6 +545,7 @@ let loop ppf =
   Location.input_lexbuf := Some lb;
   Sys.catch_break true;
   load_ocamlinit ppf;
+  Runstatic.load_static_deps ppf;
   while true do
     let snap = Btype.snapshot () in
     try

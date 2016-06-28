@@ -31,15 +31,21 @@ exception Load_failed
     @param after_ld Same as [before_ld], but will be called after the execution.
     @param on_failure Function called in case the load failed.
  *)
-val load_file : bool -> Format.formatter -> string
-  -> (unit -> unit) -> (unit -> unit) -> (exn -> unit)
-  -> bool
+val load_file : bool -> Format.formatter
+  -> string -> (unit -> unit) -> (unit -> unit) -> (exn -> unit)
+  -> Types.phase -> bool -> bool
 
-(** [load_deps ppf reloc before_ld after_ld on_failure] loads all the .cmo
-    dependencies of a compilation unit (represented as its relocation
-    information) into the bytecode symtable. *)
-val load_deps : Format.formatter -> Asttypes.static_flag
-  -> (Cmo_format.reloc_info * int) list
+(** [load_deps_runtime ppf reloc before_ld after_ld on_failure]
+    attempts to load undefined globals from .cmo files in the include path into
+    the bytecode symtable. *)
+val load_deps_runtime : Format.formatter -> (Cmo_format.reloc_info * int) list
+  -> (unit -> unit) -> (unit -> unit) -> (exn -> unit)
+  -> unit
+
+(** [load_deps_static ppf reloc before_ld after_ld on_failure]
+    attempts to load unlifted, undefined globals from .cmm files in the include
+    path into the bytecode symtable. Ignore lifted globals. *)
+val load_deps_static : Format.formatter -> (Cmo_format.reloc_info * int) list
   -> (unit -> unit) -> (unit -> unit) -> (exn -> unit)
   -> unit
 

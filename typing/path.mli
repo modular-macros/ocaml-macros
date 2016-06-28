@@ -44,18 +44,9 @@ type typath =
 val constructor_typath: t -> typath
 val is_constructor_typath: t -> bool
 
-(** Returns [true] iff the left-most identifier begins with a caret (`^`). *)
-val is_lifted: t -> bool
+(** [map_head f p] is [p] with [f] applied to its head. If [p] is of the form
+    [Papply (_,_)], it is not modified. *)
+val map_head: (Ident.t -> Ident.t) -> t -> t
 
-(** Removes the first character of its argument if it is a caret (`^`). *)
-val unlift: t -> t
-
-(** Removes the lifting symbol in path (if any) iff the path begins with a
-    persistent identifier (see [Ident]). WARNING: creates a fresh identifier if
-    called on a non-global path. *)
-val unlift_string: string -> string
-
-(** Lifts a path if it is not already lifted. WARNING: creates a new fresh
-   identifier if called on a non-global path. *)
-val lift: t -> t
+val lifted: t -> bool
 

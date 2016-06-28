@@ -15,7 +15,6 @@
 open Misc
 open Format
 open Cmo_format
-open Asttypes
 
 exception Load_failed
 
@@ -36,7 +35,7 @@ let check_consistency ppf filename cu =
     raise Load_failed
 
 let load_compunit ic filename ppf compunit before_ld after_ld on_failure
-    dependency =
+    phase lift_globals =
   check_consistency ppf filename compunit;
   seek_in ic compunit.cu_pos;
   let code_size = compunit.cu_codesize + 8 in
@@ -46,21 +45,18 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
   String.unsafe_blit "\000\000\000\001\000\000\000" 0
                      code (compunit.cu_codesize + 1) 7;
   let initial_symtable = Symtable.current_state() in
-  let unlifted_name = compunit.cu_name in
-  let reloc_mapper = match dependency with
-  | (Static, Nonstatic) -> (function
-       | (Reloc_setglobal id, n) when Ident.name id = unlifted_name
-          && not (Array.mem (Ident.name id) Runtimedef.builtin_exceptions) ->
-           (Reloc_setglobal (Ident.create_persistent @@ "^" ^ unlifted_name), n)
+  let reloc_mapper =
+    if lift_globals then (function
+       | (Reloc_setglobal id, n) ->
+           (Reloc_setglobal (Ident.lift_persistent id), n)
+       | (Reloc_getglobal id, n) ->
+           (Reloc_getglobal (Ident.lift_persistent id), n)
        | other -> other
-  )
-  | (Nonstatic, Nonstatic) | (Static, Static) -> (fun x -> x)
-  | _ -> assert false
+      )
+    else (fun x -> x)
   in
   let new_reloc = List.map reloc_mapper compunit.cu_reloc in
-  let phase_get = if snd dependency = Static then 1 else 0 in
-  let phase_set = if fst dependency = Static then 1 else 0 in
-  Symtable.patch_object phase_get phase_set code new_reloc;
+  Symtable.patch_object phase code new_reloc;
   Symtable.update_global_table();
   let events =
     if compunit.cu_debug = 0 then [| |]
@@ -79,8 +75,8 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
     raise Load_failed
   end
 
-let rec load_file recursive ppf dependency name before_ld after_ld
-    on_failure =
+let rec load_file recursive ppf name before_ld after_ld
+    on_failure phase lift_globals =
   let filename =
     try Some (find_in_path !Config.load_path name) with Not_found -> None
   in
@@ -90,7 +86,7 @@ let rec load_file recursive ppf dependency name before_ld after_ld
       let ic = open_in_bin filename in
       try
         let success = really_load_file recursive ppf name filename ic
-              before_ld after_ld on_failure dependency
+              before_ld after_ld on_failure phase lift_globals
         in
         close_in ic;
         success
@@ -99,18 +95,23 @@ let rec load_file recursive ppf dependency name before_ld after_ld
         raise exn
 
 and really_load_file recursive ppf name filename ic
-    before_ld after_ld on_failure dependency =
+    before_ld after_ld on_failure phase lift_globals =
   let buffer = really_input_string ic (String.length Config.cmo_magic_number) in
   try
     if buffer = Config.cmo_magic_number then begin
       let compunit_pos = input_binary_int ic in  (* Go to descriptor *)
       seek_in ic compunit_pos;
       let cu : compilation_unit = input_value ic in
-      if recursive then
-        load_deps ppf (snd dependency) cu.cu_reloc
-          before_ld after_ld on_failure;
+      if recursive then begin
+        if phase = 0 then
+          load_deps_runtime ppf cu.cu_reloc
+            before_ld after_ld on_failure
+        else if phase = 1 then
+          load_deps_static ppf cu.cu_reloc before_ld after_ld on_failure
+        else assert false
+      end;
       load_compunit ic filename ppf cu before_ld after_ld on_failure
-        dependency;
+        phase lift_globals;
       true
     end else
       if buffer = Config.cma_magic_number then begin
@@ -127,10 +128,12 @@ and really_load_file recursive ppf name filename ic
                 name reason;
               raise Load_failed)
           lib.lib_dllibs;
-        List.iter
-          (fun cu ->
+        Printf.fprintf stderr "loading %d compunits...\n%!" (List.length lib.lib_units);
+        List.iteri
+          (fun i cu ->
+            Printf.fprintf stderr "%d: loading compunit %s\n%!" i cu.cu_name;
             load_compunit ic filename ppf cu before_ld after_ld on_failure
-              dependency)
+              phase lift_globals)
           lib.lib_units;
         true
       end else begin
@@ -139,63 +142,47 @@ and really_load_file recursive ppf name filename ic
       end
   with Load_failed -> false
 
-and load_deps ppf static_flag reloc before_ld after_ld on_failure =
-  let phase = if static_flag = Static then 1 else 0 in
-  match static_flag with
-  | Nonstatic ->
-    List.iter
-      (function
-        | (Reloc_getglobal id, _) when not (Symtable.is_global_defined (phase,id)) ->
-            let file = Ident.name id ^ ".cmo" in
-            begin match try Some (Misc.find_in_path_uncap !Config.load_path
-                                    file)
-                  with Not_found -> None
-            with
-            | None -> ()
-            | Some file ->
-                if not (load_file
-                    true ppf (Nonstatic, Nonstatic) file before_ld
-                    after_ld on_failure) then
-                  raise Load_failed
-            end
-        | _ -> ()
-      )
-      reloc
-  | Static ->
-    List.iter
-     (function
-       | (Reloc_getglobal id, _) when not (Symtable.is_global_defined (phase,id)) ->
-           let name = Ident.name id in
-           if Path.is_lifted (Path.Pident id) then
-             let unlifted_name = Path.unlift_string @@ name in
-             let file = unlifted_name ^ ".cmo" in
-             begin match try Some (Misc.find_in_path_uncap !Config.load_path
-                                     file)
-                   with Not_found -> None
-             with
-             | None -> ()
-             | Some file ->
-                 if not (load_file
-                     true ppf (Static, Nonstatic) file
-                     before_ld after_ld on_failure) then
-                   raise Load_failed
-             end
-           else
-             let file = Ident.name id ^ ".cmm" in
-             begin match try Some (Misc.find_in_path_uncap !Config.load_path
-                                     file)
-               with Not_found -> None
-             with
-             | None -> ()
-             | Some file ->
-                 if not (load_file
-                     true ppf (Static, Static) file
-                     before_ld after_ld on_failure) then
-                   raise Load_failed
-             end
-       | _ -> ()
-     )
-     reloc
+(** Attempt to load all undefined globals from cmo files in the include path. *)
+and load_deps_runtime ppf reloc before_ld after_ld on_failure =
+  let phase = 0 in
+  List.iter (function
+  | (Reloc_getglobal id, _) when not (Symtable.is_global_defined (phase,id)) ->
+      let file = Ident.name id ^ ".cmo" in
+      begin match try Some (Misc.find_in_path_uncap !Config.load_path
+                              file)
+            with Not_found -> None
+      with
+      | None -> ()
+      | Some file ->
+          if not (load_file
+              true ppf file before_ld
+              after_ld on_failure phase false) then
+            raise Load_failed
+      end
+  | _ -> ()
+  )
+  reloc
 
-let load_file recursive ppf = load_file recursive ppf (Nonstatic, Nonstatic)
+(** Attempts to load all unlifted, undefined globals cmm files in the include
+    path. Ignores lifted globals. *)
+and load_deps_static ppf reloc before_ld after_ld on_failure =
+  let phase = 1 in
+  List.iter (function
+  | (Reloc_getglobal id, _) when not (Symtable.is_global_defined (phase,id)) ->
+      if Ident.lifted id then ()
+      else
+        let file = Ident.name id ^ ".cmm" in
+        begin match try Some (Misc.find_in_path_uncap !Config.load_path
+                                file)
+          with Not_found -> None
+        with
+        | None -> ()
+        | Some file ->
+            if not (load_file
+                true ppf file before_ld after_ld on_failure phase false) then
+              raise Load_failed
+        end
+  | _ -> ()
+  )
+  reloc
 

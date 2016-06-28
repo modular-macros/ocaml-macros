@@ -66,12 +66,14 @@ let is_global_defined id =
   Tbl.mem id (!global_table).num_tbl
 
 let slot_for_getglobal (phase, id) =
+  Printf.fprintf stderr "sfgg %s\n%!" (Ident.name id);
   try
     find_numtable !global_table (phase, id)
   with Not_found ->
     raise(Error(Undefined_global(Ident.name id)))
 
 let slot_for_setglobal id =
+  Printf.fprintf stderr "sfSg %s\n%!" (Ident.name (snd id));
   enter_numtable global_table id
 
 let slot_for_literal cst =
@@ -196,21 +198,21 @@ let gen_patch_int str_set buff pos n =
   str_set buff (pos + 2) (Char.unsafe_chr (n asr 16));
   str_set buff (pos + 3) (Char.unsafe_chr (n asr 24))
 
-let gen_patch_object phase_get phase_set str_set buff patchlist =
+let gen_patch_object phase str_set buff patchlist =
   List.iter
     (function
         (Reloc_literal sc, pos) ->
           gen_patch_int str_set buff pos (slot_for_literal sc)
       | (Reloc_getglobal id, pos) ->
-          gen_patch_int str_set buff pos (slot_for_getglobal (phase_get, id))
+          gen_patch_int str_set buff pos (slot_for_getglobal (phase, id))
       | (Reloc_setglobal id, pos) ->
-          gen_patch_int str_set buff pos (slot_for_setglobal (phase_set, id))
+          gen_patch_int str_set buff pos (slot_for_setglobal (phase, id))
       | (Reloc_primitive name, pos) ->
           gen_patch_int str_set buff pos (num_of_prim name))
     patchlist
 
-let patch_object phase_get phase_set = gen_patch_object phase_get phase_set Bytes.unsafe_set
-let ls_patch_object phase_get phase_set = gen_patch_object phase_get phase_set LongString.set
+let patch_object phase = gen_patch_object phase Bytes.unsafe_set
+let ls_patch_object phase = gen_patch_object phase LongString.set
 
 (* Translate structured constants *)
 

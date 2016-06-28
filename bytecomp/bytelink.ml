@@ -208,7 +208,7 @@ let link_compunit ppf output_fun currpos_fun inchan file_name compunit =
   check_consistency ppf file_name compunit;
   seek_in inchan compunit.cu_pos;
   let code_block = LongString.input_bytes inchan compunit.cu_codesize in
-  Symtable.ls_patch_object phase phase code_block compunit.cu_reloc;
+  Symtable.ls_patch_object phase code_block compunit.cu_reloc;
   if !Clflags.debug && compunit.cu_debug > 0 then begin
     seek_in inchan compunit.cu_debug;
     let debug_event_list : Instruct.debug_event list = input_value inchan in
