@@ -172,7 +172,7 @@ let load_lambda phase ppf lam =
   let can_free = (fun_code = []) in
   let initial_symtable = Symtable.current_state() in
   let nothing () = () in
-  (if phase = 0 then Cmo_load.load_deps_static else Cmo_load.load_deps_runtime)
+  (if phase = 0 then Cmo_load.load_deps_runtime else Cmo_load.load_deps_static)
     ppf reloc nothing nothing (fun exn -> raise exn);
   Symtable.patch_object phase code reloc;
   Symtable.check_global_initialized phase reloc;
