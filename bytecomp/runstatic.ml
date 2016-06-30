@@ -40,9 +40,6 @@ let load_static_deps ppf =
       Not_found -> Misc.fatal_error "stdlib.cma not found."
     end
   ;
-  Printf.fprintf stderr "before init_static\n%!";
-  Symtable.init_static ();
-  Printf.fprintf stderr "after init_static\n%!";
   let nothing () = () in
   let load fname =
     Printf.fprintf stderr "static dep: %s\n%!" fname;
