@@ -66,14 +66,12 @@ let is_global_defined id =
   Tbl.mem id (!global_table).num_tbl
 
 let slot_for_getglobal (phase, id) =
-  Printf.fprintf stderr "sfgg %s %d\n%!" (Ident.name id) phase;
   try
     find_numtable !global_table (phase, id)
   with Not_found ->
     raise(Error(Undefined_global(Ident.name id)))
 
 let slot_for_setglobal id =
-  Printf.fprintf stderr "sfSg %s %d\n%!" (Ident.name (snd id)) (fst id);
   enter_numtable global_table id
 
 let slot_for_literal cst =

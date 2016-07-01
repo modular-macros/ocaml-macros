@@ -29,10 +29,8 @@ let run_static ppf lam =
   (Obj.obj splices : Parsetree.expression array)
 
 let load_static_deps ppf =
-  Printf.fprintf stderr "load_static_deps called\n%!";
   if not !Clflags.no_std_include then
     begin try
-      Printf.fprintf stderr "including std\n%!";
       let stdarchive =
         Misc.find_in_path (Clflags.std_include_dir ()) "stdlib.cma" in
       Clflags.static_deps := stdarchive :: !Clflags.static_deps
@@ -42,12 +40,10 @@ let load_static_deps ppf =
   ;
   let nothing () = () in
   let load fname =
-    Printf.fprintf stderr "static dep: %s\n%!" fname;
     if Filename.check_suffix fname ".cmo"
     || Filename.check_suffix fname ".cma" then begin
       ignore (Cmo_load.load_file false ppf fname
         nothing nothing (fun exn -> raise exn) 1 true);
-      Printf.fprintf stderr "done loading!\n%!"
     end
     else
       Misc.fatal_error (fname ^ " is not a .cmo or .cma file.")

@@ -128,10 +128,8 @@ and really_load_file recursive ppf name filename ic
                 name reason;
               raise Load_failed)
           lib.lib_dllibs;
-        Printf.fprintf stderr "loading %d compunits...\n%!" (List.length lib.lib_units);
-        List.iteri
-          (fun i cu ->
-            Printf.fprintf stderr "%d: loading compunit %s\n%!" i cu.cu_name;
+        List.iter
+          (fun cu ->
             load_compunit ic filename ppf cu before_ld after_ld on_failure
               phase lift_globals)
           lib.lib_units;
