@@ -101,7 +101,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _g = set debug
   let _i () = print_types := true; compile_only := true
   let _I s = include_dirs := s :: !include_dirs
-  let _m s = static_deps := s :: !static_deps
+  let _m s = static_deps := !static_deps @ [s]
   let _impl = impl
   let _intf = intf
   let _intf_suffix s = Config.interface_suffix := s
