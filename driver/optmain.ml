@@ -118,6 +118,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _g = set debug
   let _i () = print_types := true; compile_only := true
   let _I dir = include_dirs := dir :: !include_dirs
+  let _m _ = () (* macros: unused *)
   let _impl = impl
   let _inline spec =
     Float_arg_helper.parse spec

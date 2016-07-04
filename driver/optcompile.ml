@@ -114,7 +114,8 @@ let implementation ppf sourcefile outputprefix ~backend =
         Clflags.use_inlining_arguments_set Clflags.classic_arguments;
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))
-            (Translmod.transl_store_implementation modulename)
+            (Translmod.transl_store_implementation Asttypes.Nonstatic
+              modulename)
         ++ print_if ppf Clflags.dump_rawlambda Printlambda.program
         ++ Timings.(time (Generate sourcefile))
             (fun { Lambda.code; main_module_block_size } ->

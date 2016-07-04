@@ -18,11 +18,12 @@
 
 open Typedtree
 open Lambda
+open Asttypes
 
 val transl_implementation: string -> structure * module_coercion -> lambda
-val transl_store_phrases: string -> structure -> int * lambda
+val transl_store_phrases: static_flag -> string -> structure -> int * lambda
 val transl_store_implementation:
-      string -> structure * module_coercion -> Lambda.program
+      static_flag -> string -> structure * module_coercion -> Lambda.program
 
 val transl_implementation_flambda:
   string -> structure * module_coercion -> (Ident.t * int) * lambda

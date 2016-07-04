@@ -674,35 +674,41 @@ let transl_implementation module_name (str, cc) =
   Lprim (Psetglobal module_id, [module_initializer])
 
 (* Build the list of value identifiers defined by a toplevel structure
-   (excluding primitive declarations and static bindings). *)
+   (excluding primitive declarations and replacing different-phase identifiers
+    with placeholders). *)
 
-let rec defined_idents = function
+let rec defined_idents static_flag = function
     [] -> []
   | item :: rem ->
     match item.str_desc with
-    | Tstr_eval _ -> defined_idents rem
-    | Tstr_value(static_flag, _rec_flag, pat_expr_list) -> (
-      match static_flag with
-      | Nonstatic -> let_bound_idents pat_expr_list @ defined_idents rem
-      | Static -> defined_idents rem (* exclude static bindings *)
+    | Tstr_eval _ -> defined_idents static_flag rem
+    | Tstr_value(sf, _rec_flag, pat_expr_list) -> (
+      if sf = static_flag then
+        let_bound_idents pat_expr_list @ defined_idents static_flag rem
+      else
+        let placeholders =
+          List.map (fun _ -> Ident.create_persistent "0")
+            (let_bound_idents pat_expr_list)
+        in
+        placeholders @ defined_idents static_flag rem
     )
-    | Tstr_primitive _ -> defined_idents rem
-    | Tstr_type _ -> defined_idents rem
+    | Tstr_primitive _ -> defined_idents static_flag rem
+    | Tstr_type _ -> defined_idents static_flag rem
     | Tstr_typext tyext ->
       List.map (fun ext -> ext.ext_id) tyext.tyext_constructors
-      @ defined_idents rem
-    | Tstr_exception ext -> ext.ext_id :: defined_idents rem
-    | Tstr_module mb -> mb.mb_id :: defined_idents rem
+      @ defined_idents static_flag rem
+    | Tstr_exception ext -> ext.ext_id :: defined_idents static_flag rem
+    | Tstr_module mb -> mb.mb_id :: defined_idents static_flag rem
     | Tstr_recmodule decls ->
-      List.map (fun mb -> mb.mb_id) decls @ defined_idents rem
-    | Tstr_modtype _ -> defined_idents rem
-    | Tstr_open _ -> defined_idents rem
+      List.map (fun mb -> mb.mb_id) decls @ defined_idents static_flag rem
+    | Tstr_modtype _ -> defined_idents static_flag rem
+    | Tstr_open _ -> defined_idents static_flag rem
     | Tstr_class cl_list ->
-      List.map (fun (ci, _) -> ci.ci_id_class) cl_list @ defined_idents rem
-    | Tstr_class_type _ -> defined_idents rem
+      List.map (fun (ci, _) -> ci.ci_id_class) cl_list @ defined_idents static_flag rem
+    | Tstr_class_type _ -> defined_idents static_flag rem
     | Tstr_include incl ->
-      bound_value_identifiers incl.incl_type @ defined_idents rem
-    | Tstr_attribute _ -> defined_idents rem
+      bound_value_identifiers incl.incl_type @ defined_idents static_flag rem
+    | Tstr_attribute _ -> defined_idents static_flag rem
 
 (* second level idents (module M = struct ... let id = ... end),
    and all sub-levels idents *)
@@ -786,7 +792,7 @@ let nat_toplevel_name id =
   with Not_found ->
     fatal_error("Translmod.nat_toplevel_name: " ^ Ident.unique_name id)
 
-let transl_store_structure glob map prims str =
+let transl_store_structure static_flag glob map prims str =
   let rec transl_store rootpath subst = function
     [] ->
       transl_store_subst := subst;
@@ -796,18 +802,24 @@ let transl_store_structure glob map prims str =
         | Tstr_eval (expr, _attrs) ->
             Lsequence(subst_lambda subst (transl_exp expr),
                       transl_store rootpath subst rem)
-        | Tstr_value(static_flag, rec_flag, pat_expr_list) ->
+        | Tstr_value(sf, rec_flag, pat_expr_list) ->
           begin
-            match static_flag with
-            | Nonstatic ->
+            if sf = static_flag then
               let ids = let_bound_idents pat_expr_list in
               let lam = transl_let rec_flag pat_expr_list (store_idents ids) in
               Lsequence(subst_lambda subst lam,
-                        transl_store rootpath (add_idents false ids subst) rem)
-            | Static -> lambda_unit
+                        transl_store rootpath
+                          (add_idents false ids subst) rem)
+            else
+              let _placeholders = List.map (fun _ -> Ident.create_persistent "0")
+                (let_bound_idents pat_expr_list)
+              in
+              transl_store rootpath subst rem
           end
         | Tstr_primitive descr ->
-            record_primitive descr.val_val;
+            begin if static_flag = Nonstatic then
+              record_primitive descr.val_val
+            end;
             transl_store rootpath subst rem
         | Tstr_type _ ->
             transl_store rootpath subst rem
@@ -843,7 +855,7 @@ let transl_store_structure glob map prims str =
                            subst_lambda subst
                              (Lprim(Pmakeblock(0, Immutable, None),
                                     List.map (fun id -> Lvar id)
-                                      (defined_idents str.str_items))),
+                                      (defined_idents static_flag str.str_items))),
                            Lsequence(store_ident id,
                                      transl_store rootpath
                                                   (add_ident true id subst)
@@ -865,12 +877,12 @@ let transl_store_structure glob map prims str =
             in
             (* Careful: see next case *)
             let subst = !transl_store_subst in
-            let ids = Array.of_list (defined_idents str.str_items) in
+            let ids = Array.of_list (defined_idents static_flag str.str_items) in
             let field (pos, cc) =
               match cc with
               | Tcoerce_primitive { pc_loc; pc_desc; pc_env; pc_type; } ->
                   transl_primitive pc_loc pc_desc pc_env pc_type None
-              | _ -> apply_coercion Nonstatic Strict cc (Lvar ids.(pos))
+              | _ -> apply_coercion static_flag Strict cc (Lvar ids.(pos))
             in
             Lsequence(lam,
                       Llet(Strict, Pgenval, id,
@@ -991,14 +1003,14 @@ let build_ident_map restr idlist more_ids =
               (* ignore _id_pos_list as the ids are already bound *)
         let idarray = Array.of_list idlist in
         let rec export_map pos map prims undef = function
-        [] ->
+          [] ->
           natural_map pos map prims undef
-          | (_source_pos, Tcoerce_primitive p) :: rem ->
-            export_map (pos + 1) map ((pos, p) :: prims) undef rem
-          | (source_pos, cc) :: rem ->
-            let id = idarray.(source_pos) in
-            export_map (pos + 1) (Ident.add id (pos, cc) map)
-              prims (list_remove id undef) rem
+        | (_source_pos, Tcoerce_primitive p) :: rem ->
+          export_map (pos + 1) map ((pos, p) :: prims) undef rem
+        | (source_pos, cc) :: rem ->
+          let id = idarray.(source_pos) in
+          export_map (pos + 1) (Ident.add id (pos, cc) map)
+            prims (list_remove id undef) rem
         in export_map 0 Ident.empty [] idlist pos_cc_list
       | _ ->
         fatal_error "Translmod.build_ident_map"
@@ -1008,28 +1020,28 @@ let build_ident_map restr idlist more_ids =
 (* Compile an implementation using transl_store_structure
    (for the native-code compiler). *)
 
-let transl_store_gen module_name ({ str_items = str }, restr) topl =
+let transl_store_gen static_flag module_name ({ str_items = str }, restr) topl =
   reset_labels ();
   primitive_declarations := [];
   Hashtbl.clear used_primitives;
   let module_id = Ident.create_persistent module_name in
   let (map, prims, size) =
-    build_ident_map restr (defined_idents str) (more_idents str) in
+    build_ident_map restr (defined_idents static_flag str) (more_idents str) in
   let f = function
     | [ { str_desc = Tstr_eval (expr, _attrs) } ] when topl ->
         assert (size = 0);
         subst_lambda !transl_store_subst (transl_exp expr)
-    | str -> transl_store_structure module_id map prims str in
+    | str -> transl_store_structure static_flag module_id map prims str in
   transl_store_label_init module_id size f str
   (*size, transl_label_init (transl_store_structure module_id map prims str)*)
 
-let transl_store_phrases module_name str =
-  transl_store_gen module_name (str,Tcoerce_none) true
+let transl_store_phrases static_flag module_name str =
+  transl_store_gen static_flag module_name (str,Tcoerce_none) true
 
-let transl_store_implementation module_name (str, restr) =
+let transl_store_implementation static_flag module_name (str, restr) =
   let s = !transl_store_subst in
   transl_store_subst := Ident.empty;
-  let (i, r) = transl_store_gen module_name (str, restr) false in
+  let (i, r) = transl_store_gen static_flag module_name (str, restr) false in
   transl_store_subst := s;
   { Lambda.main_module_block_size = i;
     code = wrap_globals ~flambda:false r; }
