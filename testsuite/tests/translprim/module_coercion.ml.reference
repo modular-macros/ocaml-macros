@@ -1,3 +1,6 @@
+(let (M = 0)
+  (seq (setglobal Module_coercion! (makeblock 0 0 0 0 0 0 0 0))
+    (makearray[addr])))
 (setglobal Module_coercion!
   (let (M = (makeblock 0))
     (makeblock 0 M

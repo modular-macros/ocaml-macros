@@ -1,3 +1,7 @@
+(seq
+  (setglobal Array_spec!
+    (makeblock 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+  (makearray[addr]))
 (setglobal Array_spec!
   (let
     (int_a = (makearray[int] 1 2 3)
