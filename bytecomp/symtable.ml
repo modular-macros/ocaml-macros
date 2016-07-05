@@ -66,7 +66,6 @@ let is_global_defined id =
   Tbl.mem id (!global_table).num_tbl
 
 let slot_for_getglobal (phase, id) =
-  Printf.eprintf "sfgg %s %d\n%!" (Ident.name id) phase;
   try
     find_numtable !global_table (phase, id)
   with Not_found ->
