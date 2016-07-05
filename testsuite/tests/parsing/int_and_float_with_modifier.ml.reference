@@ -1,6 +1,6 @@
 [
   structure_item (int_and_float_with_modifier.ml[1,0+0]..[2,31+57])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (int_and_float_with_modifier.ml[1,0+4]..[1,0+28])
@@ -9,7 +9,7 @@
           Pexp_constant PConst_int (1234567890_1234567890_1234567890_1234567890_1234567890,Some z)
     ]
   structure_item (int_and_float_with_modifier.ml[3,89+0]..[4,122+58])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (int_and_float_with_modifier.ml[3,89+4]..[3,89+30])
@@ -18,7 +18,7 @@
           Pexp_constant PConst_float (1234567890_1234567890_1234567890_1234567890_1234567890.,Some z)
     ]
   structure_item (int_and_float_with_modifier.ml[6,182+0]..[6,182+21])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (int_and_float_with_modifier.ml[6,182+4]..[6,182+9])
@@ -27,7 +27,7 @@
           Pexp_constant PConst_int (1234,Some l)
     ]
   structure_item (int_and_float_with_modifier.ml[7,204+0]..[7,204+21])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (int_and_float_with_modifier.ml[7,204+4]..[7,204+9])
@@ -36,7 +36,7 @@
           Pexp_constant PConst_int (1234,Some L)
     ]
   structure_item (int_and_float_with_modifier.ml[8,226+0]..[8,226+21])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (int_and_float_with_modifier.ml[8,226+4]..[8,226+13])
@@ -45,7 +45,7 @@
           Pexp_constant PConst_int (1234,Some n)
     ]
   structure_item (int_and_float_with_modifier.ml[10,249+0]..[10,249+32])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (int_and_float_with_modifier.ml[10,249+4]..[10,249+24])
@@ -54,7 +54,7 @@
           Pexp_constant PConst_int (0x32f,None)
     ]
   structure_item (int_and_float_with_modifier.ml[11,282+0]..[11,282+32])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (int_and_float_with_modifier.ml[11,282+4]..[11,282+21])
@@ -63,7 +63,7 @@
           Pexp_constant PConst_int (0x32,Some g)
     ]
   structure_item (int_and_float_with_modifier.ml[13,316+0]..[13,316+33])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (int_and_float_with_modifier.ml[13,316+4]..[13,316+25])
@@ -72,7 +72,7 @@
           Pexp_constant PConst_float (1.2e3,None)
     ]
   structure_item (int_and_float_with_modifier.ml[14,350+0]..[14,350+32])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (int_and_float_with_modifier.ml[14,350+4]..[14,350+22])

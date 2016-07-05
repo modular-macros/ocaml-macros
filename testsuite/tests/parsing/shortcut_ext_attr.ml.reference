@@ -1,6 +1,6 @@
 [
   structure_item (shortcut_ext_attr.ml[3,19+0]..[23,554+31])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
         pattern (shortcut_ext_attr.ml[3,19+4]..[3,19+6])
@@ -536,7 +536,7 @@
     Pstr_extension "foo"
     [
       structure_item (shortcut_ext_attr.ml[69,1411+0]..[70,1431+15])
-        Pstr_value Nonrec
+        Pstr_value Nonstatic Nonrec
         [
           <def>
               attribute "foo"
@@ -753,7 +753,7 @@
             Psig_extension "foo"
             [
               signature_item (shortcut_ext_attr.ml[91,1798+2]..[91,1798+21])
-                Psig_value
+                Psig_value Nonstatic
                 value_description "x" (shortcut_ext_attr.ml[91,1798+16]..[91,1798+17]) (shortcut_ext_attr.ml[91,1798+2]..[91,1798+21])
                   attribute "foo"
                     []
@@ -766,7 +766,7 @@
             Psig_extension "foo"
             [
               signature_item (shortcut_ext_attr.ml[92,1820+2]..[92,1820+31])
-                Psig_value
+                Psig_value Nonstatic
                 value_description "x" (shortcut_ext_attr.ml[92,1820+21]..[92,1820+22]) (shortcut_ext_attr.ml[92,1820+2]..[92,1820+31])
                   attribute "foo"
                     []
