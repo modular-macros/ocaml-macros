@@ -535,11 +535,10 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
             if static_flag = Static then
               zero_lam
             else
-              transl_module Tcoerce_none (field_path rootpath id) static_flag mb.mb_expr
-          in
-          let module_body =
-            Translattribute.add_inline_attribute module_body mb.mb_loc
-                                                 mb.mb_attributes
+              Translattribute.add_inline_attribute
+                (transl_module Tcoerce_none (field_path rootpath id)
+                  static_flag mb.mb_expr)
+                mb.mb_loc mb.mb_attributes
           in
           Llet(pure_module mb.mb_expr, Pgenval, id,
                module_body,
