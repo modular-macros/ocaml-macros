@@ -81,7 +81,7 @@ let implementation ppf sourcefile outputprefix =
       Stypes.dump (Some (outputprefix ^ ".annot"))
     end else begin
       (* Load static dependencies *)
-      Symtable.init_static ();
+      ignore (Symtable.init_static ());
       Runstatic.load_static_deps ppf;
       (* Run static code *)
       let stat_lam =

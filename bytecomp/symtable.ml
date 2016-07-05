@@ -66,6 +66,7 @@ let is_global_defined id =
   Tbl.mem id (!global_table).num_tbl
 
 let slot_for_getglobal (phase, id) =
+  Printf.eprintf "sfgg %s %d\n%!" (Ident.name id) phase;
   try
     find_numtable !global_table (phase, id)
   with Not_found ->
@@ -374,27 +375,35 @@ let assign_global_value id v =
 (* Initialize the linker for running static code *)
 
 let init_static () =
-  begin try
-    let sect = read_sections () in
-    (* Locations of globals *)
-    global_table := saved_to_runtime
-      (Obj.magic (sect.read_struct "SYMB") : Ident.t numtable);
-    (* Primitives *)
-    let prims = sect.read_string "PRIM" in
-    c_prim_table := empty_numtable;
-    let pos = ref 0 in
-    while !pos < String.length prims do
-      let i = String.index_from prims !pos '\000' in
-      set_prim_table (String.sub prims !pos (i - !pos));
-      pos := i + 1
-    done;
-    (* DLL initialization *)
-    let dllpath = try sect.read_string "DLPT" with Not_found -> "" in
-    Dll.init_toplevel dllpath;
-    sect.close_reader()
-  with Bytesections.Bad_magic_number | Not_found | Failure _ ->
-    fatal_error "Toplevel bytecode executable is corrupted"
-  end;
+  let crcintfs =
+    begin try
+      let sect = read_sections () in
+      (* Locations of globals *)
+      global_table := saved_to_runtime
+        (Obj.magic (sect.read_struct "SYMB") : Ident.t numtable);
+      (* Primitives *)
+      let prims = sect.read_string "PRIM" in
+      c_prim_table := empty_numtable;
+      let pos = ref 0 in
+      while !pos < String.length prims do
+        let i = String.index_from prims !pos '\000' in
+        set_prim_table (String.sub prims !pos (i - !pos));
+        pos := i + 1
+      done;
+      (* DLL initialization *)
+      let dllpath = try sect.read_string "DLPT" with Not_found -> "" in
+      Dll.init_toplevel dllpath;
+      (* Recover CRC infos for interfaces *)
+      let crcintfs =
+        try
+          (Obj.magic (sect.read_struct "CRCS") : (string * Digest.t option) list)
+        with Not_found -> [] in
+      sect.close_reader();
+      crcintfs
+    with Bytesections.Bad_magic_number | Not_found | Failure _ ->
+      fatal_error "Toplevel bytecode executable is corrupted"
+    end
+    in
   (* Add built-in exceptions to phase 1 *)
   Array.iter
     (fun name ->
@@ -405,7 +414,8 @@ let init_static () =
       let pos = get_global_position (0, id) in
       global_table := { !global_table with
         num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
-    Runtimedef.builtin_exceptions
+    Runtimedef.builtin_exceptions;
+  crcintfs
 
 (* Check that all globals referenced in the given patch list
    have been initialized already *)
