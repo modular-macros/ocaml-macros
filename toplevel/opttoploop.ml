@@ -68,7 +68,7 @@ let remembered = ref Ident.empty
 
 let rec remember phrase_name i = function
   | [] -> ()
-  | Sig_value  (id, _) :: rest
+  | Sig_value  (id, _, _) :: rest
   | Sig_module (id, _, _) :: rest
   | Sig_typext (id, _, _) :: rest
   | Sig_class  (id, _, _) :: rest ->
@@ -244,7 +244,7 @@ let load_lambda ppf ~module_ident lam size =
 let pr_item =
   Printtyp.print_items
     (fun env -> function
-      | Sig_value(id, {val_kind = Val_reg; val_type}) ->
+      | Sig_value(id, _, {val_kind = Val_reg; val_type}) ->
           Some (outval_of_value env (toplevel_value id) val_type)
       | _ -> None
     )
@@ -282,7 +282,8 @@ let execute_phrase print_outcome ppf phr =
       let sstr, rewritten =
         match sstr with
         | [ { pstr_desc = Pstr_eval (e, attrs) ; pstr_loc = loc } ]
-        | [ { pstr_desc = Pstr_value (Asttypes.Nonrecursive,
+        | [ { pstr_desc = Pstr_value (Asttypes.Nonstatic,
+                                      Asttypes.Nonrecursive,
                                       [{ pvb_expr = e
                                        ; pvb_pat = { ppat_desc = Ppat_any ; _ }
                                        ; pvb_attributes = attrs
@@ -291,7 +292,7 @@ let execute_phrase print_outcome ppf phr =
           ] ->
             let pat = Ast_helper.Pat.var (Location.mknoloc "_$") in
             let vb = Ast_helper.Vb.mk ~loc ~attrs pat e in
-            [ Ast_helper.Str.value ~loc Asttypes.Nonrecursive [vb] ], true
+            [ Ast_helper.Str.value ~loc Asttypes.Nonstatic Asttypes.Nonrecursive [vb] ], true
         | _ -> sstr, false
       in
       let (str, sg, newenv) = Typemod.type_toplevel_phrase oldenv sstr in
@@ -309,7 +310,7 @@ let execute_phrase print_outcome ppf phr =
           remember module_ident 0 sg';
           module_ident, close_phrase res, size
         else
-          let size, res = Translmod.transl_store_phrases !phrase_name str in
+          let size, res = Translmod.transl_store_phrases Asttypes.Nonstatic !phrase_name str in
           Ident.create_persistent !phrase_name, res, size
       in
       Warnings.check_fatal ();
@@ -331,7 +332,7 @@ let execute_phrase print_outcome ppf phr =
                 | _ ->
                     if rewritten then
                       match sg' with
-                      | [ Sig_value (id, vd) ] ->
+                      | [ Sig_value (id, _, vd) ] ->
                           let outv =
                             outval_of_value newenv (toplevel_value id)
                               vd.val_type
