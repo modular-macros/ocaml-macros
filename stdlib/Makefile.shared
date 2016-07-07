@@ -122,9 +122,29 @@ lazy.cmo lazy.cmm: lazy.ml camlinternalLazy.cmo obj.cmo
 .ml.cmx:
 	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` -c $<
 
+expr.cmx: expr.ml pervasives.cmx camlinternalQuote.cmx \
+  camlinternalFormat.cmx
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` \
+	  -m camlinternalFormatBasics.cmo -m pervasives.cmo -m list.cmo \
+	  -m char.cmo -m bytes.cmo -m marshal.cmo -m string.cmo -m sys.cmo \
+	  -m buffer.cmo \
+	  -m camlinternalFormat.cmo \
+	  -m format.cmo -m map.cmo \
+	  -m camlinternalQuote.cmo -c $<
+
 .ml.p.cmx:
 	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` \
 	           -p -c -o $*.p.cmx $<
+
+expr.p.cmx: expr.ml pervasives.p.cmx camlinternalQuote.p.cmx \
+  camlinternalFormat.p.cmx
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` \
+	  -m camlinternalFormatBasics.cmo -m pervasives.cmo -m list.cmo \
+	  -m char.cmo -m bytes.cmo -m marshal.cmo -m string.cmo -m sys.cmo \
+	  -m buffer.cmo \
+	  -m camlinternalFormat.cmo \
+	  -m format.cmo -m map.cmo \
+	  -m camlinternalQuote.cmo -p -c -o $@ $<
 
 # Dependencies on the compiler
 COMPILER_DEPS=$(filter-out -use-prims, $(COMPILER))

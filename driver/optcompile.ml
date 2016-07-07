@@ -83,6 +83,19 @@ let implementation ppf sourcefile outputprefix ~backend =
           Printtyped.implementation_with_coercion
     in
     if not !Clflags.print_types then begin
+      (* Load static dependencies *)
+      ignore (Symtable.init_static ());
+      Runstatic.load_static_deps ppf;
+      (* Run static code *)
+      let stat_lam =
+        Translstatic.transl_implementation modulename typedtree coercion in
+      let sstat_lam =
+        print_if ppf Clflags.dump_lambda Printlambda.lambda @@
+        Simplif.simplify_lambda stat_lam in
+      let splices = Runstatic.run_static ppf sstat_lam in
+      if !Clflags.dump_parsetree then
+        Array.iter (Printast.expression 0 ppf) splices;
+      Translcore.set_transl_splices (Some (ref splices));
       if Config.flambda then begin
         if !Clflags.classic_inlining then begin
           Clflags.default_simplify_rounds := 1;
@@ -125,7 +138,20 @@ let implementation ppf sourcefile outputprefix ~backend =
               ++ Asmgen.compile_implementation_clambda ~source_provenance
                 outputprefix ppf;
               Compilenv.save_unit_info cmxfile)
-      end
+      end;
+      (* Save static code *)
+      let stat_bytecode =
+        Bytegen.compile_implementation modulename sstat_lam in
+      let static_objfile = outputprefix ^ ".cmm" in
+      let s_oc = open_out_bin static_objfile in
+      try
+        stat_bytecode
+        ++ (Emitcode.to_file s_oc modulename static_objfile);
+        close_out s_oc
+      with x ->
+        close_out s_oc;
+        remove_file static_objfile;
+        raise x
     end;
     Warnings.check_fatal ();
     Stypes.dump (Some (outputprefix ^ ".annot"))

@@ -139,6 +139,11 @@ ASMCOMP=\
   asmcomp/branch_relaxation.cmo \
   asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
+  bytecomp/bytesections.cmo bytecomp/dll.cmo \
+  bytecomp/meta.cmo bytecomp/symtable.cmo bytecomp/opcodes.cmo \
+  bytecomp/cmo_load.cmo \
+  bytecomp/instruct.cmo bytecomp/bytegen.cmo bytecomp/emitcode.cmo \
+  bytecomp/runstatic.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
 
 MIDDLE_END=\
