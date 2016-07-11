@@ -17,9 +17,10 @@
 
 (** Translates to lambda terms all static bindings (i.e. bindings declared with
     the [static] keyword), ignore other declarations. *)
-(* module coercion not handled *)
 val transl_implementation : string -> Typedtree.structure ->
   Typedtree.module_coercion -> Lambda.lambda
+
+
 
 val transl_toplevel_definition : Typedtree.structure -> Lambda.lambda
 
