@@ -518,13 +518,17 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
           in
           transl_type_extension item.str_env rootpath tyext body, size
       | Tstr_exception ext ->
-          let id = ext.ext_id in
-          let path = field_path rootpath id in
-          let body, size =
-            transl_structure (id :: fields) cc rootpath static_flag
-              item_postproc final_env rem in
-          Llet(Strict, Pgenval, id, transl_extension_constructor item.str_env path ext,
-               body), size
+          if static_flag = Static then
+            transl_structure (Ident.create_persistent "0" :: fields) cc rootpath
+              static_flag item_postproc final_env rem
+          else
+            let id = ext.ext_id in
+            let path = field_path rootpath id in
+            let body, size =
+              transl_structure (id :: fields) cc rootpath static_flag
+                item_postproc final_env rem in
+            Llet(Strict, Pgenval, id, transl_extension_constructor item.str_env path ext,
+                 body), size
       | Tstr_module mb ->
           let id = mb.mb_id in
           let body, size =

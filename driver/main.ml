@@ -230,7 +230,7 @@ let main () =
           default_output !output_name
       in
       Compmisc.init_path false;
-      Bytelink.link ppf (get_objfiles ()) target;
+      Bytelink.link ppf 0 (get_objfiles ()) target;
       Warnings.check_fatal ();
     end;
   with x ->
