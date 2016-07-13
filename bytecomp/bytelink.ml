@@ -138,6 +138,10 @@ let rec lift_reloc = function
  * phase the units will be loaded into (e.g. if linking a normal executable it
  * will be 0, if linking a temporary, macro-producing code it will be 1. *)
 let scan_file phase obj_name tolink =
+  (* DIRTY AND TEMPORARY *)
+  if obj_name = "pervasives.cmo" && !Clflags.no_std_include then
+    tolink
+  else
   let file_name =
     try
       find_in_path !load_path obj_name
@@ -184,7 +188,11 @@ let scan_file phase obj_name tolink =
           (fun compunit ->
             let status =
               if compunit.cu_force_link || !Clflags.link_everything then begin
-                Required
+                let all_globals = List.fold_left
+                  (fun l -> function (Reloc_getglobal id, _) -> id :: l
+                    | _ -> l) [] compunit.cu_reloc
+                in
+                Available all_globals
               end else begin
                 let required = required_globals compunit.cu_reloc in
                 Available required
@@ -855,11 +863,13 @@ let load ppf phase obj_names =
   load_bytecode ppf tolink
 
 let load_deps ppf phase obj_names reloc =
+  (*
   let tolink =
     if !Clflags.nopervasives then []
     else scan_file phase "std_exit.cmo" []
   in
-  let tolink = List.fold_right (scan_file phase) obj_names tolink in
+  *)
+  let tolink = List.fold_right (scan_file phase) obj_names [] in
   let tolink =
     if !Clflags.nopervasives || !Clflags.no_std_include then tolink
     else scan_file phase "stdlib.cma" tolink

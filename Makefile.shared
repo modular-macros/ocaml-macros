@@ -143,7 +143,7 @@ ASMCOMP=\
   bytecomp/meta.cmo bytecomp/symtable.cmo bytecomp/opcodes.cmo \
   bytecomp/cmo_load.cmo \
   bytecomp/instruct.cmo bytecomp/bytegen.cmo bytecomp/emitcode.cmo \
-  bytecomp/runstatic.cmo \
+  bytecomp/bytelink.cmo bytecomp/runstatic.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
 
 MIDDLE_END=\
