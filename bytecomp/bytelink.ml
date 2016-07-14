@@ -93,15 +93,31 @@ type global_status =
   | Available of Ident.t list
   | Path of string * compilation_unit
 
+let pp_lst ~sep pp_data fmt =
+  let rec aux = function
+    | [] -> ()
+    | [ x ] -> pp_data fmt x
+    | x :: r -> Format.fprintf fmt "%a%a" pp_data x sep (); aux r
+  in aux
+
+let fmt_global_status fmt = function
+  | Missing -> Format.fprintf fmt "Missing"
+  | Required -> Format.fprintf fmt "Required"
+  | Available reqs -> Format.fprintf fmt "Available { %a }"
+      (pp_lst ~sep:(fun fmt () -> Format.fprintf fmt "@\n") (fun fmt x -> Format.fprintf fmt "%s" (Ident.name x))) reqs;
+  | Path (path, _) -> Format.fprintf fmt "Path %s" path
+
 let globals = ref Ident.empty
 
 let add_global status (rel, _pos) =
   match rel with
   | Reloc_setglobal id ->
+      Format.eprintf "add_global %s -> %a\n%!" (Ident.name id) fmt_global_status status;
       globals := Ident.add id status !globals
   | _ -> ()
 
 let add_global_id status id =
+  Format.eprintf "add_global_id %s -> %a\n%!" (Ident.name id) fmt_global_status status;
   globals := Ident.add id status !globals
 
 let global_status id =
@@ -116,10 +132,11 @@ let is_required_global (rel, _pos) =
     end
   | _ -> false
 
-let required_globals l =
+let required_globals phase l =
   let rec loop acc = function
     | [] -> List.rev acc
-    | (Reloc_getglobal id, _pos) :: rest ->
+    | (Reloc_getglobal id, _pos) :: rest
+      when not (Symtable.is_global_defined (phase, id)) ->
         loop (id :: acc) rest
     | _ :: rest ->
         loop acc rest
@@ -138,10 +155,6 @@ let rec lift_reloc = function
  * phase the units will be loaded into (e.g. if linking a normal executable it
  * will be 0, if linking a temporary, macro-producing code it will be 1. *)
 let scan_file phase obj_name tolink =
-  (* DIRTY AND TEMPORARY *)
-  if obj_name = "pervasives.cmo" && !Clflags.no_std_include then
-    tolink
-  else
   let file_name =
     try
       find_in_path !load_path obj_name
@@ -188,13 +201,11 @@ let scan_file phase obj_name tolink =
           (fun compunit ->
             let status =
               if compunit.cu_force_link || !Clflags.link_everything then begin
-                let all_globals = List.fold_left
-                  (fun l -> function (Reloc_getglobal id, _) -> id :: l
-                    | _ -> l) [] compunit.cu_reloc
-                in
-                Available all_globals
+                Printf.eprintf "case 1\n%!";
+                Required
               end else begin
-                let required = required_globals compunit.cu_reloc in
+                Printf.eprintf "case 2\n%!";
+                let required = required_globals phase compunit.cu_reloc in
                 Available required
               end
             in
@@ -241,7 +252,7 @@ let scan_from_path phase id =
             in
             let status = Path(file_name, compunit) in
             List.iter (add_global status) compunit.cu_reloc;
-            required_globals compunit.cu_reloc
+            required_globals phase compunit.cu_reloc
           end
           else raise(Error(Not_an_object_file file_name))
         with
@@ -249,25 +260,38 @@ let scan_from_path phase id =
             close_in ic; raise(Error(Not_an_object_file file_name))
         | x -> close_in ic; raise x
 
+type to_scan =
+    Objects of link_action list
+  | Reloc_info of (Cmo_format.reloc_info * int) list
+
 let scan_path phase tolink =
   let rec complete = function
     | [] -> ()
     | required :: rest ->
+        Printf.eprintf "complete called on %s\n%!" (Ident.name required);
+        Format.eprintf "case %a\n%!" fmt_global_status (global_status required);
         match global_status required with
-        | Missing | Required | Path _ -> complete rest
+        | Missing | Required | Path _ ->
+            complete rest
         | Available reqs ->
             add_global_id Required required;
+            List.iter (fun id -> Printf.eprintf "add %s to idents being scanned as dependency of %s\n%!" (Ident.name id) (Ident.name required)) reqs;
             complete (List.rev_append reqs rest)
         | exception Not_found ->
+            Printf.eprintf "case Not_found\n%!";
             let reqs = scan_from_path phase required in
             complete (List.rev_append reqs rest)
   in
-  List.iter
-    (function
-     | Link_archive _ -> ()
-     | Link_object(_, compunit, _) ->
-         complete (required_globals compunit.cu_reloc))
-    tolink
+  match tolink with
+  | Objects tolink ->
+      List.iter
+        (function
+         | Link_archive (_, _, _) -> ()
+         | Link_object(_, compunit, _) ->
+             complete (required_globals phase compunit.cu_reloc))
+        tolink
+  | Reloc_info reloc ->
+      complete (required_globals phase reloc)
 
 let complete_link_actions phase tolink =
   let rec expand_ids = function
@@ -277,26 +301,27 @@ let complete_link_actions phase tolink =
         | Missing | Required -> expand_ids rest
         | Path(file_name, compunit) ->
             add_global_id Required required;
-            let required = required_globals compunit.cu_reloc in
+            let required = required_globals phase compunit.cu_reloc in
             let prefix = expand_ids required in
             let action = Link_object(file_name, compunit, phase) in
             List.concat [prefix; [action]; expand_ids rest]
         | Available _ -> assert false
         | exception Not_found ->
             Printf.eprintf "%s not found\n%!" (Ident.name required);
-            assert false
+            assert (Symtable.is_global_defined (phase, required));
+            expand_ids rest
   in
   let rec expand_compunits = function
     | [] -> []
     | compunit :: rest ->
-        let required = required_globals compunit.cu_reloc in
+        let required = required_globals phase compunit.cu_reloc in
         let prefix = expand_ids required in
          prefix @ expand_compunits rest
   in
   let rec expand_actions = function
     | [] -> []
     | Link_object(_, compunit, _) as action :: rest ->
-        let required = required_globals compunit.cu_reloc in
+        let required = required_globals phase compunit.cu_reloc in
         let prefix = expand_ids required in
         List.concat [prefix; [action]; expand_actions rest]
     | Link_archive(file_name, compunits, phase) :: rest ->
@@ -699,7 +724,7 @@ let link ppf phase objfiles output_name =
     if !Clflags.nopervasives || !Clflags.no_std_include then tolink
     else scan_file phase "stdlib.cma" tolink
   in
-  scan_path phase tolink;
+  scan_path phase (Objects tolink);
   let tolink = complete_link_actions phase tolink in
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs; (* put user's libs last *)
   Clflags.all_ccopts := !lib_ccopts @ !Clflags.all_ccopts;
@@ -784,6 +809,7 @@ let link ppf phase objfiles output_name =
   end
 
 let load_compunit ppf phase ic filename compunit =
+  Printf.eprintf "loading %s\n%!" filename;
   check_consistency ppf filename compunit;
   seek_in ic compunit.cu_pos;
   let code_size = compunit.cu_codesize + 8 in
@@ -849,7 +875,7 @@ let load ppf phase obj_names =
     if !Clflags.nopervasives || !Clflags.no_std_include then tolink
     else scan_file phase "stdlib.cma" tolink
   in
-  scan_path phase tolink;
+  scan_path phase (Objects tolink);
   let tolink = complete_link_actions phase tolink in
   (*
   (* Initialize the DLL machinery *)
@@ -874,8 +900,7 @@ let load_deps ppf phase obj_names reloc =
     if !Clflags.nopervasives || !Clflags.no_std_include then tolink
     else scan_file phase "stdlib.cma" tolink
   in
-  scan_path phase tolink;
-  List.iter (add_global Required) reloc;
+  scan_path phase (Reloc_info reloc);
   let tolink = complete_link_actions phase tolink in
   (*
   (* Initialize the DLL machinery *)
