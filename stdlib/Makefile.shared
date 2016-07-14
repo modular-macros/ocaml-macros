@@ -102,6 +102,16 @@ clean::
 .ml.cmo:
 	$(CAMLC) $(COMPFLAGS) `./Compflags $@` -c $<
 
+expr.cmo expr.cmm: expr.ml pervasives.cmo camlinternalQuote.cmo \
+  camlinternalFormat.cmo
+	$(CAMLC) $(COMPFLAGS) `./Compflags $@` \
+	  -m camlinternalFormatBasics.cmo -m pervasives.cmo -m list.cmo \
+	  -m char.cmo -m bytes.cmo -m marshal.cmo -m string.cmo -m sys.cmo \
+	  -m buffer.cmo \
+	  -m camlinternalFormat.cmo \
+	  -m format.cmo -m map.cmo \
+	  -m camlinternalQuote.cmo -c $<
+
 .ml.cmx:
 	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` -c $<
 
