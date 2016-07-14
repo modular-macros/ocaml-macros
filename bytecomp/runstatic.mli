@@ -13,6 +13,11 @@
 (**************************************************************************)
 
 (** runstatic.ml: Execution of static terms and splices. *)
+(** WARNING WARNING This interface is implemented by two different files,
+ * byterunstatic.ml (for ocaml and ocamlopt) and optrunstatic.ml (for
+ * ocamlc.opt and ocamlopt.opt). The command generating runstatic.ml is
+ * executed at the Makefile level. DO NOT edit runstatic.ml directly!
+ *)
 
 open Lambda
 
@@ -20,5 +25,6 @@ open Lambda
     *)
 val run_static : Format.formatter -> lambda -> Parsetree.expression array
 
-val load_static_deps : Format.formatter -> unit
+val load_static_deps : Format.formatter -> (Cmo_format.reloc_info * int) list
+  -> unit
 

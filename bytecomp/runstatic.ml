@@ -27,6 +27,6 @@ let run_static ppf lam =
   Symtable.reset ();
   (Obj.obj splices : Parsetree.expression array)
 
-let load_static_deps _ppf =
-  ()
+let load_static_deps ppf reloc =
+  Bytelink.load_deps ppf 1 !Clflags.static_deps reloc
 

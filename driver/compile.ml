@@ -82,7 +82,6 @@ let implementation ppf sourcefile outputprefix =
     end else begin
       (* Load static dependencies *)
       ignore (Symtable.init_static ());
-      Runstatic.load_static_deps ppf;
       (* Run static code *)
       let stat_lam =
         Translstatic.transl_implementation modulename typedtree coercion in
