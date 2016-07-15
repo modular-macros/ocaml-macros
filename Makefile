@@ -317,10 +317,8 @@ partialclean::
 # The bytecode compiler
 
 compilerlibs/ocamlbytecomp.cma: $(BYTECOMP)
-	cp bytecomp/byterunstatic.ml bytecomp/runstatic.ml
 	$(CAMLC) -a -o $@ $(BYTECOMP)
 partialclean::
-	rm -f bytecomp/runstatic.ml
 	rm -f compilerlibs/ocamlbytecomp.cma
 
 ocamlc: compilerlibs/ocamlcommon.cma compilerlibs/ocamlbytecomp.cma $(BYTESTART)
@@ -467,10 +465,8 @@ partialclean::
 # The bytecode compiler compiled with the native-code compiler
 
 compilerlibs/ocamlbytecomp.cmxa: $(BYTECOMP:.cmo=.cmx)
-	cp bytecomp/optrunstatic.ml bytecomp/runstatic.ml
 	$(CAMLOPT) -a -o $@ $(BYTECOMP:.cmo=.cmx)
 partialclean::
-	rm -f bytecomp/runstatic.ml
 	rm -f compilerlibs/ocamlbytecomp.cmxa compilerlibs/ocamlbytecomp.a
 
 ocamlc.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamlbytecomp.cmxa \
