@@ -132,6 +132,14 @@ let rec lift_reloc = function
       (Reloc_setglobal (Ident.lift_persistent id), pos) :: lift_reloc rem
   | x :: rem -> x :: lift_reloc rem
 
+let lift_cu_globals cu =
+  { cu with
+    cu_reloc = lift_reloc cu.cu_reloc;
+    cu_imports =
+      List.map (fun (name, hash) -> (Ident.lift_string name, hash)) cu.cu_imports;
+    cu_name = Ident.lift_string cu.cu_name;
+  }
+
 let has_dot id = String.contains (Ident.name id) '.'
 
 (* Extract identifier of a compilation unit using its relocation information. *)
@@ -185,7 +193,7 @@ let scan_file phase obj_name =
       close_in ic;
       let compunit =
         if lift_globals then
-          { compunit with cu_reloc = lift_reloc compunit.cu_reloc }
+          lift_cu_globals compunit
         else compunit
       in
       set_status_id (Needed (Standalone (compunit, file_name, phase)))
@@ -203,7 +211,7 @@ let scan_file phase obj_name =
       let toc =
         if lift_globals then
           { toc with lib_units =
-              List.map (fun u -> {u with cu_reloc = lift_reloc u.cu_reloc})
+              List.map (fun u -> lift_cu_globals u)
                 toc.lib_units }
         else toc
       in
@@ -260,7 +268,7 @@ let find_objfile phase id =
             (* Lift dependency names if needed *)
             let compunit =
               if phase = 1 && Ident.lifted id then
-                { compunit with cu_reloc = lift_reloc compunit.cu_reloc }
+                lift_cu_globals compunit
               else compunit
             in
             (compunit, filename)
