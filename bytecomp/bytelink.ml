@@ -132,28 +132,31 @@ let rec lift_reloc = function
       (Reloc_setglobal (Ident.lift_persistent id), pos) :: lift_reloc rem
   | x :: rem -> x :: lift_reloc rem
 
+let has_dot id = String.contains (Ident.name id) '.'
+
+(* Extract identifier of a compilation unit using its relocation information. *)
+let rec get_unit_id = function
+  | [] -> raise Not_found
+  | (Reloc_setglobal id, _pos) :: rem ->
+      if has_dot id then get_unit_id rem else id
+  | _ :: rem -> get_unit_id rem
+
 let status_table = ref Ident.empty
 
 let get_status id = Ident.find_same id !status_table
-
-let set_status status compunit =
-  Format.eprintf "set_status %a %s\n%!" fmt_global_status status compunit.cu_name;
-  List.iter (function
-    | (Reloc_setglobal id, _pos) ->
-        status_table := Ident.add id status !status_table
-    | _ -> ()
-  ) compunit.cu_reloc
 
 let set_status_id status id =
   Format.eprintf "set_status_id %a %s\n%!" fmt_global_status status (Ident.name id);
   status_table := Ident.add id status !status_table
 
 (* Returns the globals required by a piece of relocation info, excluding those
-   already defined in the symbol table. *)
+   already defined in the symbol table and those containing a dot (which are not
+   really global but should be defined in the unit). *)
 let rec required_globals phase = function
   | [] -> []
   | (Reloc_getglobal id, _pos) :: rem ->
-      if Symtable.is_global_defined (phase,id) then required_globals phase rem
+      if Symtable.is_global_defined (phase,id) || has_dot id then
+        required_globals phase rem
       else id :: required_globals phase rem
   | _ :: rem -> required_globals phase rem
 
@@ -185,7 +188,8 @@ let scan_file phase obj_name =
           { compunit with cu_reloc = lift_reloc compunit.cu_reloc }
         else compunit
       in
-      set_status (Needed (Standalone (compunit, file_name, phase))) compunit
+      set_status_id (Needed (Standalone (compunit, file_name, phase)))
+        (get_unit_id compunit.cu_reloc)
     end
     else if buffer = cma_magic_number then begin
       (* This is an archive file. Each unit contained in it will be linked
@@ -214,7 +218,7 @@ let scan_file phase obj_name =
                 Available (In_archive (compunit, file_name, phase))
               end
             in
-            set_status status compunit
+            set_status_id status (get_unit_id compunit.cu_reloc)
           )
           toc.lib_units
     end
@@ -299,7 +303,9 @@ let sort_and_discover phase =
     match lookup id with
     | Missing -> complete acc rem (* no error thrown here but later, on linking *)
     | Visited -> complete acc rem (* already included in earlier deps *)
-    | Being_visited -> assert false (* cyclical dependency *)
+    | Being_visited ->
+        Printf.eprintf "%s already being visited\n%!" (Ident.name id);
+        assert false (* cyclical dependency *)
     | x -> begin
       let descr = match x with
       | Needed y -> y
@@ -310,13 +316,13 @@ let sort_and_discover phase =
       | Standalone (u,_,_) -> u
       | In_archive (u,_,_) -> u
       in
-      set_status Being_visited compunit;
+      set_status_id Being_visited id;
       let acc' =
         List.fold_left (fun ordered id ->
           complete ordered [id]
         ) acc (List.map (fun id -> Printf.eprintf "-> %s\n" (Ident.name id); id) (required_globals phase compunit.cu_reloc))
       in
-      set_status Visited compunit;
+      set_status_id Visited id;
       complete (descr :: acc') rem
     end
   end
