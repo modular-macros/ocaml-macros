@@ -14,7 +14,8 @@
 
 let run_static ppf lam =
   let splices =
-    if Sys.backend_type = Sys.Bytecode then
+    if Sys.backend_type = Sys.Bytecode then begin
+      ignore (Symtable.init_static ());
       let (init_code, fun_code) = Bytegen.compile_phrase lam in
       let (code, code_size, reloc, _) =
         Emitcode.to_memory init_code fun_code
@@ -27,11 +28,11 @@ let run_static ppf lam =
       let splices = (Meta.reify_bytecode code code_size) () in
       Printf.printf "after reify\n%!";
       (Obj.obj splices : Parsetree.expression array)
-    else if Sys.backend_type = Sys.Native then
+    end else if Sys.backend_type = Sys.Native then
       let open Filename in
       let modulename = "static_code" in
       let bytecode = Bytegen.compile_implementation modulename lam in
-      let (objfilename, oc) = open_temp_file ~mode:[Open_binary] "camlstatic" ".cmo" in
+      let (objfilename, oc) = open_temp_file ~mode:[Open_binary] "camlstatic" ".cmm" in
       Emitcode.to_file oc modulename objfilename bytecode;
       close_out oc;
       let execfilename = temp_file "camlstatic" "" in

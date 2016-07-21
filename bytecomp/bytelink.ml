@@ -545,6 +545,7 @@ let link_bytecode ppf tolink exec_name standalone =
       Bytesections.record outchan "DLLS"
     end;
     (* The names of all primitives *)
+    Symtable.output_primitive_names stderr;
     Symtable.output_primitive_names outchan;
     Bytesections.record outchan "PRIM";
     (* The table of global data *)

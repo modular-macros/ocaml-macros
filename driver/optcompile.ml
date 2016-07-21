@@ -83,8 +83,6 @@ let implementation ppf sourcefile outputprefix ~backend =
           Printtyped.implementation_with_coercion
     in
     if not !Clflags.print_types then begin
-      (* Load static dependencies *)
-      ignore (Symtable.init_static ());
       (* Run static code *)
       let stat_lam =
         Translstatic.transl_implementation modulename typedtree coercion in
