@@ -117,12 +117,14 @@ let fmt_unit_descr fmt = function
         (if p = 1 then "^" else "") unit.cu_name
   *)
 
+(*
 let fmt_global_status fmt = function
   | Missing -> Format.fprintf fmt "Missing"
   | Needed _ -> Format.fprintf fmt "Needed"
   | Available _ -> Format.fprintf fmt "Available"
   | Being_visited -> Format.fprintf fmt "Being_visited"
   | Visited -> Format.fprintf fmt "Visited"
+*)
 
 let rec lift_reloc = function
   | [] -> []
@@ -154,7 +156,6 @@ let status_table = ref Ident.empty
 let get_status id = Ident.find_same id !status_table
 
 let set_status_id status id =
-  Format.eprintf "set_status_id %a %s\n%!" fmt_global_status status (Ident.name id);
   status_table := Ident.add id status !status_table
 
 (* Returns the globals required by a piece of relocation info, excluding those
@@ -219,10 +220,8 @@ let scan_file phase obj_name =
           (fun compunit ->
             let status =
               if compunit.cu_force_link || !Clflags.link_everything then begin
-                Printf.eprintf "link forced\n%!";
                 Needed (In_archive (compunit, file_name, phase))
               end else begin
-                Printf.eprintf "link not forced\n%!";
                 Available (In_archive (compunit, file_name, phase))
               end
             in
@@ -312,7 +311,6 @@ let sort_and_discover phase =
     | Missing -> complete acc rem (* no error thrown here but later, on linking *)
     | Visited -> complete acc rem (* already included in earlier deps *)
     | Being_visited ->
-        Printf.eprintf "%s already being visited\n%!" (Ident.name id);
         assert false (* cyclical dependency *)
     | x -> begin
       let descr = match x with
@@ -328,7 +326,7 @@ let sort_and_discover phase =
       let acc' =
         List.fold_left (fun ordered id ->
           complete ordered [id]
-        ) acc (List.map (fun id -> Printf.eprintf "-> %s\n" (Ident.name id); id) (required_globals phase compunit.cu_reloc))
+        ) acc (required_globals phase compunit.cu_reloc)
       in
       set_status_id Visited id;
       complete (descr :: acc') rem
@@ -545,7 +543,6 @@ let link_bytecode ppf tolink exec_name standalone =
       Bytesections.record outchan "DLLS"
     end;
     (* The names of all primitives *)
-    Symtable.output_primitive_names stderr;
     Symtable.output_primitive_names outchan;
     Bytesections.record outchan "PRIM";
     (* The table of global data *)
@@ -817,7 +814,6 @@ let link ppf phase objfiles output_name =
   end
 
 let load_compunit ppf phase ic filename compunit =
-  Printf.eprintf "loading %s\n%!" filename;
   check_consistency ppf filename compunit;
   seek_in ic compunit.cu_pos;
   let code_size = compunit.cu_codesize + 8 in

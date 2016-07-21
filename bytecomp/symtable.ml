@@ -66,22 +66,17 @@ let is_global_defined id =
   Tbl.mem id (!global_table).num_tbl
 
 let slot_for_getglobal (phase, id) =
-  Printf.eprintf "sfgg %s\n%!" (Ident.name id);
   try
     let n = find_numtable !global_table (phase, id) in
-    Printf.eprintf "-> result: slot %d\n%!" n;
     n
   with Not_found ->
     raise(Error(Undefined_global(Ident.name id)))
 
 let slot_for_setglobal id =
-  Printf.eprintf "sfsg %s\n%!" (Ident.name (snd id));
-  let n = enter_numtable global_table id in
-  Printf.eprintf "--> assigned to slot %d\n%!" n; n
+  enter_numtable global_table id
 
 let slot_for_literal cst =
   let n = incr_numtable global_table in
-  Printf.eprintf "sfl\n--> assigned to slot %d\n%!" n;
   literal_table := (n, cst) :: !literal_table;
   n
 
@@ -90,7 +85,6 @@ let slot_for_literal cst =
 let c_prim_table = ref(empty_numtable : string numtable)
 
 let set_prim_table name =
-  Printf.eprintf "set_prim_table %s\n%!" name;
   ignore(enter_numtable c_prim_table name)
 
 let num_of_prim name =
@@ -100,13 +94,11 @@ let num_of_prim name =
     if !Clflags.custom_runtime || Config.host <> Config.target
        || !Clflags.no_check_prims
     then
-      (Printf.eprintf "set_prim_table %s\n%!" name;
-      enter_numtable c_prim_table name)
+      enter_numtable c_prim_table name
     else begin
       let symb =
         try Dll.find_primitive name
         with Not_found -> raise(Error(Unavailable_primitive name)) in
-      Printf.eprintf "set_prim_table %s\n%!" name;
       let num = enter_numtable c_prim_table name in
       Dll.synchronize_primitive num symb;
       num
@@ -196,7 +188,6 @@ let init () =
          | x -> close_in ic; raise x
     with x -> remove_file primfile; raise x
   end else begin
-    Printf.eprintf "c_prim_table.num_cnt: %d\n%!" !c_prim_table.num_cnt;
     Array.iter set_prim_table Runtimedef.builtin_primitives
   end
 
@@ -272,7 +263,6 @@ let update_global_table () =
   let glob = Meta.global_data() in
   List.iter
     (fun (slot, cst) ->
-      Printf.eprintf "assigning slot %d of global data\n%!" slot;
       glob.(slot) <- transl_const cst)
     !literal_table;
   literal_table := []
