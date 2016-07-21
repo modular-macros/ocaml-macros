@@ -66,16 +66,22 @@ let is_global_defined id =
   Tbl.mem id (!global_table).num_tbl
 
 let slot_for_getglobal (phase, id) =
+  Printf.eprintf "sfgg %s\n%!" (Ident.name id);
   try
-    find_numtable !global_table (phase, id)
+    let n = find_numtable !global_table (phase, id) in
+    Printf.eprintf "-> result: slot %d\n%!" n;
+    n
   with Not_found ->
     raise(Error(Undefined_global(Ident.name id)))
 
 let slot_for_setglobal id =
-  enter_numtable global_table id
+  Printf.eprintf "sfsg %s\n%!" (Ident.name (snd id));
+  let n = enter_numtable global_table id in
+  Printf.eprintf "--> assigned to slot %d\n%!" n; n
 
 let slot_for_literal cst =
   let n = incr_numtable global_table in
+  Printf.eprintf "sfl\n--> assigned to slot %d\n%!" n;
   literal_table := (n, cst) :: !literal_table;
   n
 
@@ -156,7 +162,12 @@ let init () =
                              Const_base(Const_int (-i-1))
                             ])
       in
-      literal_table := (c, cst) :: !literal_table)
+      literal_table := (c, cst) :: !literal_table;
+      (* Add the lifted version of this literal as a pointer to the unlifted
+         version (the only one actually existing in the runtime *)
+      let lifted_id = Ident.lift_persistent id in
+      global_table := { !global_table with
+        num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
     Runtimedef.builtin_exceptions;
   (* Initialize the known C primitives *)
   if String.length !Clflags.use_prims > 0 then begin
@@ -256,7 +267,9 @@ let update_global_table () =
   if ng > Array.length(Meta.global_data()) then Meta.realloc_global_data ng;
   let glob = Meta.global_data() in
   List.iter
-    (fun (slot, cst) -> glob.(slot) <- transl_const cst)
+    (fun (slot, cst) ->
+      Printf.eprintf "assigning slot %d of global data\n%!" slot;
+      glob.(slot) <- transl_const cst)
     !literal_table;
   literal_table := []
 
@@ -374,8 +387,8 @@ let assign_global_value id v =
 (* Initialize the linker for running static code *)
 
 let init_static () =
-  let crcintfs =
-    begin try
+  if Sys.backend_type = Sys.Bytecode then
+    (begin try
       let sect = read_sections () in
       (* Locations of globals *)
       global_table := saved_to_runtime
@@ -392,29 +405,32 @@ let init_static () =
       (* DLL initialization *)
       let dllpath = try sect.read_string "DLPT" with Not_found -> "" in
       Dll.init_toplevel dllpath;
-      (* Recover CRC infos for interfaces *)
-      let crcintfs =
+      let crc =
         try
           (Obj.magic (sect.read_struct "CRCS") : (string * Digest.t option) list)
-        with Not_found -> [] in
+        with Not_found -> []
+      in
       sect.close_reader();
-      crcintfs
+      (* Add built-in exceptions to phase 1 *)
+      Array.iter
+        (fun name ->
+          let id =
+            try List.assoc name Predef.builtin_values
+            with Not_found -> fatal_error "Symtable.init" in
+          let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
+          let pos = get_global_position (0, id) in
+          global_table := { !global_table with
+            num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
+        Runtimedef.builtin_exceptions;
+      crc
     with Bytesections.Bad_magic_number | Not_found | Failure _ ->
       fatal_error "Toplevel bytecode executable is corrupted"
-    end
-    in
-  (* Add built-in exceptions to phase 1 *)
-  Array.iter
-    (fun name ->
-      let id =
-        try List.assoc name Predef.builtin_values
-        with Not_found -> fatal_error "Symtable.init" in
-      let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
-      let pos = get_global_position (0, id) in
-      global_table := { !global_table with
-        num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
-    Runtimedef.builtin_exceptions;
-  crcintfs
+    end : (string * Digest.t option) list)
+  else if Sys.backend_type = Sys.Native then begin
+    init ();
+    []
+  end
+  else assert false
 
 (* Check that all globals referenced in the given patch list
    have been initialized already *)

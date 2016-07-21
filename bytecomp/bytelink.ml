@@ -516,7 +516,7 @@ let link_bytecode ppf tolink exec_name standalone =
     end;
     (* The bytecode *)
     let start_code = pos_out outchan in
-    Symtable.init();
+    ignore (Symtable.init_static());
     clear_crc_interfaces ();
     let sharedobjs = List.map Dll.extract_dll_name !Clflags.dllibs in
     let check_dlls = standalone && Config.target = Config.host in
@@ -649,7 +649,7 @@ let link_bytecode_as_c ppf tolink outfile =
 \n           char *section_table, asize_t section_table_size,\
 \n           char **argv);\n";
     output_string outchan "static int caml_code[] = {\n";
-    Symtable.init();
+    ignore (Symtable.init_static());
     clear_crc_interfaces ();
     let currpos = ref 0 in
     let output_fun code =

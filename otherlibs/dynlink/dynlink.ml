@@ -144,7 +144,7 @@ let init () =
     if !Sys.interactive then (* PR#6802 *)
       invalid_arg "The dynlink.cma library cannot be used \
                    inside the OCaml toplevel";
-    default_crcs := Symtable.init_static();
+    default_crcs := Symtable.init_static ();
     default_available_units ();
     inited := true;
   end

@@ -106,10 +106,10 @@ let transl_implementation module_name str cc =
   else if Sys.backend_type = Sys.Native then
     let mod_lam_id = Ident.create "let" in
     let marshal_to_channel = Lprim (Pfield 0,
-      [Lprim (Pgetglobal (Ident.create_persistent "Marshal"), [])])
+      [Lprim (Pgetglobal (Ident.create_persistent "^Marshal"), [])])
     in
     let stdout = Lprim (Pfield 23,
-      [Lprim (Pgetglobal (Ident.create_persistent "Pervasives"), [])])
+      [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])])
     in
     let write_lam =
       Lapply {

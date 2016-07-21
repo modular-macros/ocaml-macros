@@ -607,6 +607,10 @@ value caml_interprete(code_t prog, asize_t prog_size)
       *--sp = accu;
       /* Fallthrough */
     Instruct(GETGLOBAL):
+      if(caml_runtime_warnings) {
+        fprintf(stderr, "GETGLOBAL %d\n", *pc);
+        fflush(stderr);
+      }
       accu = Field(caml_global_data, *pc);
       pc++;
       Next;
@@ -615,8 +619,15 @@ value caml_interprete(code_t prog, asize_t prog_size)
       *--sp = accu;
       /* Fallthrough */
     Instruct(GETGLOBALFIELD): {
+      if(caml_runtime_warnings) {
+        fprintf(stderr, "GETGLOBALFIELD %d", *pc);
+      }
       accu = Field(caml_global_data, *pc);
       pc++;
+      if(caml_runtime_warnings) {
+        fprintf(stderr, " %d\n", *pc);
+        fflush(stderr);
+      }
       accu = Field(accu, *pc);
       pc++;
       Next;
