@@ -102,25 +102,60 @@ let transl_implementation module_name str cc =
 
 (* Wrap a piece of lambda code so that, if the original code returned a value,
  * the result of this function will execute the original code, marshal the
- * returned value, print it on the standard output and return unit. Intended
- * for wrapping of splice-producing code in [ocaml*.opt]. *)
+ * returned value to the file passed as the first command-line argument.
+ * Intended for wrapping of splice-producing code in [ocaml*.opt]. *)
 let wrap_marshal lam =
-  let lam_id = Ident.create "let" in
-  let marshal_to_channel = Lprim (Pfield 0,
-    [Lprim (Pgetglobal (Ident.create_persistent "^Marshal"), [])])
-  in
-  let stdout = Lprim (Pfield 23,
-    [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])])
-  in
-  let write_lam =
+  let apply fun_lam args =
     Lapply {
-      ap_func = marshal_to_channel;
-      ap_args = [stdout; Lvar lam_id; Lconst (Const_pointer 0)];
+      ap_func = fun_lam;
+      ap_args = args;
       ap_loc = Location.none;
       ap_should_be_tailcall = false;
       ap_inlined = Default_inline;
       ap_specialised = Default_specialise;
     }
+  in
+  let lam_id = Ident.create "let" in
+  let channel_id = Ident.create "channel" in
+  let marshal_to_channel =
+    Lprim (Pfield 0, (* ^Marshal.to_channel *)
+      [Lprim (Pgetglobal (Ident.create_persistent "^Marshal"), [])]
+    )
+  in
+  let get_filename =
+    (* ^Sys.argv.[1] *)
+    Lprim (
+      Pccall (
+        Primitive.simple
+          ~name:"caml_array_get" ~arity:2 ~alloc:true (* ? *)),
+      [Lprim
+        (Pfield 0, (* ^Sys.argv *)
+          [Lprim (Pgetglobal (Ident.create_persistent "^Sys"), [])]);
+        (* 1 *)
+        Lconst (Const_base (Const_int 1))
+      ]
+    )
+  in
+  let open_channel =
+    apply
+      (Lprim (Pfield 43, (* ^Pervasives.open_out_bin *)
+        [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])]
+      ))
+      [get_filename]
+  in
+  let write_lam =
+    Llet (Strict, Pgenval, channel_id, open_channel,
+      Lsequence (
+        apply
+          marshal_to_channel
+          [Lvar channel_id; Lvar lam_id; Lconst (Const_pointer 0)],
+        apply
+          (Lprim (Pfield 58, (* ^Pervasives.close_out *)
+            [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])]
+          ))
+          [Lvar channel_id]
+      )
+    )
   in
   Llet (Strict, Pgenval, lam_id, lam, write_lam)
 
