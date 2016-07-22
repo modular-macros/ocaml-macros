@@ -28,9 +28,10 @@ let run_static ppf lam =
       (Obj.obj splices : Parsetree.expression array)
     end else if Sys.backend_type = Sys.Native then
       let open Filename in
-      let modulename = "static_code" in
-      let bytecode = Bytegen.compile_implementation modulename lam in
       let (objfilename, oc) = open_temp_file ~mode:[Open_binary] "camlstatic" ".cmm" in
+      let modulename = String.capitalize_ascii @@
+        Filename.chop_extension @@ Filename.basename objfilename in
+      let bytecode = Bytegen.compile_implementation modulename lam in
       Emitcode.to_file oc modulename objfilename bytecode;
       close_out oc;
       let execfilename = temp_file "camlstatic" "" in
