@@ -89,7 +89,12 @@ let implementation ppf sourcefile outputprefix ~backend =
       let sstat_lam =
         print_if ppf Clflags.dump_lambda Printlambda.lambda @@
         Simplif.simplify_lambda stat_lam in
-      let splices = Runstatic.run_static ppf sstat_lam in
+      let w_stat_lam =
+        if Sys.backend_type = Sys.Native then
+          Translstatic.wrap_marshal sstat_lam
+        else sstat_lam
+      in
+      let splices = Runstatic.run_static ppf w_stat_lam in
       if !Clflags.dump_parsetree then
         Array.iter (Printast.expression 0 ppf) splices;
       Translcore.set_transl_splices (Some (ref splices));

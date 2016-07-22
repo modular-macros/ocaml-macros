@@ -92,37 +92,37 @@ let rec insert_splice_array module_id splice_ids = function
         splice_body)
 
 let transl_implementation module_name str cc =
-  let mod_lam =
-    let module_id = Ident.create_persistent module_name in
-    Translcore.set_transl_splices None;
-    splice_ids := [];
-    let (mod_body, _size) =
-      Translmod.transl_structure [] cc (Some (Path.Pident module_id))
-      Static transl_item_splices str.str_final_env str.str_items in
-    insert_splice_array module_id !splice_ids mod_body
+  let module_id = Ident.create_persistent module_name in
+  Translcore.set_transl_splices None;
+  splice_ids := [];
+  let (mod_body, _size) =
+    Translmod.transl_structure [] cc (Some (Path.Pident module_id))
+    Static transl_item_splices str.str_final_env str.str_items in
+  insert_splice_array module_id !splice_ids mod_body
+
+(* Wrap a piece of lambda code so that, if the original code returned a value,
+ * the result of this function will execute the original code, marshal the
+ * returned value, print it on the standard output and return unit. Intended
+ * for wrapping of splice-producing code in [ocaml*.opt]. *)
+let wrap_marshal lam =
+  let lam_id = Ident.create "let" in
+  let marshal_to_channel = Lprim (Pfield 0,
+    [Lprim (Pgetglobal (Ident.create_persistent "^Marshal"), [])])
   in
-  if Sys.backend_type = Sys.Bytecode then
-    mod_lam
-  else if Sys.backend_type = Sys.Native then
-    let mod_lam_id = Ident.create "let" in
-    let marshal_to_channel = Lprim (Pfield 0,
-      [Lprim (Pgetglobal (Ident.create_persistent "^Marshal"), [])])
-    in
-    let stdout = Lprim (Pfield 23,
-      [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])])
-    in
-    let write_lam =
-      Lapply {
-        ap_func = marshal_to_channel;
-        ap_args = [stdout; Lvar mod_lam_id; Lconst (Const_pointer 0)];
-        ap_loc = Location.none;
-        ap_should_be_tailcall = false;
-        ap_inlined = Default_inline;
-        ap_specialised = Default_specialise;
-      }
-    in
-    Llet (Strict, Pgenval, mod_lam_id, mod_lam, write_lam)
-  else assert false (* no macro support for other backends *)
+  let stdout = Lprim (Pfield 23,
+    [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])])
+  in
+  let write_lam =
+    Lapply {
+      ap_func = marshal_to_channel;
+      ap_args = [stdout; Lvar lam_id; Lconst (Const_pointer 0)];
+      ap_loc = Location.none;
+      ap_should_be_tailcall = false;
+      ap_inlined = Default_inline;
+      ap_specialised = Default_specialise;
+    }
+  in
+  Llet (Strict, Pgenval, lam_id, lam, write_lam)
 
 let toploop_ident = Ident.create_persistent "Toploop"
 (*let toploop_getvalue_pos = 0 (* position of getvalue in module Toploop *)*)

@@ -20,7 +20,11 @@
 val transl_implementation : string -> Typedtree.structure ->
   Typedtree.module_coercion -> Lambda.lambda
 
-
+(** Wrap a piece of lambda code so that, if the original code returned a value,
+    the result of this function will execute the original code, marshal the
+    returned value, print it on the standard output and return unit. Intended
+    for wrapping of splice-producing code in [ocaml*.opt]. *)
+val wrap_marshal : Lambda.lambda -> Lambda.lambda
 
 val transl_toplevel_definition : Typedtree.structure -> Lambda.lambda
 
