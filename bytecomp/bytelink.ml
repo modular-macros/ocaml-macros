@@ -413,7 +413,6 @@ let link_compunit ppf phase output_fun currpos_fun inchan file_name compunit =
 (* Link in a .cmo file *)
 
 let link_object ppf phase output_fun currpos_fun file_name compunit =
-  Printf.eprintf "linking comp. unit %s\n%!" compunit.cu_name;
   let inchan = open_in_bin file_name in
   try
     link_compunit ppf phase output_fun currpos_fun inchan file_name compunit;

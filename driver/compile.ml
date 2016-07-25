@@ -92,7 +92,6 @@ let implementation ppf sourcefile outputprefix =
         else sstat_lam
       in
       let splices = Runstatic.run_static ppf w_stat_lam in
-      Printf.eprintf "%d top-level splices\n%!" (Array.length splices);
       if !Clflags.dump_parsetree then
         Array.iter (Printast.expression 0 ppf) splices;
       Translcore.set_transl_splices (Some (ref splices));
