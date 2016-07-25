@@ -142,18 +142,20 @@ let implementation ppf sourcefile outputprefix ~backend =
               Compilenv.save_unit_info cmxfile)
       end;
       (* Save static code *)
-      let stat_bytecode =
-        Bytegen.compile_implementation modulename sstat_lam in
-      let static_objfile = outputprefix ^ ".cmm" in
-      let s_oc = open_out_bin static_objfile in
-      try
-        stat_bytecode
-        ++ (Emitcode.to_file s_oc modulename static_objfile);
-        close_out s_oc
-      with x ->
-        close_out s_oc;
-        remove_file static_objfile;
-        raise x
+      if sstat_lam <> Lambda.lambda_unit then begin
+        let stat_bytecode =
+          Bytegen.compile_implementation modulename sstat_lam in
+        let static_objfile = outputprefix ^ ".cmm" in
+        let s_oc = open_out_bin static_objfile in
+        try
+          stat_bytecode
+          ++ (Emitcode.to_file s_oc modulename static_objfile);
+          close_out s_oc
+        with x ->
+          close_out s_oc;
+          remove_file static_objfile;
+          raise x
+      end
     end;
     Warnings.check_fatal ();
     Stypes.dump (Some (outputprefix ^ ".annot"))
