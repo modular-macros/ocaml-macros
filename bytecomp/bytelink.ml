@@ -723,13 +723,13 @@ let fix_exec_name name =
 (* Main entry point (build a custom runtime if needed) *)
 
 let link ppf phase objfiles output_name =
-  (if not (!Clflags.nopervasives || !Clflags.output_c_object) then
-    scan_file phase "std_exit.cmo")
-  ;
+  begin if not !Clflags.nopervasives then
+    scan_file phase "stdlib.cma"
+  end;
   List.iter (scan_file phase) objfiles;
-  (if not (!Clflags.nopervasives || !Clflags.no_std_include) then
-    scan_file phase "stdlib.cma")
-  ;
+  begin if not !Clflags.nopervasives && not !Clflags.output_c_object then
+    scan_file phase "std_exit.cmo"
+  end;
   let tolink = sort_and_discover phase in
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs; (* put user's libs last *)
   Clflags.all_ccopts := !lib_ccopts @ !Clflags.all_ccopts;
