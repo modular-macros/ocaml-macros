@@ -346,11 +346,11 @@ and add_sig_item (bv, m) item =
       add_type_extension bv te; (bv, m)
   | Psig_exception pext ->
       add_extension_constructor bv pext; (bv, m)
-  | Psig_module pmd ->
+  | Psig_module (_, pmd) ->
       let m' = add_modtype_binding bv pmd.pmd_type in
       let add = StringMap.add pmd.pmd_name.txt m' in
       (add bv, add m)
-  | Psig_recmodule decls ->
+  | Psig_recmodule (_, decls) ->
       let add =
         List.fold_right (fun pmd -> StringMap.add pmd.pmd_name.txt bound)
                         decls
@@ -437,11 +437,11 @@ and add_struct_item (bv, m) item : _ StringMap.t * _ StringMap.t =
       (bv, m)
   | Pstr_exception pext ->
       add_extension_constructor bv pext; (bv, m)
-  | Pstr_module x ->
+  | Pstr_module (_sf, x) -> (* macros: ignore static modifier for now *)
       let b = add_module_binding bv x.pmb_expr in
       let add = StringMap.add x.pmb_name.txt b in
       (add bv, add m)
-  | Pstr_recmodule bindings ->
+  | Pstr_recmodule (_, bindings) ->
       let add =
         List.fold_right (fun x -> StringMap.add x.pmb_name.txt bound) bindings
       in

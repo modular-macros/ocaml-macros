@@ -108,10 +108,10 @@ module PathMap = Map.Make(Path)
 
 type summary =
     Env_empty
-  | Env_value of summary * Ident.t * value_description
+  | Env_value of summary * phase * Ident.t * value_description
   | Env_type of summary * Ident.t * type_declaration
   | Env_extension of summary * Ident.t * extension_constructor
-  | Env_module of summary * Ident.t * module_declaration
+  | Env_module of summary * phase * Ident.t * module_declaration
   | Env_modtype of summary * Ident.t * modtype_declaration
   | Env_class of summary * Ident.t * class_declaration
   | Env_cltype of summary * Ident.t * class_type_declaration
@@ -1006,11 +1006,13 @@ and lookup_cltype =
 let update_value s f env =
   try
     let ((p, vd), slot) = Ident.find_name s env.values in
+    let phase = find_phase p env in
+    (* Phase will remain unchanged *)
     match p with
     | Pident id ->
         let vd2 = f vd in
         {env with values = Ident.add id ((p, vd2), slot) env.values;
-                  summary = Env_value(env.summary, id, vd2)}
+                  summary = Env_value(env.summary, phase, id, vd2)}
     | _ ->
         env
   with Not_found ->
@@ -1346,7 +1348,7 @@ let rec prefix_idents root pos sub = function
       let (pl, final_sub) =
         prefix_idents root (pos+1) (Subst.add_type id p sub) rem in
       (p::pl, final_sub)
-  | Sig_module(id, _, _) :: rem ->
+  | Sig_module(id, _, _, _) :: rem ->
       let p = Pdot(root, Ident.name id, pos) in
       let (pl, final_sub) =
         prefix_idents root (pos+1) (Subst.add_module id p sub) rem in
@@ -1379,8 +1381,8 @@ let subst_signature sub sg =
           Sig_type(id, Subst.type_declaration sub decl, x)
       | Sig_typext(id, ext, es) ->
           Sig_typext (id, Subst.extension_constructor sub ext, es)
-      | Sig_module(id, mty, x) ->
-          Sig_module(id, Subst.module_declaration sub mty,x)
+      | Sig_module(id, mty, sf, x) ->
+          Sig_module(id, Subst.module_declaration sub mty, sf, x)
       | Sig_modtype(id, decl) ->
           Sig_modtype(id, Subst.modtype_declaration sub decl)
       | Sig_class(id, decl, x) ->
@@ -1432,7 +1434,10 @@ let rec components_of_module ~deprecated env sub path mty =
   }
 
 and components_of_module_maker (env, sub, path, mty) =
-  let lifted = Path.lifted path in
+  let phase =
+    if Path.lifted path then env.cur_env_phase + 1
+    else env.cur_env_phase
+  in
   (match scrape_alias env mty with
     Mty_signature sg ->
       let c =
@@ -1453,8 +1458,9 @@ and components_of_module_maker (env, sub, path, mty) =
             let decl' = Subst.value_description sub decl in
             c.comp_values <-
               Tbl.add (Ident.name id) (decl', !pos) c.comp_values;
-            if lifted || sf = Static then
-              c.comp_phases <- Tbl.add (Ident.name id) (1, !pos) c.comp_phases;
+            let phase = if sf = Static then phase + 1 else phase in
+            if phase <> 0 then
+              c.comp_phases <- Tbl.add (Ident.name id) (phase, !pos) c.comp_phases;
             begin match decl.val_kind with
               Val_prim _ -> () | _ -> incr pos
             end
@@ -1485,7 +1491,7 @@ and components_of_module_maker (env, sub, path, mty) =
             c.comp_constrs <-
               add_to_tbl (Ident.name id) (descr, !pos) c.comp_constrs;
             incr pos
-        | Sig_module(id, md, _) ->
+        | Sig_module(id, md, sf, _) ->
             let mty = md.md_type in
             let mty' = EnvLazy.create (sub, mty) in
             c.comp_modules <-
@@ -1496,7 +1502,10 @@ and components_of_module_maker (env, sub, path, mty) =
             let comps = components_of_module ~deprecated !env sub path mty in
             c.comp_components <-
               Tbl.add (Ident.name id) (comps, !pos) c.comp_components;
-            env := store_module None id (Pident id) md !env !env;
+            let phase = if sf = Static then phase + 1 else phase in
+            if phase <> 0 then
+              c.comp_phases <- Tbl.add (Ident.name id) (phase, !pos) c.comp_phases;
+            env := store_module None sf id (Pident id) md !env !env;
             incr pos
         | Sig_modtype(id, decl) ->
             let decl' = Subst.modtype_declaration sub decl in
@@ -1581,7 +1590,7 @@ and store_value ?check slot id path decl env renv =
         EnvTbl.add None (fun x -> x) id (path, env.cur_env_stage)
         env.stages renv.stages
     );
-    summary = Env_value(env.summary, id, decl) }
+    summary = Env_value(env.summary, env.cur_env_phase, id, decl) }
 
 and store_phase id path phase env renv =
   { env with
@@ -1684,17 +1693,25 @@ and store_extension ~check slot id path ext env renv =
                 env.constrs renv.constrs;
     summary = Env_extension(env.summary, id, ext) }
 
-and store_module slot id path md env renv =
+and store_module slot sf id path md env renv =
   let deprecated = Builtin_attributes.deprecated_of_attrs md.md_attributes in
+  let phase =
+    if sf = Static then succ env.cur_env_phase else env.cur_env_phase
+  in
   { env with
     modules = EnvTbl.add slot (fun x -> `Module x) id (path, md)
         env.modules renv.modules;
+    phases = (
+      if phase = 0 then env.phases
+      else
+        EnvTbl.add None (fun x -> x) id (path, phase) env.phases
+          renv.phases);
     components =
       EnvTbl.add slot (fun x -> `Component x) id
         (path, components_of_module ~deprecated
            env Subst.identity path md.md_type)
         env.components renv.components;
-    summary = Env_module(env.summary, id, md) }
+    summary = Env_module(env.summary, phase, id, md) }
 
 and store_modtype slot id path info env renv =
   { env with
@@ -1748,6 +1765,11 @@ let add_value ?check id desc env =
 let add_phase id phase env =
   store_phase id (Pident id) phase env env
 
+let add_value_with_phase ?check phase id desc env =
+  let env = add_value ?check id desc env in
+  if phase <> 0 then add_phase id phase env
+  else env
+
 (*
 let add_stage id stage env =
   store_stage id (Pident id) stage env env
@@ -1759,13 +1781,13 @@ let add_type ~check id info env =
 and add_extension ~check id ext env =
   store_extension ~check None id (Pident id) ext env env
 
-and add_module_declaration ?(arg=false) id md env =
+and add_module_declaration ?(arg=false) sf id md env =
   let path =
     (*match md.md_type with
       Mty_alias path -> normalize_path env path
     | _ ->*) Pident id
   in
-  let env = store_module None id path md env env in
+  let env = store_module None sf id path md env env in
   if arg then add_functor_arg id env else env
 
 and add_modtype id info env =
@@ -1777,8 +1799,8 @@ and add_class id ty env =
 and add_cltype id ty env =
   store_cltype None id (Pident id) ty env env
 
-let add_module ?arg id mty env =
-  add_module_declaration ?arg id (md mty) env
+let add_module ?arg sf id mty env =
+  add_module_declaration ?arg sf id (md mty) env
 
 let add_local_type path info env =
   { env with
@@ -1801,17 +1823,17 @@ let enter store_fun name data env =
 let enter_value ?check = enter (store_value ?check)
 and enter_type = enter (store_type ~check:true)
 and enter_extension = enter (store_extension ~check:true)
-and enter_module_declaration ?arg id md env =
-  add_module_declaration ?arg id md env
+and enter_module_declaration ?arg sf id md env =
+  add_module_declaration ?arg sf id md env
   (* let (id, env) = enter store_module name md env in
   (id, add_functor_arg ?arg id env) *)
 and enter_modtype = enter store_modtype
 and enter_class = enter store_class
 and enter_cltype = enter store_cltype
 
-let enter_module ?arg s mty env =
+let enter_module ?arg sf s mty env =
   let id = Ident.create s in
-  (id, enter_module_declaration ?arg id (md mty) env)
+  (id, enter_module_declaration ?arg sf id (md mty) env)
 
 (* Insertion of all components of a signature *)
 
@@ -1825,7 +1847,8 @@ let add_item comp env =
       end
   | Sig_type(id, decl, _)   -> add_type ~check:false id decl env
   | Sig_typext(id, ext, _)  -> add_extension ~check:false id ext env
-  | Sig_module(id, md, _)   -> add_module_declaration id md env
+  | Sig_module(id, md, sf, _)   ->
+      add_module_declaration sf id md env
   | Sig_modtype(id, decl)   -> add_modtype id decl env
   | Sig_class(id, decl, _)  -> add_class id decl env
   | Sig_class_type(id, decl, _) -> add_cltype id decl env
@@ -1858,8 +1881,8 @@ let open_signature slot root sg env0 =
             store_type ~check:false slot (Ident.hide id) p decl env env0
         | Sig_typext(id, ext, _) ->
             store_extension ~check:false slot (Ident.hide id) p ext env env0
-        | Sig_module(id, mty, _) ->
-            store_module slot (Ident.hide id) p mty env env0
+        | Sig_module(id, mty, sf, _) ->
+            store_module slot sf (Ident.hide id) p mty env env0
         | Sig_modtype(id, decl) ->
             store_modtype slot (Ident.hide id) p decl env env0
         | Sig_class(id, decl, _) ->

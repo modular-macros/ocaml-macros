@@ -401,7 +401,7 @@ and signature_item =
     Sig_value of Ident.t * static_flag * value_description
   | Sig_type of Ident.t * type_declaration * rec_status
   | Sig_typext of Ident.t * extension_constructor * ext_status
-  | Sig_module of Ident.t * module_declaration * rec_status
+  | Sig_module of Ident.t * module_declaration * static_flag * rec_status
   | Sig_modtype of Ident.t * modtype_declaration
   | Sig_class of Ident.t * class_declaration * rec_status
   | Sig_class_type of Ident.t * class_type_declaration * rec_status

@@ -221,8 +221,8 @@ and structure_item_desc =
   | Tstr_type of rec_flag * type_declaration list
   | Tstr_typext of type_extension
   | Tstr_exception of extension_constructor
-  | Tstr_module of module_binding
-  | Tstr_recmodule of module_binding list
+  | Tstr_module of static_flag * module_binding
+  | Tstr_recmodule of static_flag * module_binding list
   | Tstr_modtype of module_type_declaration
   | Tstr_open of open_description
   | Tstr_class of (class_declaration * string list) list
@@ -296,8 +296,8 @@ and signature_item_desc =
   | Tsig_type of rec_flag * type_declaration list
   | Tsig_typext of type_extension
   | Tsig_exception of extension_constructor
-  | Tsig_module of module_declaration
-  | Tsig_recmodule of module_declaration list
+  | Tsig_module of static_flag * module_declaration
+  | Tsig_recmodule of static_flag * module_declaration list
   | Tsig_modtype of module_type_declaration
   | Tsig_open of open_description
   | Tsig_include of include_description

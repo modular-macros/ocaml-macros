@@ -142,8 +142,9 @@ module MakeIterator(Iter : IteratorArgument) : sig
         | Tstr_type (rf, list) -> iter_type_declarations rf list
         | Tstr_typext tyext -> iter_type_extension tyext
         | Tstr_exception ext -> iter_extension_constructor ext
-        | Tstr_module x -> iter_module_binding x
-        | Tstr_recmodule list -> List.iter iter_module_binding list
+        | Tstr_module (_sf, x) -> iter_module_binding x
+            (* macros: no handling of static modifier *)
+        | Tstr_recmodule (_sf, list) -> List.iter iter_module_binding list
         | Tstr_modtype mtd -> iter_module_type_declaration mtd
         | Tstr_open _ -> ()
         | Tstr_class list ->
@@ -383,9 +384,9 @@ module MakeIterator(Iter : IteratorArgument) : sig
             iter_extension_constructor ext
         | Tsig_typext tyext ->
             iter_type_extension tyext
-        | Tsig_module md ->
+        | Tsig_module (_sf, md) ->
             iter_module_type md.md_type
-        | Tsig_recmodule list ->
+        | Tsig_recmodule (_sf, list) ->
             List.iter (fun md -> iter_module_type md.md_type) list
         | Tsig_modtype mtd ->
             iter_module_type_declaration mtd

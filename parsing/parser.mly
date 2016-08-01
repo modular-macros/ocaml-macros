@@ -837,9 +837,9 @@ structure_item:
   | str_exception_declaration
       { let (l, ext) = $1 in mkstr_ext (Pstr_exception l) ext }
   | module_binding
-      { let (body, ext) = $1 in mkstr_ext (Pstr_module body) ext }
+      { let (sf, body, ext) = $1 in mkstr_ext (Pstr_module (sf, body)) ext }
   | rec_module_bindings
-      { let (l, ext) = $1 in mkstr_ext (Pstr_recmodule(List.rev l)) ext }
+      { let (sf, l, ext) = $1 in mkstr_ext (Pstr_recmodule(sf, List.rev l)) ext }
   | module_type_declaration
       { let (body, ext) = $1 in mkstr_ext (Pstr_modtype body) ext }
   | open_statement
@@ -874,19 +874,33 @@ module_binding_body:
 module_binding:
     MODULE ext_attributes UIDENT module_binding_body post_item_attributes
       { let (ext, attrs) = $2 in
-        Mb.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
+        Nonstatic
+      , Mb.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
+            ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
+      , ext }
+  | STATIC MODULE ext_attributes UIDENT module_binding_body post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Mb.mk (mkrhs $4 3) $5 ~attrs:(attrs@$6)
             ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
       , ext }
 ;
 rec_module_bindings:
-    rec_module_binding                     { let (b, ext) = $1 in ([b], ext) }
+    rec_module_binding { let (sf, b, ext) = $1 in (sf, [b], ext) }
   | rec_module_bindings and_module_binding
-      { let (l, ext) = $1 in ($2 :: l, ext) }
+      { let (sf, l, ext) = $1 in (sf, $2 :: l, ext) }
 ;
 rec_module_binding:
     MODULE ext_attributes REC UIDENT module_binding_body post_item_attributes
       { let (ext, attrs) = $2 in
-        Mb.mk (mkrhs $4 4) $5 ~attrs:(attrs@$6)
+        Nonstatic
+      , Mb.mk (mkrhs $4 4) $5 ~attrs:(attrs@$6)
+            ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
+      , ext }
+  | STATIC MODULE ext_attributes REC UIDENT module_binding_body post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Mb.mk (mkrhs $5 4) $6 ~attrs:(attrs@$7)
             ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
       , ext }
 ;
@@ -947,11 +961,11 @@ signature_item:
   | sig_exception_declaration
       { let (l, ext) = $1 in mksig_ext (Psig_exception l) ext }
   | module_declaration
-      { let (body, ext) = $1 in mksig_ext (Psig_module body) ext }
+      { let (sf, body, ext) = $1 in mksig_ext (Psig_module (sf, body)) ext }
   | module_alias
-      { let (body, ext) = $1 in mksig_ext (Psig_module body) ext }
+      { let (sf, body, ext) = $1 in mksig_ext (Psig_module (sf, body)) ext }
   | rec_module_declarations
-      { let (l, ext) = $1 in mksig_ext (Psig_recmodule (List.rev l)) ext }
+      { let (sf, l, ext) = $1 in mksig_ext (Psig_recmodule (sf, List.rev l)) ext }
   | module_type_declaration
       { let (body, ext) = $1 in mksig_ext (Psig_modtype body) ext }
   | open_statement
@@ -993,28 +1007,50 @@ module_declaration_body:
 module_declaration:
     MODULE ext_attributes UIDENT module_declaration_body post_item_attributes
       { let (ext, attrs) = $2 in
-        Md.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
+        Nonstatic
+      , Md.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
+          ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+      , ext }
+  | STATIC MODULE ext_attributes UIDENT module_declaration_body post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Md.mk (mkrhs $4 3) $5 ~attrs:(attrs@$6)
           ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext }
 ;
 module_alias:
     MODULE ext_attributes UIDENT EQUAL mod_longident post_item_attributes
       { let (ext, attrs) = $2 in
-        Md.mk (mkrhs $3 3)
+        Nonstatic
+      , Md.mk (mkrhs $3 3)
           (Mty.alias ~loc:(rhs_loc 5) (mkrhs $5 5)) ~attrs:(attrs@$6)
+             ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+      , ext }
+  | STATIC MODULE ext_attributes UIDENT EQUAL mod_longident post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Md.mk (mkrhs $4 3)
+          (Mty.alias ~loc:(rhs_loc 5) (mkrhs $6 5)) ~attrs:(attrs@$7)
              ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext }
 ;
 rec_module_declarations:
     rec_module_declaration
-      { let (body, ext) = $1 in ([body], ext) }
+      { let (sf, body, ext) = $1 in (sf, [body], ext) }
   | rec_module_declarations and_module_declaration
-      { let (l, ext) = $1 in ($2 :: l, ext) }
+      { let (sf, l, ext) = $1 in (sf, $2 :: l, ext) }
 ;
 rec_module_declaration:
     MODULE ext_attributes REC UIDENT COLON module_type post_item_attributes
       { let (ext, attrs) = $2 in
-        Md.mk (mkrhs $4 4) $6 ~attrs:(attrs@$7)
+        Nonstatic
+      , Md.mk (mkrhs $4 4) $6 ~attrs:(attrs@$7)
+            ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+      , ext}
+  | STATIC MODULE ext_attributes REC UIDENT COLON module_type post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Md.mk (mkrhs $5 4) $7 ~attrs:(attrs@$8)
             ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext}
 ;

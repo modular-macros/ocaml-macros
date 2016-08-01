@@ -211,8 +211,8 @@ let iter_expression f e =
     | Pstr_attribute _
     | Pstr_extension _ -> ()
     | Pstr_include {pincl_mod = me}
-    | Pstr_module {pmb_expr = me} -> module_expr me
-    | Pstr_recmodule l -> List.iter (fun x -> module_expr x.pmb_expr) l
+    | Pstr_module (_, {pmb_expr = me}) -> module_expr me
+    | Pstr_recmodule (_, l) -> List.iter (fun x -> module_expr x.pmb_expr) l
     | Pstr_class cdl -> List.iter (fun c -> class_expr c.pci_expr) cdl
 
   and class_expr ce =
@@ -1627,9 +1627,9 @@ and is_nonexpansive_mod mexp =
           | Tstr_modtype _ | Tstr_open _ | Tstr_class_type _  -> true
           | Tstr_value (_, _, pat_exp_list) ->
               List.for_all (fun vb -> is_nonexpansive vb.vb_expr) pat_exp_list
-          | Tstr_module {mb_expr=m;_}
+          | Tstr_module (_, {mb_expr=m;_})
           | Tstr_include {incl_mod=m;_} -> is_nonexpansive_mod m
-          | Tstr_recmodule id_mod_list ->
+          | Tstr_recmodule (_, id_mod_list) ->
               List.for_all (fun {mb_expr=m;_} -> is_nonexpansive_mod m)
                 id_mod_list
           | Tstr_exception {ext_kind = Text_decl _} ->
@@ -2801,7 +2801,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       Ident.set_current_time ty.level;
       let context = Typetexp.narrow () in
       let modl = !type_module env smodl in
-      let (id, new_env) = Env.enter_module name.txt modl.mod_type env in
+      let (id, new_env) =
+        Env.enter_module Asttypes.Nonstatic (* macros: not sure *)
+        name.txt modl.mod_type env
+      in
       Ctype.init_def(Ident.current_time());
       Typetexp.widen context;
       let body = type_expect new_env sbody ty_expected in

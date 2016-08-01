@@ -652,12 +652,13 @@ and signature_item i ppf x =
   | Tsig_exception ext ->
       line i ppf "Tsig_exception\n";
       extension_constructor i ppf ext
-  | Tsig_module md ->
-      line i ppf "Tsig_module \"%a\"\n" fmt_ident md.md_id;
+  | Tsig_module (sf, md) ->
+      line i ppf "Tsig_module %a \"%a\"\n" fmt_static_flag sf
+        fmt_ident md.md_id;
       attributes i ppf md.md_attributes;
       module_type i ppf md.md_type
-  | Tsig_recmodule decls ->
-      line i ppf "Tsig_recmodule\n";
+  | Tsig_recmodule (sf, decls) ->
+      line i ppf "Tsig_recmodule %a\n" fmt_static_flag sf;
       list i module_declaration ppf decls;
   | Tsig_modtype x ->
       line i ppf "Tsig_modtype \"%a\"\n" fmt_ident x.mtd_id;
@@ -758,11 +759,11 @@ and structure_item i ppf x =
   | Tstr_exception ext ->
       line i ppf "Tstr_exception\n";
       extension_constructor i ppf ext;
-  | Tstr_module x ->
-      line i ppf "Tstr_module\n";
+  | Tstr_module (sf, x) ->
+      line i ppf "Tstr_module %a\n" fmt_static_flag sf;
       module_binding i ppf x
-  | Tstr_recmodule bindings ->
-      line i ppf "Tstr_recmodule\n";
+  | Tstr_recmodule (sf, bindings) ->
+      line i ppf "Tstr_recmodule %a\n" fmt_static_flag sf;
       list i module_binding ppf bindings
   | Tstr_modtype x ->
       line i ppf "Tstr_modtype \"%a\"\n" fmt_ident x.mtd_id;

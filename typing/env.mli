@@ -22,10 +22,10 @@ module PathMap : Map.S with type key = Path.t
 
 type summary =
     Env_empty
-  | Env_value of summary * Ident.t * value_description
+  | Env_value of summary * phase * Ident.t * value_description
   | Env_type of summary * Ident.t * type_declaration
   | Env_extension of summary * Ident.t * extension_constructor
-  | Env_module of summary * Ident.t * module_declaration
+  | Env_module of summary * phase * Ident.t * module_declaration
   | Env_modtype of summary * Ident.t * modtype_declaration
   | Env_class of summary * Ident.t * class_declaration
   | Env_cltype of summary * Ident.t * class_type_declaration
@@ -176,10 +176,15 @@ exception Recmodule
 
 val add_value:
     ?check:(string -> Warnings.t) -> Ident.t -> value_description -> t -> t
+val add_value_with_phase:
+    ?check:(string -> Warnings.t) -> phase -> Ident.t -> value_description -> t
+    -> t
 val add_type: check:bool -> Ident.t -> type_declaration -> t -> t
 val add_extension: check:bool -> Ident.t -> extension_constructor -> t -> t
-val add_module: ?arg:bool -> Ident.t -> module_type -> t -> t
-val add_module_declaration: ?arg:bool -> Ident.t -> module_declaration -> t -> t
+val add_module: ?arg:bool -> Asttypes.static_flag -> Ident.t
+  -> module_type -> t -> t
+val add_module_declaration: ?arg:bool -> Asttypes.static_flag -> Ident.t
+  -> module_declaration -> t -> t
 val add_modtype: Ident.t -> modtype_declaration -> t -> t
 val add_class: Ident.t -> class_declaration -> t -> t
 val add_cltype: Ident.t -> class_type_declaration -> t -> t
@@ -206,9 +211,10 @@ val enter_value:
     string -> value_description -> t -> Ident.t * t
 val enter_type: string -> type_declaration -> t -> Ident.t * t
 val enter_extension: string -> extension_constructor -> t -> Ident.t * t
-val enter_module: ?arg:bool -> string -> module_type -> t -> Ident.t * t
+val enter_module: ?arg:bool -> Asttypes.static_flag -> string -> module_type -> t
+  -> Ident.t * t
 val enter_module_declaration:
-    ?arg:bool -> Ident.t -> module_declaration -> t -> t
+    ?arg:bool -> Asttypes.static_flag -> Ident.t -> module_declaration -> t -> t
 val enter_modtype: string -> modtype_declaration -> t -> Ident.t * t
 val enter_class: string -> class_declaration -> t -> Ident.t * t
 val enter_cltype: string -> class_type_declaration -> t -> Ident.t * t

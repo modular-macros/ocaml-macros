@@ -154,10 +154,11 @@ let structure_item sub item =
         Pstr_typext (sub.type_extension sub tyext)
     | Tstr_exception ext ->
         Pstr_exception (sub.extension_constructor sub ext)
-    | Tstr_module mb ->
-        Pstr_module (sub.module_binding sub mb)
-    | Tstr_recmodule list ->
-        Pstr_recmodule (List.map (sub.module_binding sub) list)
+    | Tstr_module (sf, mb) ->
+        Pstr_module (sf, sub.module_binding sub mb)
+        (* macros: no handling of static modifier here for now *)
+    | Tstr_recmodule (sf, list) ->
+        Pstr_recmodule (sf, List.map (sub.module_binding sub) list)
     | Tstr_modtype mtd ->
         Pstr_modtype (sub.module_type_declaration sub mtd)
     | Tstr_open od ->
@@ -504,10 +505,10 @@ let signature_item sub item =
         Psig_typext (sub.type_extension sub tyext)
     | Tsig_exception ext ->
         Psig_exception (sub.extension_constructor sub ext)
-    | Tsig_module md ->
-        Psig_module (sub.module_declaration sub md)
-    | Tsig_recmodule list ->
-        Psig_recmodule (List.map (sub.module_declaration sub) list)
+    | Tsig_module (sf, md) ->
+        Psig_module (sf, sub.module_declaration sub md)
+    | Tsig_recmodule (sf, list) ->
+        Psig_recmodule (sf, List.map (sub.module_declaration sub) list)
     | Tsig_modtype mtd ->
         Psig_modtype (sub.module_type_declaration sub mtd)
     | Tsig_open od ->

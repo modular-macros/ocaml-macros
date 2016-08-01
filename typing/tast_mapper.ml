@@ -115,9 +115,9 @@ let structure_item sub {str_desc; str_loc; str_env} =
         Tstr_type (rec_flag, list)
     | Tstr_typext te -> Tstr_typext (sub.type_extension sub te)
     | Tstr_exception ext -> Tstr_exception (sub.extension_constructor sub ext)
-    | Tstr_module mb -> Tstr_module (sub.module_binding sub mb)
-    | Tstr_recmodule list ->
-        Tstr_recmodule (List.map (sub.module_binding sub) list)
+    | Tstr_module (sf, mb) -> Tstr_module (sf, sub.module_binding sub mb)
+    | Tstr_recmodule (sf, list) ->
+        Tstr_recmodule (sf, List.map (sub.module_binding sub) list)
     | Tstr_modtype x -> Tstr_modtype (sub.module_type_declaration sub x)
     | Tstr_class list ->
         Tstr_class
@@ -375,10 +375,10 @@ let signature_item sub x =
         Tsig_typext (sub.type_extension sub te)
     | Tsig_exception ext ->
         Tsig_exception (sub.extension_constructor sub ext)
-    | Tsig_module x ->
-        Tsig_module (sub.module_declaration sub x)
-    | Tsig_recmodule list ->
-        Tsig_recmodule (List.map (sub.module_declaration sub) list)
+    | Tsig_module (sf, x) ->
+        Tsig_module (sf, sub.module_declaration sub x)
+    | Tsig_recmodule (sf, list) ->
+        Tsig_recmodule (sf, List.map (sub.module_declaration sub) list)
     | Tsig_modtype x ->
         Tsig_modtype (sub.module_type_declaration sub x)
     | Tsig_include incl ->

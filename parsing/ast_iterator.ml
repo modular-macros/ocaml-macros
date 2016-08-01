@@ -46,7 +46,7 @@ type iterator = {
   include_description: iterator -> include_description -> unit;
   label_declaration: iterator -> label_declaration -> unit;
   location: iterator -> Location.t -> unit;
-  module_binding: iterator -> module_binding -> unit;
+  module_binding: iterator -> Asttypes.static_flag * module_binding -> unit;
   module_declaration: iterator -> module_declaration -> unit;
   module_expr: iterator -> module_expr -> unit;
   module_type: iterator -> module_type -> unit;
@@ -238,8 +238,8 @@ module MT = struct
     | Psig_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Psig_typext te -> sub.type_extension sub te
     | Psig_exception ed -> sub.extension_constructor sub ed
-    | Psig_module x -> sub.module_declaration sub x
-    | Psig_recmodule l ->
+    | Psig_module (_sf, x) -> sub.module_declaration sub x
+    | Psig_recmodule (_sf, l) ->
         List.iter (sub.module_declaration sub) l
     | Psig_modtype x -> sub.module_type_declaration sub x
     | Psig_open x -> sub.open_description sub x
@@ -283,8 +283,9 @@ module M = struct
     | Pstr_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Pstr_typext te -> sub.type_extension sub te
     | Pstr_exception ed -> sub.extension_constructor sub ed
-    | Pstr_module x -> sub.module_binding sub x
-    | Pstr_recmodule l -> List.iter (sub.module_binding sub) l
+    | Pstr_module (sf, x) -> sub.module_binding sub (sf, x)
+    | Pstr_recmodule (sf, l) -> List.iter
+        (fun expr -> sub.module_binding sub (sf, expr)) l
     | Pstr_modtype x -> sub.module_type_declaration sub x
     | Pstr_open x -> sub.open_description sub x
     | Pstr_class l -> List.iter (sub.class_declaration sub) l
@@ -521,7 +522,7 @@ let default_iterator =
       );
 
     module_binding =
-      (fun this {pmb_name; pmb_expr; pmb_attributes; pmb_loc} ->
+      (fun this (_sf, {pmb_name; pmb_expr; pmb_attributes; pmb_loc}) ->
          iter_loc this pmb_name; this.module_expr this pmb_expr;
          this.attributes this pmb_attributes;
          this.location this pmb_loc

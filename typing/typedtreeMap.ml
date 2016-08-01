@@ -125,11 +125,12 @@ module MakeMap(Map : MapArgument) = struct
           Tstr_typext (map_type_extension tyext)
         | Tstr_exception ext ->
           Tstr_exception (map_extension_constructor ext)
-        | Tstr_module x ->
-          Tstr_module (map_module_binding x)
-        | Tstr_recmodule list ->
+        | Tstr_module (sf, x) ->
+          Tstr_module (sf, map_module_binding x)
+            (* macros: no handling of static modifier for now *)
+        | Tstr_recmodule (sf, list) ->
           let list = List.map map_module_binding list in
-          Tstr_recmodule list
+          Tstr_recmodule (sf, list)
         | Tstr_modtype mtd ->
           Tstr_modtype (map_module_type_declaration mtd)
         | Tstr_open od -> Tstr_open od
@@ -439,11 +440,11 @@ module MakeMap(Map : MapArgument) = struct
             Tsig_typext (map_type_extension tyext)
         | Tsig_exception ext ->
             Tsig_exception (map_extension_constructor ext)
-        | Tsig_module md ->
-            Tsig_module {md with md_type = map_module_type md.md_type}
-        | Tsig_recmodule list ->
+        | Tsig_module (sf, md) ->
+            Tsig_module (sf, {md with md_type = map_module_type md.md_type})
+        | Tsig_recmodule (sf, list) ->
             Tsig_recmodule
-                (List.map
+                (sf, List.map
                    (fun md -> {md with md_type = map_module_type md.md_type})
                    list
                 )

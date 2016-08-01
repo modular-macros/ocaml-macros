@@ -680,12 +680,13 @@ and signature_item i ppf x =
   | Psig_exception ext ->
       line i ppf "Psig_exception\n";
       extension_constructor i ppf ext;
-  | Psig_module pmd ->
-      line i ppf "Psig_module %a\n" fmt_string_loc pmd.pmd_name;
+  | Psig_module (sf, pmd) ->
+      line i ppf "Psig_module %a %a\n" fmt_static_flag sf
+        fmt_string_loc pmd.pmd_name;
       attributes i ppf pmd.pmd_attributes;
       module_type i ppf pmd.pmd_type
-  | Psig_recmodule decls ->
-      line i ppf "Psig_recmodule\n";
+  | Psig_recmodule (sf, decls) ->
+      line i ppf "Psig_recmodule %a\n" fmt_static_flag sf;
       list i module_declaration ppf decls;
   | Psig_modtype x ->
       line i ppf "Psig_modtype %a\n" fmt_string_loc x.pmtd_name;
@@ -788,11 +789,11 @@ and structure_item i ppf x =
   | Pstr_exception ext ->
       line i ppf "Pstr_exception\n";
       extension_constructor i ppf ext;
-  | Pstr_module x ->
-      line i ppf "Pstr_module\n";
+  | Pstr_module (sf, x) ->
+      line i ppf "Pstr_module %a\n" fmt_static_flag sf;
       module_binding i ppf x
-  | Pstr_recmodule bindings ->
-      line i ppf "Pstr_recmodule\n";
+  | Pstr_recmodule (sf, bindings) ->
+      line i ppf "Pstr_recmodule %a\n" fmt_static_flag sf;
       list i module_binding ppf bindings;
   | Pstr_modtype x ->
       line i ppf "Pstr_modtype %a\n" fmt_string_loc x.pmtd_name;

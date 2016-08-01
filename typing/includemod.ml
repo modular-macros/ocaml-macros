@@ -147,7 +147,7 @@ let item_ident_name = function
     Sig_value(id, _, d) -> (id, d.val_loc, Field_value(Ident.name id))
   | Sig_type(id, d, _) -> (id, d.type_loc, Field_type(Ident.name id))
   | Sig_typext(id, d, _) -> (id, d.ext_loc, Field_typext(Ident.name id))
-  | Sig_module(id, d, _) -> (id, d.md_loc, Field_module(Ident.name id))
+  | Sig_module(id, d, _, _) -> (id, d.md_loc, Field_module(Ident.name id))
   | Sig_modtype(id, d) -> (id, d.mtd_loc, Field_modtype(Ident.name id))
   | Sig_class(id, d, _) -> (id, d.cty_loc, Field_class(Ident.name id))
   | Sig_class_type(id, d, _) -> (id, d.clty_loc, Field_classtype(Ident.name id))
@@ -159,7 +159,7 @@ let is_runtime_component = function
   | Sig_class_type(_,_,_) -> false
   | Sig_value(_,_,_)
   | Sig_typext(_,_,_)
-  | Sig_module(_,_,_)
+  | Sig_module(_,_,_,_)
   | Sig_class(_, _,_) -> true
 
 (* Print a coercion *)
@@ -260,8 +260,9 @@ and try_modtypes env cxt subst mty1 mty2 =
       let arg2' = Subst.modtype subst arg2 in
       let cc_arg = modtypes env (Arg param1::cxt) Subst.identity arg2' arg1 in
       let cc_res =
-        modtypes (Env.add_module param1 arg2' env) (Body param1::cxt)
-          (Subst.add_module param2 (Pident param1) subst) res1 res2 in
+        modtypes (Env.add_module Asttypes.Nonstatic param1 arg2' env)
+          (Body param1::cxt) (Subst.add_module param2 (Pident param1) subst)
+          res1 res2 in
       begin match (cc_arg, cc_res) with
           (Tcoerce_none, Tcoerce_none) -> Tcoerce_none
         | _ -> Tcoerce_functor(cc_arg, cc_res)
@@ -291,7 +292,7 @@ and signatures env cxt subst sig1 sig2 =
   let (id_pos_list,_) =
     List.fold_left
       (fun (l,pos) -> function
-          Sig_module (id, _, _) ->
+          Sig_module (id, _, _, _) ->
             ((id,pos,Tcoerce_none)::l , pos+1)
         | item -> (l, if is_runtime_component item then pos+1 else pos))
       ([], 0) sig1 in
@@ -388,7 +389,7 @@ and signature_components old_env env cxt subst paired =
     :: rem ->
       extension_constructors env cxt subst id1 ext1 ext2;
       (pos, Tcoerce_none) :: comps_rec rem
-  | (Sig_module(id1, mty1, _), Sig_module(_id2, mty2, _), pos) :: rem ->
+  | (Sig_module(id1, mty1, _, _), Sig_module(_id2, mty2, _, _), pos) :: rem ->
       let p1 = Pident id1 in
       let cc =
         modtypes env (Module id1::cxt) subst

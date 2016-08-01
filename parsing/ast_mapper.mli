@@ -49,6 +49,7 @@ let () =
   *)
 
 open Parsetree
+open Asttypes
 
 (** {2 A generic Parsetree mapper} *)
 
@@ -77,8 +78,10 @@ type mapper = {
   include_description: mapper -> include_description -> include_description;
   label_declaration: mapper -> label_declaration -> label_declaration;
   location: mapper -> Location.t -> Location.t;
-  module_binding: mapper -> module_binding -> module_binding;
-  module_declaration: mapper -> module_declaration -> module_declaration;
+  module_binding: mapper -> static_flag -> module_binding
+    -> static_flag * module_binding;
+  module_declaration: mapper -> static_flag -> module_declaration
+    -> static_flag * module_declaration;
   module_expr: mapper -> module_expr -> module_expr;
   module_type: mapper -> module_type -> module_type;
   module_type_declaration: mapper -> module_type_declaration

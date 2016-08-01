@@ -686,9 +686,9 @@ and signature_item_desc =
         (* type t1 += ... *)
   | Psig_exception of extension_constructor
         (* exception C of T *)
-  | Psig_module of module_declaration
+  | Psig_module of static_flag * module_declaration
         (* module X : MT *)
-  | Psig_recmodule of module_declaration list
+  | Psig_recmodule of static_flag * module_declaration list
         (* module rec X1 : MT1 and ... and Xn : MTn *)
   | Psig_modtype of module_type_declaration
         (* module type S = MT
@@ -816,9 +816,10 @@ and structure_item_desc =
   | Pstr_exception of extension_constructor
         (* exception C of T
            exception C = M.X *)
-  | Pstr_module of module_binding
+  | Pstr_module of static_flag * module_binding
         (* module X = ME *)
-  | Pstr_recmodule of module_binding list
+        (* static module X = ME *)
+  | Pstr_recmodule of static_flag * module_binding list
         (* module rec X1 = ME1 and ... and Xn = MEn *)
   | Pstr_modtype of module_type_declaration
         (* module type S = MT *)

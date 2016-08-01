@@ -1184,7 +1184,9 @@ let rec tree_of_modtype ?(ellipsis=false) = function
       let res =
         match ty_arg with None -> tree_of_modtype ~ellipsis ty_res
         | Some mty ->
-            wrap_env (Env.add_module ~arg:true param mty)
+            wrap_env (Env.add_module ~arg:true
+                        Asttypes.Nonstatic (* macros: not sure *)
+                        param mty)
                      (tree_of_modtype ~ellipsis) ty_res
       in
       Omty_functor (Ident.name param,
@@ -1220,7 +1222,7 @@ and trees_of_sigitem = function
       [tree_of_type_declaration id decl rs]
   | Sig_typext(id, ext, es) ->
       [tree_of_extension_constructor id ext es]
-  | Sig_module(id, md, rs) ->
+  | Sig_module(id, md, _, rs) ->
       let ellipsis =
         List.exists (function ({txt="..."}, Parsetree.PStr []) -> true
                             | _ -> false)
