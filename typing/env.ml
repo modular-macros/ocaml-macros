@@ -67,6 +67,10 @@ exception Error of error
 
 let error err = raise (Error err)
 
+let phase_of_sf = function
+  | Nonstatic -> 0
+  | Static -> 1
+
 module EnvLazy : sig
   type ('a,'b) t
 
@@ -1502,10 +1506,10 @@ and components_of_module_maker (env, sub, path, mty) =
             let comps = components_of_module ~deprecated !env sub path mty in
             c.comp_components <-
               Tbl.add (Ident.name id) (comps, !pos) c.comp_components;
-            let phase = if sf = Static then phase + 1 else phase in
+            let phase = phase_of_sf sf in
             if phase <> 0 then
               c.comp_phases <- Tbl.add (Ident.name id) (phase, !pos) c.comp_phases;
-            env := store_module None sf id (Pident id) md !env !env;
+            env := store_module None phase id (Pident id) md !env !env;
             incr pos
         | Sig_modtype(id, decl) ->
             let decl' = Subst.modtype_declaration sub decl in
@@ -1693,11 +1697,8 @@ and store_extension ~check slot id path ext env renv =
                 env.constrs renv.constrs;
     summary = Env_extension(env.summary, id, ext) }
 
-and store_module slot sf id path md env renv =
+and store_module slot phase id path md env renv =
   let deprecated = Builtin_attributes.deprecated_of_attrs md.md_attributes in
-  let phase =
-    if sf = Static then succ env.cur_env_phase else env.cur_env_phase
-  in
   { env with
     modules = EnvTbl.add slot (fun x -> `Module x) id (path, md)
         env.modules renv.modules;
@@ -1781,13 +1782,13 @@ let add_type ~check id info env =
 and add_extension ~check id ext env =
   store_extension ~check None id (Pident id) ext env env
 
-and add_module_declaration ?(arg=false) sf id md env =
+and add_module_declaration ?(arg=false) phase id md env =
   let path =
     (*match md.md_type with
       Mty_alias path -> normalize_path env path
     | _ ->*) Pident id
   in
-  let env = store_module None sf id path md env env in
+  let env = store_module None phase id path md env env in
   if arg then add_functor_arg id env else env
 
 and add_modtype id info env =
@@ -1799,8 +1800,11 @@ and add_class id ty env =
 and add_cltype id ty env =
   store_cltype None id (Pident id) ty env env
 
-let add_module ?arg sf id mty env =
-  add_module_declaration ?arg sf id (md mty) env
+let add_module_with_phase ?arg phase id mty env =
+  add_module_declaration ?arg phase id (md mty) env
+
+let add_module ?arg id mty env =
+  add_module_with_phase ?arg env.cur_env_phase id mty env
 
 let add_local_type path info env =
   { env with
@@ -1823,17 +1827,20 @@ let enter store_fun name data env =
 let enter_value ?check = enter (store_value ?check)
 and enter_type = enter (store_type ~check:true)
 and enter_extension = enter (store_extension ~check:true)
-and enter_module_declaration ?arg sf id md env =
-  add_module_declaration ?arg sf id md env
+and enter_module_declaration ?arg phase id md env =
+  add_module_declaration ?arg phase id md env
   (* let (id, env) = enter store_module name md env in
   (id, add_functor_arg ?arg id env) *)
 and enter_modtype = enter store_modtype
 and enter_class = enter store_class
 and enter_cltype = enter store_cltype
 
-let enter_module ?arg sf s mty env =
+let enter_module_with_phase ?arg phase s mty env =
   let id = Ident.create s in
-  (id, enter_module_declaration ?arg sf id (md mty) env)
+  (id, enter_module_declaration ?arg phase id (md mty) env)
+
+let enter_module ?arg s mty env =
+  enter_module_with_phase ?arg env.cur_env_phase s mty env
 
 (* Insertion of all components of a signature *)
 
@@ -1848,7 +1855,7 @@ let add_item comp env =
   | Sig_type(id, decl, _)   -> add_type ~check:false id decl env
   | Sig_typext(id, ext, _)  -> add_extension ~check:false id ext env
   | Sig_module(id, md, sf, _)   ->
-      add_module_declaration sf id md env
+      add_module_declaration (phase_of_sf sf) id md env
   | Sig_modtype(id, decl)   -> add_modtype id decl env
   | Sig_class(id, decl, _)  -> add_class id decl env
   | Sig_class_type(id, decl, _) -> add_cltype id decl env
@@ -1882,7 +1889,7 @@ let open_signature slot root sg env0 =
         | Sig_typext(id, ext, _) ->
             store_extension ~check:false slot (Ident.hide id) p ext env env0
         | Sig_module(id, mty, sf, _) ->
-            store_module slot sf (Ident.hide id) p mty env env0
+            store_module slot (phase_of_sf sf) (Ident.hide id) p mty env env0
         | Sig_modtype(id, decl) ->
             store_modtype slot (Ident.hide id) p decl env env0
         | Sig_class(id, decl, _) ->

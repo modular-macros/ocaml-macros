@@ -1184,9 +1184,7 @@ let rec tree_of_modtype ?(ellipsis=false) = function
       let res =
         match ty_arg with None -> tree_of_modtype ~ellipsis ty_res
         | Some mty ->
-            wrap_env (Env.add_module ~arg:true
-                        Asttypes.Nonstatic (* macros: not sure *)
-                        param mty)
+            wrap_env (Env.add_module ~arg:true param mty)
                      (tree_of_modtype ~ellipsis) ty_res
       in
       Omty_functor (Ident.name param,

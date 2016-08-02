@@ -228,9 +228,11 @@ let init_shape modl =
         init_shape_struct (Env.add_type ~check:false id tdecl env) rem
     | Sig_typext _ :: _ ->
         raise Not_found
-    | Sig_module(id, md, _) :: rem ->
+    | Sig_module(id, md, sf, _) :: rem ->
+        let phase = Env.cur_phase env + Env.phase_of_sf sf in
+        if phase > 1 then assert false;
         init_shape_mod env md.md_type ::
-        init_shape_struct (Env.add_module_declaration id md env) rem
+        init_shape_struct (Env.add_module_declaration phase id md env) rem
     | Sig_modtype(id, minfo) :: rem ->
         init_shape_struct (Env.add_modtype id minfo env) rem
     | Sig_class _ :: rem ->
@@ -337,10 +339,8 @@ let rec bound_value_identifiers = function
     [] -> []
   | Sig_value(id, Nonstatic, {val_kind = Val_reg}) :: rem ->
       id :: bound_value_identifiers rem
-  | Sig_value(_, Static, _) :: rem ->
-      bound_value_identifiers rem
   | Sig_typext(id, _, _) :: rem -> id :: bound_value_identifiers rem
-  | Sig_module(id, _, _) :: rem -> id :: bound_value_identifiers rem
+  | Sig_module(id, _, _, _) :: rem -> id :: bound_value_identifiers rem
   | Sig_class(id, _, _) :: rem -> id :: bound_value_identifiers rem
   | _ :: rem -> bound_value_identifiers rem
 
@@ -356,6 +356,8 @@ let transl_class_bindings cl_list =
      cl_list)
 
 (* Compile a module expression *)
+
+let ident_zero = Ident.create_persistent "0"
 
 let rec transl_module cc rootpath static_flag mexp =
   List.iter (Translattribute.check_attribute_on_module mexp)
@@ -475,9 +477,18 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
          body),
       size
   | item :: rem ->
+      (* Determine whether an item should be translated or ignored, based on
+         its static modifier, and the target phase. *)
+      let should_translate sf item =
+        let item_phase = Env.cur_phase item.str_env + Env.phase_of_sf sf in
+        let target_phase = if static_flag = Static then 1 else 0 in
+        assert (item_phase <= target_phase);
+        item_phase = target_phase
+      in
       let (item_lam, size) =
       match item.str_desc with
       | Tstr_eval (expr, _) ->
+          (* toplevel expressions are deemed run-time *)
           if static_flag = Nonstatic then
             let body, size = transl_structure fields cc rootpath static_flag
               item_postproc final_env rem in
@@ -485,20 +496,20 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
           else
             transl_structure fields cc rootpath static_flag item_postproc final_env rem
       | Tstr_value(sf, rec_flag, pat_expr_list) -> (
-          if static_flag = sf then
+          if should_translate sf item then
             let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
             let body, size =
               transl_structure ext_fields cc rootpath static_flag
                 item_postproc final_env rem in
             transl_let rec_flag pat_expr_list body, size
-          (* Put zero as a placeholder for static items *)
           else
-              let placeholders =
-                List.map (fun _ -> Ident.create_persistent "0") @@
-                  rev_let_bound_idents pat_expr_list
-              in
-              transl_structure (placeholders @ fields)
-                cc rootpath static_flag item_postproc final_env rem
+            (* Put zero as a placeholder for ignored items *)
+            let placeholders =
+              List.map (fun _ -> ident_zero) @@
+                rev_let_bound_idents pat_expr_list
+            in
+            transl_structure (placeholders @ fields)
+              cc rootpath static_flag item_postproc final_env rem
       )
       | Tstr_primitive descr ->
           (if static_flag = Nonstatic then
@@ -519,8 +530,8 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
           transl_type_extension item.str_env rootpath tyext body, size
       | Tstr_exception ext ->
           if static_flag = Static then
-            transl_structure (Ident.create_persistent "0" :: fields) cc rootpath
-              static_flag item_postproc final_env rem
+            transl_structure (ident_zero :: fields) cc rootpath static_flag
+              item_postproc final_env rem
           else
             let id = ext.ext_id in
             let path = field_path rootpath id in
@@ -529,25 +540,22 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
                 item_postproc final_env rem in
             Llet(Strict, Pgenval, id, transl_extension_constructor item.str_env path ext,
                  body), size
-      | Tstr_module mb ->
+      | Tstr_module (sf, mb) ->
           let id = mb.mb_id in
           let body, size =
-            transl_structure
-              ((if static_flag = Static then Ident.create_persistent "0" else id) :: fields) cc rootpath static_flag
-              item_postproc final_env rem in
+            transl_structure (id :: fields) cc rootpath static_flag
+              item_postproc final_env rem
+          in
           let module_body =
-            if static_flag = Static then
-              zero_lam
-            else
-              Translattribute.add_inline_attribute
-                (transl_module Tcoerce_none (field_path rootpath id)
-                  static_flag mb.mb_expr)
-                mb.mb_loc mb.mb_attributes
+            Translattribute.add_inline_attribute
+              (transl_module Tcoerce_none (field_path rootpath id)
+                static_flag mb.mb_expr)
+              mb.mb_loc mb.mb_attributes
           in
           Llet(pure_module mb.mb_expr, Pgenval, id,
                module_body,
                body), size
-      | Tstr_recmodule bindings ->
+      | Tstr_recmodule (sf, bindings) ->
           let ext_fields =
             List.rev_append (List.map (fun mb -> mb.mb_id) bindings) fields
           in
@@ -690,7 +698,7 @@ let rec defined_idents static_flag = function
         let_bound_idents pat_expr_list @ defined_idents static_flag rem
       else
         let placeholders =
-          List.map (fun _ -> Ident.create_persistent "0")
+          List.map (fun _ -> ident_zero)
             (let_bound_idents pat_expr_list)
         in
         placeholders @ defined_idents static_flag rem
@@ -701,9 +709,20 @@ let rec defined_idents static_flag = function
       List.map (fun ext -> ext.ext_id) tyext.tyext_constructors
       @ defined_idents static_flag rem
     | Tstr_exception ext -> ext.ext_id :: defined_idents static_flag rem
-    | Tstr_module mb -> mb.mb_id :: defined_idents static_flag rem
-    | Tstr_recmodule decls ->
-      List.map (fun mb -> mb.mb_id) decls @ defined_idents static_flag rem
+    | Tstr_module (sf, mb) ->
+        begin match (static_flag, sf) with
+        | (Nonstatic, Static) ->
+          defined_idents static_flag rem
+        | _ (* target phase is higher than module phase *) ->
+          mb.mb_id :: defined_idents static_flag rem
+        end
+    | Tstr_recmodule (sf, decls) ->
+        begin match (static_flag, sf) with
+        | (Nonstatic, Static) ->
+          defined_idents static_flag rem
+        | _ (* target phase is higher than module phase *) ->
+          List.map (fun mb -> mb.mb_id) decls @ defined_idents static_flag rem
+        end
     | Tstr_modtype _ -> defined_idents static_flag rem
     | Tstr_open _ -> defined_idents static_flag rem
     | Tstr_class cl_list ->

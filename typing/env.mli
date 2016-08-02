@@ -49,6 +49,10 @@ val with_phase: phase -> t -> t
 val with_phase_down: t -> t
 val with_phase_up: t -> t
 
+(** [phase_of_sf sf] returns 0 if [sf] is [Nonstatic] and [1] if [sf] is
+    [Static]. *)
+val phase_of_sf: Asttypes.static_flag -> phase
+
 (** Represents the stage of a computation, i.e. the number of surroundig quotes
     minus the number of surrounding, non-zero-phase escapes. Should be
     non-negative. *)
@@ -181,9 +185,12 @@ val add_value_with_phase:
     -> t
 val add_type: check:bool -> Ident.t -> type_declaration -> t -> t
 val add_extension: check:bool -> Ident.t -> extension_constructor -> t -> t
-val add_module: ?arg:bool -> Asttypes.static_flag -> Ident.t
-  -> module_type -> t -> t
-val add_module_declaration: ?arg:bool -> Asttypes.static_flag -> Ident.t
+val add_module: ?arg:bool -> Ident.t -> module_type -> t -> t
+  (* the phase of the new module is set to the current phase of the
+     environment. *)
+val add_module_with_phase: ?arg:bool -> phase -> Ident.t -> module_type -> t
+  -> t
+val add_module_declaration: ?arg:bool -> phase -> Ident.t
   -> module_declaration -> t -> t
 val add_modtype: Ident.t -> modtype_declaration -> t -> t
 val add_class: Ident.t -> class_declaration -> t -> t
@@ -211,10 +218,13 @@ val enter_value:
     string -> value_description -> t -> Ident.t * t
 val enter_type: string -> type_declaration -> t -> Ident.t * t
 val enter_extension: string -> extension_constructor -> t -> Ident.t * t
-val enter_module: ?arg:bool -> Asttypes.static_flag -> string -> module_type -> t
+val enter_module: ?arg:bool -> string -> module_type -> t -> Ident.t * t
+  (* the phase of the new module is set to the current phase of the
+     environment. *)
+val enter_module_with_phase: ?arg:bool -> phase -> string -> module_type -> t
   -> Ident.t * t
 val enter_module_declaration:
-    ?arg:bool -> Asttypes.static_flag -> Ident.t -> module_declaration -> t -> t
+    ?arg:bool -> phase -> Ident.t -> module_declaration -> t -> t
 val enter_modtype: string -> modtype_declaration -> t -> Ident.t * t
 val enter_class: string -> class_declaration -> t -> Ident.t * t
 val enter_cltype: string -> class_type_declaration -> t -> Ident.t * t

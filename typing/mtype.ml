@@ -78,7 +78,9 @@ and strengthen_sig env sg p pos =
           {md with md_type = Mty_alias (Pdot(p, Ident.name id, pos))}
       in
       Sig_module(id, str, sf, rs)
-      :: strengthen_sig (Env.add_module_declaration sf id md env) rem p (pos+1)
+      :: strengthen_sig
+          (Env.add_module_declaration (Env.phase_of_sf sf) id md env)
+          rem p (pos+1)
       (* Need to add the module in case it defines manifest module types *)
   | Sig_modtype(id, decl) :: rem ->
       let newdecl =
@@ -126,9 +128,7 @@ let nondep_supertype env mid mty =
           match va with Co -> Contra | Contra -> Co | Strict -> Strict in
         Mty_functor(param, Misc.may_map (nondep_mty env var_inv) arg,
                     nondep_mty
-                      (Env.add_module ~arg:true
-                         Asttypes.Nonstatic (* macros: not sure *)
-                         param
+                      (Env.add_module ~arg:true param
                          (Btype.default_mty arg) env) va res)
 
   and nondep_sig env va = function
@@ -221,7 +221,9 @@ and type_paths_sig env p pos sg =
       Pdot(p, Ident.name id, nopos) :: type_paths_sig env p pos rem
   | Sig_module(id, md, sf, _) :: rem ->
       type_paths env (Pdot(p, Ident.name id, pos)) md.md_type @
-      type_paths_sig (Env.add_module_declaration sf id md env) p (pos+1) rem
+      type_paths_sig
+        (Env.add_module_declaration (Env.phase_of_sf sf) id md env)
+        p (pos+1) rem
   | Sig_modtype(id, decl) :: rem ->
       type_paths_sig (Env.add_modtype id decl env) p pos rem
   | (Sig_typext _ | Sig_class _) :: rem ->
@@ -246,7 +248,8 @@ and no_code_needed_sig env sg =
       end
   | Sig_module(id, md, sf, _) :: rem ->
       no_code_needed env md.md_type &&
-      no_code_needed_sig (Env.add_module_declaration sf id md env) rem
+      no_code_needed_sig
+        (Env.add_module_declaration (Env.phase_of_sf sf) id md env) rem
   | (Sig_type _ | Sig_modtype _ | Sig_class_type _) :: rem ->
       no_code_needed_sig env rem
   | (Sig_typext _ | Sig_class _) :: _ ->
@@ -385,7 +388,8 @@ and remove_aliases_sig env excl sg =
             remove_aliases env excl mty
       in
       Sig_module(id, {md with md_type = mty} , sf, rs) ::
-      remove_aliases_sig (Env.add_module sf id mty env) excl rem
+      remove_aliases_sig
+        (Env.add_module_with_phase (Env.phase_of_sf sf) id mty env) excl rem
   | Sig_modtype(id, mtd) :: rem ->
       Sig_modtype(id, mtd) ::
       remove_aliases_sig (Env.add_modtype id mtd env) excl rem

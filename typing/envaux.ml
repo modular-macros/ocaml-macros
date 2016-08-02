@@ -55,11 +55,7 @@ let rec env_from_summary sum subst =
             (Subst.extension_constructor subst desc)
             (env_from_summary s subst)
       | Env_module(s, phase, id, desc) ->
-          Env.add_module_declaration
-            (if phase = 0 then Asttypes.Nonstatic
-             else if phase = 1 then Asttypes.Static
-             else assert false)
-            id
+          Env.add_module_declaration phase id
             (Subst.module_declaration subst desc)
             (env_from_summary s subst)
       | Env_modtype(s, id, desc) ->
@@ -84,11 +80,7 @@ let rec env_from_summary sum subst =
             (extract_sig env md.md_type) env
       | Env_functor_arg(Env_module(s, phase, id, desc), id')
         when Ident.same id id' ->
-          Env.add_module_declaration
-            (if phase = 0 then Asttypes.Nonstatic
-             else if phase = 1 then Asttypes.Static
-             else assert false)
-            id
+          Env.add_module_declaration phase id
             (Subst.module_declaration subst desc)
             ~arg:true (env_from_summary s subst)
       | Env_functor_arg _ -> assert false

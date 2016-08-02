@@ -260,7 +260,7 @@ and try_modtypes env cxt subst mty1 mty2 =
       let arg2' = Subst.modtype subst arg2 in
       let cc_arg = modtypes env (Arg param1::cxt) Subst.identity arg2' arg1 in
       let cc_res =
-        modtypes (Env.add_module Asttypes.Nonstatic param1 arg2' env)
+        modtypes (Env.add_module param1 arg2' env)
           (Body param1::cxt) (Subst.add_module param2 (Pident param1) subst)
           res1 res2 in
       begin match (cc_arg, cc_res) with
