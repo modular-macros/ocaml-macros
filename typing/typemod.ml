@@ -1234,6 +1234,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
               Some (Annot.Idef {scope with Location.loc_start = start})
         in
         begin
+          let old_phase = Env.cur_phase env in
           match static_flag with
           | Nonstatic ->
               let (defs, newenv) =
@@ -1247,7 +1248,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                 (fun id ->
                   Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
                 (let_bound_idents defs),
-              newenv
+              Env.with_phase old_phase newenv
           | Static ->
               let (defs, newenv) =
                 Typecore.type_binding
@@ -1257,7 +1258,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                 (fun id ->
                   Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
                 (let_bound_idents defs),
-              newenv
+              Env.with_phase old_phase newenv
         end
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in

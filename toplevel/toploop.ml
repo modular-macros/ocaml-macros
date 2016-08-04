@@ -126,6 +126,10 @@ let parse_mod_use_file name lb =
   let modname =
     String.capitalize_ascii (Filename.chop_extension (Filename.basename name))
   in
+  let phase =
+    if Filename.check_suffix name ".cmm"
+    then Asttypes.Static else Asttypes.Nonstatic
+  in
   let items =
     List.concat
       (List.map
@@ -134,7 +138,7 @@ let parse_mod_use_file name lb =
   in
   [ Ptop_def
       [ Str.module_
-          (Mb.mk
+          (phase, Mb.mk
              (Location.mknoloc modname)
              (Mod.structure items)
           )

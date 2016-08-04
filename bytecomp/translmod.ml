@@ -67,8 +67,6 @@ let rec apply_coercion static_flag strict restr arg =
   match restr with
     Tcoerce_none ->
       arg
-  | Tcoerce_structure _ when static_flag = Static ->
-      zero_lam
   | Tcoerce_structure(pos_cc_list, id_pos_list) ->
       name_lambda strict arg (fun id ->
         let get_field pos = Lprim(Pfield pos,[Lvar id]) in
@@ -77,8 +75,6 @@ let rec apply_coercion static_flag strict restr arg =
                 List.map (apply_coercion_field static_flag get_field) pos_cc_list)
         in
         wrap_id_pos_list static_flag id_pos_list get_field lam)
-  | Tcoerce_functor _ when static_flag = Static ->
-      zero_lam
   | Tcoerce_functor(cc_arg, cc_res) ->
       let param = Ident.create "funarg" in
       name_lambda strict arg (fun id ->
@@ -99,8 +95,6 @@ let rec apply_coercion static_flag strict restr arg =
         transl_primitive pc_loc pc_desc pc_env pc_type None
       else
         zero_lam
-  | Tcoerce_alias _ when static_flag = Static ->
-      zero_lam
   | Tcoerce_alias (path, cc) ->
       name_lambda strict arg
         (fun _ -> apply_coercion static_flag Alias cc (transl_normal_path path))
@@ -359,19 +353,32 @@ let transl_class_bindings cl_list =
 
 let ident_zero = Ident.create_persistent "0"
 
-let rec transl_module cc rootpath static_flag mexp =
+(* Tell whether a module expression is a static module or not (for now, only
+   module identifiers bound with the [static] modifier are considered static
+   modules). *)
+let rec static_module mexp =
+  match mexp.mod_desc with
+  | Tmod_ident (path,_) ->
+      Env.find_phase path mexp.mod_env = 1
+  | Tmod_apply (funct, arg, _) ->
+      static_module funct && static_module arg
+  | Tmod_constraint (m, _, _, _) ->
+      static_module m
+  | _ -> false
+
+let rec transl_module cc rootpath target_phase mexp =
   List.iter (Translattribute.check_attribute_on_module mexp)
     mexp.mod_attributes;
   match mexp.mod_type with
-    Mty_alias _ -> apply_coercion static_flag Alias cc lambda_unit
+    Mty_alias _ -> apply_coercion target_phase Alias cc lambda_unit
   | _ ->
       match mexp.mod_desc with
         Tmod_ident (path,_) ->
-          apply_coercion static_flag Strict cc
+          apply_coercion target_phase Strict cc
             (transl_path ~loc:mexp.mod_loc mexp.mod_env path)
       | Tmod_structure str ->
-          fst (transl_struct [] cc rootpath static_flag str)
-      | Tmod_functor(param, _, _, body) when static_flag = Nonstatic ->
+          fst (transl_struct [] cc rootpath target_phase str)
+      | Tmod_functor(param, _, _, body) ->
           let bodypath = functor_path rootpath param in
           let inline_attribute =
             Translattribute.get_inline_attribute mexp.mod_attributes
@@ -383,7 +390,7 @@ let rec transl_module cc rootpath static_flag mexp =
                             attr = { inline = inline_attribute;
                                      specialise = Default_specialise;
                                      is_a_functor = true };
-                            body = transl_module Tcoerce_none bodypath static_flag body}
+                            body = transl_module Tcoerce_none bodypath target_phase body}
               | Tcoerce_functor(ccarg, ccres) ->
                   let param' = Ident.create "funarg" in
                   Lfunction{kind = Curried; params = [param'];
@@ -391,36 +398,39 @@ let rec transl_module cc rootpath static_flag mexp =
                                      specialise = Default_specialise;
                                      is_a_functor = true };
                             body = Llet(Alias, Pgenval, param,
-                                        apply_coercion static_flag Alias ccarg
+                                        apply_coercion target_phase Alias ccarg
                                                        (Lvar param'),
-                                        transl_module ccres bodypath static_flag body)}
+                                        transl_module ccres bodypath target_phase body)}
               | _ ->
                   fatal_error "Translmod.transl_module")
             cc
-      | Tmod_functor _ -> zero_lam
       | Tmod_apply(funct, arg, ccarg) ->
-          let inlined_attribute, funct =
-            Translattribute.get_and_remove_inlined_attribute_on_module funct
-          in
-          oo_wrap mexp.mod_env true
-            (apply_coercion static_flag Strict cc)
-            (Lapply{ap_should_be_tailcall=false;
-                    ap_loc=mexp.mod_loc;
-                    ap_func=transl_module Tcoerce_none None
-                      static_flag funct;
-                    ap_args=[transl_module ccarg None static_flag arg];
-                    ap_inlined=inlined_attribute;
-                    ap_specialised=Default_specialise})
+          if target_phase = Static
+            && not (static_module funct) || not (static_module arg) then
+              zero_lam
+          else
+            let inlined_attribute, funct =
+              Translattribute.get_and_remove_inlined_attribute_on_module funct
+            in
+            oo_wrap mexp.mod_env true
+              (apply_coercion target_phase Strict cc)
+              (Lapply{ap_should_be_tailcall=false;
+                      ap_loc=mexp.mod_loc;
+                      ap_func=transl_module Tcoerce_none None
+                        target_phase funct;
+                      ap_args=[transl_module ccarg None target_phase arg];
+                      ap_inlined=inlined_attribute;
+                      ap_specialised=Default_specialise})
       | Tmod_constraint(arg, _, _, ccarg) ->
-          transl_module (compose_coercions cc ccarg) rootpath static_flag arg
+          transl_module (compose_coercions cc ccarg) rootpath target_phase arg
       | Tmod_unpack(arg, _) ->
-          apply_coercion static_flag Strict cc (Translcore.transl_exp arg)
+          apply_coercion target_phase Strict cc (Translcore.transl_exp arg)
 
 and transl_struct fields cc rootpath static_flag str =
   transl_structure fields cc rootpath static_flag
   (fun _ lam -> lam) str.str_final_env str.str_items
 
-and transl_structure fields cc rootpath static_flag item_postproc final_env = function
+and transl_structure fields cc rootpath target_phase item_postproc final_env = function
     [] ->
       let body, size =
         match cc with
@@ -449,17 +459,17 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
                     (fun (pos, cc) ->
                       match cc with
                         Tcoerce_primitive p ->
-                          if static_flag = Nonstatic then
+                          if target_phase = Nonstatic then
                             transl_primitive p.pc_loc
                               p.pc_desc p.pc_env p.pc_type None
                           else zero_lam
-                      | _ -> apply_coercion static_flag Strict cc (get_field pos))
+                      | _ -> apply_coercion target_phase Strict cc (get_field pos))
                     pos_cc_list))
             and id_pos_list =
               List.filter (fun (id,_,_) -> not (IdentSet.mem id ids))
                 id_pos_list
             in
-            wrap_id_pos_list static_flag id_pos_list get_field lam,
+            wrap_id_pos_list target_phase id_pos_list get_field lam,
               List.length pos_cc_list
         | _ ->
             fatal_error "Translmod.transl_structure"
@@ -481,121 +491,127 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
          its static modifier, and the target phase. *)
       let should_translate sf item =
         let item_phase = Env.cur_phase item.str_env + Env.phase_of_sf sf in
-        let target_phase = if static_flag = Static then 1 else 0 in
-        assert (item_phase <= target_phase);
+        let target_phase = if target_phase = Static then 1 else 0 in
         item_phase = target_phase
       in
       let (item_lam, size) =
       match item.str_desc with
       | Tstr_eval (expr, _) ->
           (* toplevel expressions are deemed run-time *)
-          if static_flag = Nonstatic then
-            let body, size = transl_structure fields cc rootpath static_flag
+          if target_phase = Nonstatic then
+            let body, size = transl_structure fields cc rootpath target_phase
               item_postproc final_env rem in
             Lsequence(transl_exp expr, body), size
           else
-            transl_structure fields cc rootpath static_flag item_postproc final_env rem
-      | Tstr_value(sf, rec_flag, pat_expr_list) -> (
-          if should_translate sf item then
+            transl_structure fields cc rootpath target_phase item_postproc final_env rem
+      | Tstr_value(sf, rec_flag, pat_expr_list) -> begin
+          Printf.eprintf "looking at values under phase %d:\n" (Env.cur_phase item.str_env);
+          List.iter (fun id ->
+            Printf.eprintf "  %s\n%!" (Ident.name id)) (rev_let_bound_idents pat_expr_list);
+          if should_translate sf item then begin
             let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
             let body, size =
-              transl_structure ext_fields cc rootpath static_flag
+              transl_structure ext_fields cc rootpath target_phase
                 item_postproc final_env rem in
             transl_let rec_flag pat_expr_list body, size
-          else
+          end else
             (* Put zero as a placeholder for ignored items *)
             let placeholders =
               List.map (fun _ -> ident_zero) @@
                 rev_let_bound_idents pat_expr_list
             in
             transl_structure (placeholders @ fields)
-              cc rootpath static_flag item_postproc final_env rem
-      )
+              cc rootpath target_phase item_postproc final_env rem
+      end
       | Tstr_primitive descr ->
-          (if static_flag = Nonstatic then
+          (if target_phase = Nonstatic then
             record_primitive descr.val_val
           );
-          transl_structure fields cc rootpath static_flag
+          transl_structure fields cc rootpath target_phase
             item_postproc final_env rem
       | Tstr_type _ ->
-          transl_structure fields cc rootpath static_flag
+          transl_structure fields cc rootpath target_phase
             item_postproc final_env rem
       | Tstr_typext(tyext) ->
           let ids = List.map (fun ext -> ext.ext_id) tyext.tyext_constructors in
           let body, size =
             transl_structure (List.rev_append ids fields)
-              cc rootpath static_flag
+              cc rootpath target_phase
                 item_postproc final_env rem
           in
           transl_type_extension item.str_env rootpath tyext body, size
       | Tstr_exception ext ->
-          if static_flag = Static then
-            transl_structure (ident_zero :: fields) cc rootpath static_flag
+          if target_phase = Static then
+            transl_structure (ident_zero :: fields) cc rootpath target_phase
               item_postproc final_env rem
           else
             let id = ext.ext_id in
             let path = field_path rootpath id in
             let body, size =
-              transl_structure (id :: fields) cc rootpath static_flag
+              transl_structure (id :: fields) cc rootpath target_phase
                 item_postproc final_env rem in
             Llet(Strict, Pgenval, id, transl_extension_constructor item.str_env path ext,
                  body), size
       | Tstr_module (sf, mb) ->
-          let id = mb.mb_id in
-          let body, size =
-            transl_structure (id :: fields) cc rootpath static_flag
-              item_postproc final_env rem
-          in
-          let module_body =
-            Translattribute.add_inline_attribute
-              (transl_module Tcoerce_none (field_path rootpath id)
-                static_flag mb.mb_expr)
-              mb.mb_loc mb.mb_attributes
-          in
-          Llet(pure_module mb.mb_expr, Pgenval, id,
-               module_body,
-               body), size
+          if sf = Static && target_phase = Nonstatic then (zero_lam, 0)
+          else
+            let id = mb.mb_id in
+            let body, size =
+              transl_structure (id :: fields) cc rootpath target_phase
+                item_postproc final_env rem
+            in
+            let module_body =
+              Translattribute.add_inline_attribute
+                (transl_module Tcoerce_none (field_path rootpath id)
+                  target_phase mb.mb_expr)
+                mb.mb_loc mb.mb_attributes
+            in
+            Llet(pure_module mb.mb_expr, Pgenval, id,
+                 module_body,
+                 body), size
       | Tstr_recmodule (sf, bindings) ->
-          let ext_fields =
-            List.rev_append (List.map (fun mb -> mb.mb_id) bindings) fields
-          in
-          let body, size =
-            transl_structure ext_fields cc rootpath static_flag
-              item_postproc final_env rem in
-          let lam =
-            compile_recmodule
-              (fun id modl ->
-                 transl_module Tcoerce_none (field_path rootpath id) static_flag modl)
-              bindings
-              body
-          in
-          lam, size
+          if sf = Static && target_phase = Nonstatic then (zero_lam, 0)
+          else
+            let ext_fields =
+              List.rev_append (List.map (fun mb -> mb.mb_id) bindings) fields
+            in
+            let body, size =
+              transl_structure ext_fields cc rootpath target_phase
+                item_postproc final_env rem in
+            let lam =
+              compile_recmodule
+                (fun id modl ->
+                   transl_module Tcoerce_none (field_path rootpath id) target_phase modl)
+                bindings
+                body
+            in
+            lam, size
       | Tstr_class cl_list ->
           let (ids, class_bindings) = transl_class_bindings cl_list in
-          if static_flag = Static then
+          if target_phase = Static then
             transl_structure
               (List.rev_append
                 (List.map (fun _ -> Ident.create_persistent "0") ids)
                 fields)
-              cc rootpath static_flag item_postproc final_env rem
+              cc rootpath target_phase item_postproc final_env rem
           else
             let body, size =
               transl_structure (List.rev_append ids fields)
-                cc rootpath static_flag
+                cc rootpath target_phase
                   item_postproc final_env rem
             in
             Lletrec(class_bindings, body), size
       | Tstr_include incl ->
           let ids = bound_value_identifiers incl.incl_type in
-          if static_flag = Static then
+          if target_phase = Static then
             transl_structure (List.map (fun _ -> Ident.create_persistent "0") ids @ fields)
-            cc rootpath static_flag item_postproc final_env rem
+            cc rootpath target_phase item_postproc final_env rem
           else
             let modl = incl.incl_mod in
             let mid = Ident.create "include" in
             let rec rebind_idents pos newfields = function
                 [] ->
-                  transl_structure newfields cc rootpath static_flag
+                  transl_structure newfields cc rootpath target_phase
                     item_postproc final_env rem
               | id :: ids ->
                   let body, size =
@@ -604,14 +620,14 @@ and transl_structure fields cc rootpath static_flag item_postproc final_env = fu
                   Llet(Alias, Pgenval, id, Lprim(Pfield pos, [Lvar mid]), body), size
             in
             let body, size = rebind_idents 0 fields ids in
-            Llet(pure_module modl, Pgenval, mid, transl_module Tcoerce_none None static_flag modl,
+            Llet(pure_module modl, Pgenval, mid, transl_module Tcoerce_none None target_phase modl,
                  body), size
 
       | Tstr_modtype _
       | Tstr_open _
       | Tstr_class_type _
       | Tstr_attribute _ ->
-          transl_structure fields cc rootpath static_flag
+          transl_structure fields cc rootpath target_phase
             item_postproc final_env rem
       in
       (item_postproc item item_lam, size)
@@ -734,64 +750,80 @@ let rec defined_idents static_flag = function
 
 (* second level idents (module M = struct ... let id = ... end),
    and all sub-levels idents *)
-let rec more_idents = function
+let rec more_idents target_phase = function
     [] -> []
   | item :: rem ->
     match item.str_desc with
-    | Tstr_eval _ -> more_idents rem
-    | Tstr_value _ -> more_idents rem
-    | Tstr_primitive _ -> more_idents rem
-    | Tstr_type _ -> more_idents rem
-    | Tstr_typext _ -> more_idents rem
-    | Tstr_exception _ -> more_idents rem
-    | Tstr_recmodule _ -> more_idents rem
-    | Tstr_modtype _ -> more_idents rem
-    | Tstr_open _ -> more_idents rem
-    | Tstr_class _ -> more_idents rem
-    | Tstr_class_type _ -> more_idents rem
-    | Tstr_include _ -> more_idents rem
-    | Tstr_module {mb_expr={mod_desc = Tmod_structure str}}
-    | Tstr_module{mb_expr={mod_desc =
+    | Tstr_eval _ -> more_idents target_phase rem
+    | Tstr_value _ -> more_idents target_phase rem
+    | Tstr_primitive _ -> more_idents target_phase rem
+    | Tstr_type _ -> more_idents target_phase rem
+    | Tstr_typext _ -> more_idents target_phase rem
+    | Tstr_exception _ -> more_idents target_phase rem
+    | Tstr_recmodule _ -> more_idents target_phase rem
+    | Tstr_modtype _ -> more_idents target_phase rem
+    | Tstr_open _ -> more_idents target_phase rem
+    | Tstr_class _ -> more_idents target_phase rem
+    | Tstr_class_type _ -> more_idents target_phase rem
+    | Tstr_include _ -> more_idents target_phase rem
+    | Tstr_module (sf, {mb_expr={mod_desc = Tmod_structure str}})
+    | Tstr_module (sf, {mb_expr={mod_desc =
                              Tmod_constraint ({mod_desc = Tmod_structure str},
-                                              _, _, _)}} ->
-        all_idents str.str_items @ more_idents rem
-    | Tstr_module _ -> more_idents rem
-    | Tstr_attribute _ -> more_idents rem
+                                              _, _, _)}}) ->
+      begin match (target_phase, sf) with
+      | (Nonstatic, Static) ->
+        more_idents target_phase rem
+      | _ ->
+        all_idents target_phase str.str_items @ more_idents target_phase rem
+      end
+    | Tstr_module _ -> more_idents target_phase rem
+    | Tstr_attribute _ -> more_idents target_phase rem
 
-and all_idents = function
+and all_idents target_phase = function
     [] -> []
   | item :: rem ->
     match item.str_desc with
-    | Tstr_eval _ -> all_idents rem
-    | Tstr_value(static_flag, _rec_flag, pat_expr_list) ->
-      begin
-        match static_flag with
-        | Nonstatic -> let_bound_idents pat_expr_list @ all_idents rem
-        | Static -> all_idents rem (* exclude static decls *)
+    | Tstr_eval _ -> all_idents target_phase rem
+    | Tstr_value(sf, _rec_flag, pat_expr_list) ->
+      begin match (target_phase, sf) with
+        | (Nonstatic, Static) -> all_idents target_phase rem
+        | _ -> let_bound_idents pat_expr_list @ all_idents target_phase rem
       end
-    | Tstr_primitive _ -> all_idents rem
-    | Tstr_type _ -> all_idents rem
+    | Tstr_primitive _ -> all_idents target_phase rem
+    | Tstr_type _ -> all_idents target_phase rem
     | Tstr_typext tyext ->
       List.map (fun ext -> ext.ext_id) tyext.tyext_constructors
-      @ all_idents rem
-    | Tstr_exception ext -> ext.ext_id :: all_idents rem
-    | Tstr_recmodule decls ->
-      List.map (fun mb -> mb.mb_id) decls @ all_idents rem
-    | Tstr_modtype _ -> all_idents rem
-    | Tstr_open _ -> all_idents rem
+      @ all_idents target_phase rem
+    | Tstr_exception ext -> ext.ext_id :: all_idents target_phase rem
+    | Tstr_recmodule (sf, decls) ->
+      begin match (target_phase, sf) with
+      | (Nonstatic, Static) -> all_idents target_phase rem
+      | _ ->
+        List.map (fun mb -> mb.mb_id) decls @ all_idents target_phase rem
+      end
+    | Tstr_modtype _ -> all_idents target_phase rem
+    | Tstr_open _ -> all_idents target_phase rem
     | Tstr_class cl_list ->
-      List.map (fun (ci, _) -> ci.ci_id_class) cl_list @ all_idents rem
-    | Tstr_class_type _ -> all_idents rem
+      List.map (fun (ci, _) -> ci.ci_id_class) cl_list @ all_idents target_phase rem
+    | Tstr_class_type _ -> all_idents target_phase rem
     | Tstr_include incl ->
-      bound_value_identifiers incl.incl_type @ all_idents rem
-    | Tstr_module {mb_id;mb_expr={mod_desc = Tmod_structure str}}
-    | Tstr_module{mb_id;
-                  mb_expr={mod_desc =
+      bound_value_identifiers incl.incl_type @ all_idents target_phase rem
+    | Tstr_module (sf, {mb_id;mb_expr={mod_desc = Tmod_structure str}})
+    | Tstr_module (sf, {mb_id;
+                        mb_expr={mod_desc =
                              Tmod_constraint ({mod_desc = Tmod_structure str},
-                                              _, _, _)}} ->
-        mb_id :: all_idents str.str_items @ all_idents rem
-    | Tstr_module mb -> mb.mb_id :: all_idents rem
-    | Tstr_attribute _ -> all_idents rem
+                                              _, _, _)}}) ->
+      begin match (target_phase, sf) with
+      | (Nonstatic, Static) -> all_idents target_phase rem
+      | _ ->
+        mb_id :: all_idents target_phase str.str_items @ all_idents target_phase rem
+      end
+    | Tstr_module (sf,mb) ->
+      begin match (target_phase, sf) with
+      | (Nonstatic, Static) -> all_idents target_phase rem
+      | _ -> mb.mb_id :: all_idents target_phase rem
+      end
+    | Tstr_attribute _ -> all_idents target_phase rem
 
 
 (* A variant of transl_structure used to compile toplevel structure definitions
@@ -814,7 +846,7 @@ let nat_toplevel_name id =
   with Not_found ->
     fatal_error("Translmod.nat_toplevel_name: " ^ Ident.unique_name id)
 
-let transl_store_structure static_flag glob map prims str =
+let transl_store_structure target_phase glob map prims str =
   let rec transl_store rootpath subst = function
     [] ->
       transl_store_subst := subst;
@@ -826,7 +858,10 @@ let transl_store_structure static_flag glob map prims str =
                       transl_store rootpath subst rem)
         | Tstr_value(sf, rec_flag, pat_expr_list) ->
           begin
-            if sf = static_flag then
+            let item_phase = Env.cur_phase item.str_env + Env.phase_of_sf sf in
+            let target_phase_n = if target_phase = Static then 1 else 0 in
+            assert (item_phase <= target_phase_n);
+            if item_phase = target_phase_n then
               let ids = let_bound_idents pat_expr_list in
               let lam = transl_let rec_flag pat_expr_list (store_idents ids) in
               Lsequence(subst_lambda subst lam,
@@ -839,7 +874,7 @@ let transl_store_structure static_flag glob map prims str =
               transl_store rootpath subst rem
           end
         | Tstr_primitive descr ->
-            begin if static_flag = Nonstatic then
+            begin if target_phase = Nonstatic then
               record_primitive descr.val_val
             end;
             transl_store rootpath subst rem
@@ -862,84 +897,94 @@ let transl_store_structure static_flag glob map prims str =
             Lsequence(Llet(Strict, Pgenval, id,
                            subst_lambda subst lam, store_ident id),
                       transl_store rootpath (add_ident false id subst) rem)
-        | Tstr_module{mb_id=id;
-                      mb_expr={mod_desc = Tmod_structure str} as mexp;
-                      mb_attributes} ->
-            List.iter (Translattribute.check_attribute_on_module mexp)
-              mb_attributes;
-            let lam =
-              transl_store (field_path rootpath id) subst str.str_items
-            in
-            (* Careful: see next case *)
-            let subst = !transl_store_subst in
-            Lsequence(lam,
-                      Llet(Strict, Pgenval, id,
-                           subst_lambda subst
-                             (Lprim(Pmakeblock(0, Immutable, None),
-                                    List.map (fun id -> Lvar id)
-                                      (defined_idents static_flag str.str_items))),
-                           Lsequence(store_ident id,
-                                     transl_store rootpath
-                                                  (add_ident true id subst)
-                                                  rem)))
-        | Tstr_module{
+        | Tstr_module (sf, {mb_id=id;
+                            mb_expr={mod_desc = Tmod_structure str} as mexp;
+                            mb_attributes}) ->
+            if sf = Static && target_phase = Nonstatic then zero_lam
+            else begin
+              List.iter (Translattribute.check_attribute_on_module mexp)
+                mb_attributes;
+              let lam =
+                transl_store (field_path rootpath id) subst str.str_items
+              in
+              (* Careful: see next case *)
+              let subst = !transl_store_subst in
+              Lsequence(lam,
+                        Llet(Strict, Pgenval, id,
+                             subst_lambda subst
+                               (Lprim(Pmakeblock(0, Immutable, None),
+                                      List.map (fun id -> Lvar id)
+                                        (defined_idents target_phase str.str_items))),
+                             Lsequence(store_ident id,
+                                       transl_store rootpath
+                                                    (add_ident true id subst)
+                                                    rem)))
+            end
+        | Tstr_module (sf, {
             mb_id=id;
             mb_expr= {
               mod_desc = Tmod_constraint (
                   {mod_desc = Tmod_structure str} as mexp, _, _,
                   (Tcoerce_structure (map, _) as _cc))};
             mb_attributes
-          } ->
-            (*    Format.printf "coerc id %s: %a@." (Ident.unique_name id)
-                                Includemod.print_coercion cc; *)
-            List.iter (Translattribute.check_attribute_on_module mexp)
-              mb_attributes;
-            let lam =
-              transl_store (field_path rootpath id) subst str.str_items
-            in
-            (* Careful: see next case *)
-            let subst = !transl_store_subst in
-            let ids = Array.of_list (defined_idents static_flag str.str_items) in
-            let field (pos, cc) =
-              match cc with
-              | Tcoerce_primitive { pc_loc; pc_desc; pc_env; pc_type; } ->
-                  transl_primitive pc_loc pc_desc pc_env pc_type None
-              | _ -> apply_coercion static_flag Strict cc (Lvar ids.(pos))
-            in
-            Lsequence(lam,
-                      Llet(Strict, Pgenval, id,
-                           subst_lambda subst
-                             (Lprim(Pmakeblock(0, Immutable, None),
-                                    List.map field map)),
-                           Lsequence(store_ident id,
-                                     transl_store rootpath
-                                                  (add_ident true id subst)
-                                                  rem)))
-        | Tstr_module{mb_id=id; mb_expr=modl; mb_loc; mb_attributes} ->
-            let lam =
-              Translattribute.add_inline_attribute
-                (transl_module Tcoerce_none (field_path rootpath id) Nonstatic modl)
-                mb_loc mb_attributes
-            in
-            (* Careful: the module value stored in the global may be different
-               from the local module value, in case a coercion is applied.
-               If so, keep using the local module value (id) in the remainder of
-               the compilation unit (add_ident true returns subst unchanged).
-               If not, we can use the value from the global
-               (add_ident true adds id -> Pgetglobal... to subst). *)
-            Llet(Strict, Pgenval, id, subst_lambda subst lam,
-                 Lsequence(store_ident id,
-                           transl_store rootpath (add_ident true id subst) rem))
-        | Tstr_recmodule bindings ->
-            let ids = List.map (fun mb -> mb.mb_id) bindings in
-            compile_recmodule
-              (fun id modl ->
-                 subst_lambda subst
-                   (transl_module Tcoerce_none
-                      (field_path rootpath id) Nonstatic modl))
-              bindings
-              (Lsequence(store_idents ids,
-                         transl_store rootpath (add_idents true ids subst) rem))
+          }) ->
+            if sf = Static && target_phase = Nonstatic then zero_lam
+            else begin
+              (*    Format.printf "coerc id %s: %a@." (Ident.unique_name id)
+                                  Includemod.print_coercion cc; *)
+              List.iter (Translattribute.check_attribute_on_module mexp)
+                mb_attributes;
+              let lam =
+                transl_store (field_path rootpath id) subst str.str_items
+              in
+              (* Careful: see next case *)
+              let subst = !transl_store_subst in
+              let ids = Array.of_list (defined_idents target_phase str.str_items) in
+              let field (pos, cc) =
+                match cc with
+                | Tcoerce_primitive { pc_loc; pc_desc; pc_env; pc_type; } ->
+                    transl_primitive pc_loc pc_desc pc_env pc_type None
+                | _ -> apply_coercion target_phase Strict cc (Lvar ids.(pos))
+              in
+              Lsequence(lam,
+                        Llet(Strict, Pgenval, id,
+                             subst_lambda subst
+                               (Lprim(Pmakeblock(0, Immutable, None),
+                                      List.map field map)),
+                             Lsequence(store_ident id,
+                                       transl_store rootpath
+                                                    (add_ident true id subst)
+                                                    rem)))
+            end
+        | Tstr_module (sf, {mb_id=id; mb_expr=modl; mb_loc; mb_attributes}) ->
+            if sf = Static && target_phase = Nonstatic then zero_lam
+            else
+              let lam =
+                Translattribute.add_inline_attribute
+                  (transl_module Tcoerce_none (field_path rootpath id) target_phase modl)
+                  mb_loc mb_attributes
+              in
+              (* Careful: the module value stored in the global may be different
+                 from the local module value, in case a coercion is applied.
+                 If so, keep using the local module value (id) in the remainder of
+                 the compilation unit (add_ident true returns subst unchanged).
+                 If not, we can use the value from the global
+                 (add_ident true adds id -> Pgetglobal... to subst). *)
+              Llet(Strict, Pgenval, id, subst_lambda subst lam,
+                   Lsequence(store_ident id,
+                             transl_store rootpath (add_ident true id subst) rem))
+        | Tstr_recmodule (sf, bindings) ->
+            if sf = Static && target_phase = Nonstatic then zero_lam
+            else
+              let ids = List.map (fun mb -> mb.mb_id) bindings in
+              compile_recmodule
+                (fun id modl ->
+                   subst_lambda subst
+                     (transl_module Tcoerce_none
+                        (field_path rootpath id) target_phase modl))
+                bindings
+                (Lsequence(store_idents ids,
+                           transl_store rootpath (add_idents true ids subst) rem))
         | Tstr_class cl_list ->
             let (ids, class_bindings) = transl_class_bindings cl_list in
             let lam = Lletrec(class_bindings, store_idents ids) in
@@ -1042,28 +1087,29 @@ let build_ident_map restr idlist more_ids =
 (* Compile an implementation using transl_store_structure
    (for the native-code compiler). *)
 
-let transl_store_gen static_flag module_name ({ str_items = str }, restr) topl =
+let transl_store_gen target_phase module_name ({ str_items = str }, restr) topl =
   reset_labels ();
   primitive_declarations := [];
   Hashtbl.clear used_primitives;
   let module_id = Ident.create_persistent module_name in
   let (map, prims, size) =
-    build_ident_map restr (defined_idents static_flag str) (more_idents str) in
+    build_ident_map restr (defined_idents target_phase str)
+      (more_idents target_phase str) in
   let f = function
     | [ { str_desc = Tstr_eval (expr, _attrs) } ] when topl ->
         assert (size = 0);
         subst_lambda !transl_store_subst (transl_exp expr)
-    | str -> transl_store_structure static_flag module_id map prims str in
+    | str -> transl_store_structure target_phase module_id map prims str in
   transl_store_label_init module_id size f str
   (*size, transl_label_init (transl_store_structure module_id map prims str)*)
 
-let transl_store_phrases static_flag module_name str =
-  transl_store_gen static_flag module_name (str,Tcoerce_none) true
+let transl_store_phrases target_phase module_name str =
+  transl_store_gen target_phase module_name (str,Tcoerce_none) true
 
-let transl_store_implementation static_flag module_name (str, restr) =
+let transl_store_implementation target_phase module_name (str, restr) =
   let s = !transl_store_subst in
   transl_store_subst := Ident.empty;
-  let (i, r) = transl_store_gen static_flag module_name (str, restr) false in
+  let (i, r) = transl_store_gen target_phase module_name (str, restr) false in
   transl_store_subst := s;
   { Lambda.main_module_block_size = i;
     code = wrap_globals ~flambda:false r; }
@@ -1110,6 +1156,9 @@ let close_toplevel_term (lam, ()) =
                                   toploop_getvalue id, l))
                 (free_variables lam) lam
 
+(* This version of [transl_toplevel_item] translates only run-time components
+   and ignores the static ones. The version in {!module:Translstatic} does the
+   opposite. *)
 let transl_toplevel_item item =
   match item.str_desc with
     Tstr_eval (expr, _)
@@ -1142,18 +1191,22 @@ let transl_toplevel_item item =
       set_toplevel_unique_name ext.ext_id;
       toploop_setvalue ext.ext_id
         (transl_extension_constructor item.str_env None ext)
-  | Tstr_module {mb_id=id; mb_expr=modl} ->
-      (* we need to use the unique name for the module because of issues
-         with "open" (PR#1672) *)
-      set_toplevel_unique_name id;
-      let lam = transl_module Tcoerce_none (Some(Pident id)) Nonstatic modl in
-      toploop_setvalue id lam
-  | Tstr_recmodule bindings ->
-      let idents = List.map (fun mb -> mb.mb_id) bindings in
-      compile_recmodule
-        (fun id modl -> transl_module Tcoerce_none (Some(Pident id)) Nonstatic modl)
-        bindings
-        (make_sequence toploop_setvalue_id idents)
+  | Tstr_module (sf, {mb_id=id; mb_expr=modl}) ->
+      if sf = Nonstatic then begin
+        (* we need to use the unique name for the module because of issues
+           with "open" (PR#1672) *)
+        set_toplevel_unique_name id;
+        let lam = transl_module Tcoerce_none (Some(Pident id)) Nonstatic modl in
+        toploop_setvalue id lam
+      end else lambda_unit
+  | Tstr_recmodule (sf, bindings) ->
+      if sf = Nonstatic then begin
+        let idents = List.map (fun mb -> mb.mb_id) bindings in
+        compile_recmodule
+          (fun id modl -> transl_module Tcoerce_none (Some(Pident id)) Nonstatic modl)
+          bindings
+          (make_sequence toploop_setvalue_id idents)
+      end else lambda_unit
   | Tstr_class cl_list ->
       (* we need to use unique names for the classes because there might
          be a value named identically *)

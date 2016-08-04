@@ -392,8 +392,10 @@ and rewrite_str_item iflag item =
   match item.pstr_desc with
     Pstr_eval (exp, _attrs) -> rewrite_exp iflag exp
   | Pstr_value(_, _, exps)
+      (* macros: no support of static components *)
      -> List.iter (fun x -> rewrite_exp iflag x.pvb_expr) exps
-  | Pstr_module x -> rewrite_mod iflag x.pmb_expr
+  | Pstr_module (_, x) -> rewrite_mod iflag x.pmb_expr
+        (* macros: see previous case *)
         (* todo: Pstr_recmodule?? *)
   | Pstr_class classes -> List.iter (rewrite_class_declaration iflag) classes
   | _ -> ()
