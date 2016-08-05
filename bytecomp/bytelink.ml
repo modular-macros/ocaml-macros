@@ -833,7 +833,9 @@ let load_compunit ppf phase ic filename compunit =
     end in
   Meta.add_debug_info code code_size events;
   begin try
+    Printf.eprintf "loading file %s\nbefore reify\n%!" filename;
     ignore ((Meta.reify_bytecode code code_size) ());
+    Printf.eprintf "after reify\n%!"
   with exn ->
     Symtable.restore_state initial_symtable;
     raise exn
