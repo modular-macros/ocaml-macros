@@ -331,7 +331,7 @@ let compile_recmodule compile_rhs bindings cont =
 
 let rec bound_value_identifiers = function
     [] -> []
-  | Sig_value(id, Nonstatic, {val_kind = Val_reg}) :: rem ->
+  | Sig_value(id, _, {val_kind = Val_reg}) :: rem ->
       id :: bound_value_identifiers rem
   | Sig_typext(id, _, _) :: rem -> id :: bound_value_identifiers rem
   | Sig_module(id, _, _, _) :: rem -> id :: bound_value_identifiers rem
@@ -406,8 +406,8 @@ let rec transl_module cc rootpath target_phase mexp =
             cc
       | Tmod_apply(funct, arg, ccarg) ->
           if target_phase = Static
-            && not (static_module funct) || not (static_module arg) then
-              zero_lam
+              && (not (static_module funct) || not (static_module arg)) then
+            zero_lam
           else
             let inlined_attribute, funct =
               Translattribute.get_and_remove_inlined_attribute_on_module funct
@@ -602,11 +602,16 @@ and transl_structure fields cc rootpath target_phase item_postproc final_env = f
             in
             Lletrec(class_bindings, body), size
       | Tstr_include incl ->
+          Printf.eprintf "see include\n%!";
+          List.iter (fun id ->
+            Printf.eprintf "  %s\n%!" (Ident.name id)) @@
+            bound_value_identifiers incl.incl_type;
           let ids = bound_value_identifiers incl.incl_type in
-          if target_phase = Static then
-            transl_structure (List.map (fun _ -> Ident.create_persistent "0") ids @ fields)
+          if target_phase = Static then begin
+            Printf.eprintf "static\n%!";
+            transl_structure (List.map (fun _ -> ident_zero) ids @ fields)
             cc rootpath target_phase item_postproc final_env rem
-          else
+          end else
             let modl = incl.incl_mod in
             let mid = Ident.create "include" in
             let rec rebind_idents pos newfields = function
