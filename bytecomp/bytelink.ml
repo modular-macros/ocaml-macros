@@ -505,6 +505,7 @@ let link_bytecode ppf tolink exec_name standalone =
         close_in inchan
       with Not_found | Sys_error _ -> ()
     end;
+    ignore (Symtable.init_static());
     Bytesections.init_record outchan;
     (* The path to the bytecode interpreter (in use_runtime mode) *)
     if String.length !Clflags.use_runtime > 0 then begin
@@ -514,7 +515,6 @@ let link_bytecode ppf tolink exec_name standalone =
     end;
     (* The bytecode *)
     let start_code = pos_out outchan in
-    ignore (Symtable.init_static());
     clear_crc_interfaces ();
     let sharedobjs = List.map Dll.extract_dll_name !Clflags.dllibs in
     let check_dlls = standalone && Config.target = Config.host in
