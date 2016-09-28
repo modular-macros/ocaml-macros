@@ -369,6 +369,7 @@ let init_toplevel () =
         global_table := { !global_table with
           num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
       Runtimedef.builtin_exceptions;
+    Bytesections.reset ();
     crcintfs
   with Bytesections.Bad_magic_number | Not_found | Failure _ ->
     fatal_error "Toplevel bytecode executable is corrupted"
@@ -416,6 +417,7 @@ let init_static () =
           global_table := { !global_table with
             num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
         Runtimedef.builtin_exceptions;
+      Bytesections.reset ();
       crc
     with Bytesections.Bad_magic_number | Not_found | Failure _ ->
       fatal_error "Toplevel bytecode executable is corrupted"
