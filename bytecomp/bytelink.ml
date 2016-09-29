@@ -505,6 +505,7 @@ let link_bytecode ppf tolink exec_name standalone =
         close_in inchan
       with Not_found | Sys_error _ -> ()
     end;
+    ignore (Symtable.init ());
     Bytesections.init_record outchan;
     (* The path to the bytecode interpreter (in use_runtime mode) *)
     if String.length !Clflags.use_runtime > 0 then begin
@@ -514,7 +515,6 @@ let link_bytecode ppf tolink exec_name standalone =
     end;
     (* The bytecode *)
     let start_code = pos_out outchan in
-    ignore (Symtable.init_static());
     clear_crc_interfaces ();
     let sharedobjs = List.map Dll.extract_dll_name !Clflags.dllibs in
     let check_dlls = standalone && Config.target = Config.host in
@@ -647,7 +647,7 @@ let link_bytecode_as_c ppf tolink outfile =
 \n           char *section_table, asize_t section_table_size,\
 \n           char **argv);\n";
     output_string outchan "static int caml_code[] = {\n";
-    ignore (Symtable.init_static());
+    ignore (Symtable.init ());
     clear_crc_interfaces ();
     let currpos = ref 0 in
     let output_fun code =
