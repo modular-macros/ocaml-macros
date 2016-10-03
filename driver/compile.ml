@@ -82,6 +82,7 @@ let implementation ppf sourcefile outputprefix =
     end else begin
       (* Run static code *)
       let stat_lam =
+        print_if ppf Clflags.dump_rawlambda Printlambda.lambda @@
         Translstatic.transl_implementation modulename typedtree coercion in
       let sstat_lam =
         print_if ppf Clflags.dump_lambda Printlambda.lambda @@
