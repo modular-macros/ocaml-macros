@@ -356,6 +356,7 @@ let ident_zero = Ident.create_persistent "0"
 (* Tell whether a module expression is a static module or not (for now, only
    module identifiers bound with the [static] modifier are considered static
    modules). *)
+(*
 let rec static_module mexp =
   match mexp.mod_desc with
   | Tmod_ident (path,_) ->
@@ -365,6 +366,7 @@ let rec static_module mexp =
   | Tmod_constraint (m, _, _, _) ->
       static_module m
   | _ -> false
+*)
 
 let rec transl_module cc rootpath target_phase mexp =
   List.iter (Translattribute.check_attribute_on_module mexp)
@@ -405,10 +407,12 @@ let rec transl_module cc rootpath target_phase mexp =
                   fatal_error "Translmod.transl_module")
             cc
       | Tmod_apply(funct, arg, ccarg) ->
+          (*
           if target_phase = Static
               && (not (static_module funct) || not (static_module arg)) then
             zero_lam
           else
+          *)
             let inlined_attribute, funct =
               Translattribute.get_and_remove_inlined_attribute_on_module funct
             in
