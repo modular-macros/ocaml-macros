@@ -483,8 +483,8 @@ let trim_signature = function
       Mty_signature
         (List.map
            (function
-               Sig_module (id, md, rs) ->
-                 Sig_module (id, {md with md_attributes =
+               Sig_module (phase, id, md, rs) ->
+                 Sig_module (phase, id, {md with md_attributes =
                                     (Location.mknoloc "...", Parsetree.PStr [])
                                     :: md.md_attributes},
                              rs)

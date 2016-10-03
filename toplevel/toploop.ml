@@ -137,10 +137,10 @@ let parse_mod_use_file name lb =
          (!parse_use_file lb))
   in
   [ Ptop_def
-      [ Str.module_
-          (phase, Mb.mk
-             (Location.mknoloc modname)
-             (Mod.structure items)
+      [ Str.module_ phase
+          (Mb.mk
+            (Location.mknoloc modname)
+            (Mod.structure items)
           )
        ]
    ]
