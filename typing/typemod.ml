@@ -1233,23 +1233,23 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
               in
               Some (Annot.Idef {scope with Location.loc_start = start})
         in
-        begin
-          let old_phase = Env.cur_phase env in
-          match static_flag with
-          | Nonstatic ->
-              let (defs, newenv) =
-                Typecore.type_binding
-                  (Env.with_phase 0 env) rec_flag sdefs scope in
-              (* Note: Env.find_value does not trigger the value_used event.
-                 Values will be marked as being used during the signature
-                 inclusion test. *)
-              Tstr_value(static_flag, rec_flag, defs),
-              List.map
-                (fun id ->
-                  Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
-                (let_bound_idents defs),
-              Env.with_phase old_phase newenv
-          | Static ->
+        let old_phase = Env.cur_phase env in
+        let phase = old_phase + Env.phase_of_sf static_flag in
+        Printf.eprintf "Pstr_value of phase (%d, %d)\n%!" old_phase phase;
+        if phase = 0 then
+          let (defs, newenv) =
+            Typecore.type_binding
+              (Env.with_phase 0 env) rec_flag sdefs scope in
+          (* Note: Env.find_value does not trigger the value_used event.
+             Values will be marked as being used during the signature
+             inclusion test. *)
+          Tstr_value(static_flag, rec_flag, defs),
+          List.map
+            (fun id ->
+              Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
+            (let_bound_idents defs),
+          Env.with_phase old_phase newenv
+        else if phase = 1 then
               let (defs, newenv) =
                 Typecore.type_binding
                   (Env.with_phase 1 env) rec_flag sdefs scope in
@@ -1259,7 +1259,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                   Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
                 (let_bound_idents defs),
               Env.with_phase old_phase newenv
-        end
+        else assert false
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
         Tstr_primitive
@@ -1297,12 +1297,14 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
          pmb_loc; }) ->
         if Env.cur_phase env > 0 && sf = Static then assert false;
         let phase = Env.cur_phase env + Env.phase_of_sf sf in
+        Printf.eprintf "Pstr_module of phase (%d, %d)\n%!" (Env.cur_phase env) phase;
         check_name check_module names name;
         let id = Ident.create name.txt in (* create early for PR#6752 *)
         let env =
           if sf = Static then Env.with_phase 1 env
           else env
         in
+        Printf.eprintf "env. phase = %d\n%!" (Env.cur_phase env);
         let modl =
           Builtin_attributes.with_warning_attribute attrs
             (fun () ->
