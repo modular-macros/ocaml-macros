@@ -407,24 +407,18 @@ let rec transl_module cc rootpath target_phase mexp =
                   fatal_error "Translmod.transl_module")
             cc
       | Tmod_apply(funct, arg, ccarg) ->
-          (*
-          if target_phase = Static
-              && (not (static_module funct) || not (static_module arg)) then
-            zero_lam
-          else
-          *)
-            let inlined_attribute, funct =
-              Translattribute.get_and_remove_inlined_attribute_on_module funct
-            in
-            oo_wrap mexp.mod_env true
-              (apply_coercion target_phase Strict cc)
-              (Lapply{ap_should_be_tailcall=false;
-                      ap_loc=mexp.mod_loc;
-                      ap_func=transl_module Tcoerce_none None
-                        target_phase funct;
-                      ap_args=[transl_module ccarg None target_phase arg];
-                      ap_inlined=inlined_attribute;
-                      ap_specialised=Default_specialise})
+          let inlined_attribute, funct =
+            Translattribute.get_and_remove_inlined_attribute_on_module funct
+          in
+          oo_wrap mexp.mod_env true
+            (apply_coercion target_phase Strict cc)
+            (Lapply{ap_should_be_tailcall=false;
+                    ap_loc=mexp.mod_loc;
+                    ap_func=transl_module Tcoerce_none None
+                      target_phase funct;
+                    ap_args=[transl_module ccarg None target_phase arg];
+                    ap_inlined=inlined_attribute;
+                    ap_specialised=Default_specialise})
       | Tmod_constraint(arg, _, _, ccarg) ->
           transl_module (compose_coercions cc ccarg) rootpath target_phase arg
       | Tmod_unpack(arg, _) ->
@@ -509,9 +503,6 @@ and transl_structure fields cc rootpath target_phase item_postproc final_env = f
           else
             transl_structure fields cc rootpath target_phase item_postproc final_env rem
       | Tstr_value(sf, rec_flag, pat_expr_list) -> begin
-          Printf.eprintf "looking at values under phase %d:\n" (Env.cur_phase item.str_env);
-          List.iter (fun id ->
-            Printf.eprintf "  %s\n%!" (Ident.name id)) (rev_let_bound_idents pat_expr_list);
           if should_translate sf item then begin
             let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
             let body, size =
@@ -606,32 +597,22 @@ and transl_structure fields cc rootpath target_phase item_postproc final_env = f
             in
             Lletrec(class_bindings, body), size
       | Tstr_include incl ->
-          Printf.eprintf "see include\n%!";
-          List.iter (fun id ->
-            Printf.eprintf "  %s\n%!" (Ident.name id)) @@
-            bound_value_identifiers incl.incl_type;
           let ids = bound_value_identifiers incl.incl_type in
-          if target_phase = Static then begin
-            Printf.eprintf "static\n%!";
-            transl_structure (List.map (fun _ -> ident_zero) ids @ fields)
-            cc rootpath target_phase item_postproc final_env rem
-          end else
-            let modl = incl.incl_mod in
-            let mid = Ident.create "include" in
-            let rec rebind_idents pos newfields = function
-                [] ->
-                  transl_structure newfields cc rootpath target_phase
-                    item_postproc final_env rem
-              | id :: ids ->
-                  let body, size =
-                    rebind_idents (pos + 1) (id :: newfields) ids
-                  in
-                  Llet(Alias, Pgenval, id, Lprim(Pfield pos, [Lvar mid]), body), size
-            in
-            let body, size = rebind_idents 0 fields ids in
-            Llet(pure_module modl, Pgenval, mid, transl_module Tcoerce_none None target_phase modl,
-                 body), size
-
+          let modl = incl.incl_mod in
+          let mid = Ident.create "include" in
+          let rec rebind_idents pos newfields = function
+              [] ->
+                transl_structure newfields cc rootpath target_phase
+                  item_postproc final_env rem
+            | id :: ids ->
+                let body, size =
+                  rebind_idents (pos + 1) (id :: newfields) ids
+                in
+                Llet(Alias, Pgenval, id, Lprim(Pfield pos, [Lvar mid]), body), size
+          in
+          let body, size = rebind_idents 0 fields ids in
+          Llet(pure_module modl, Pgenval, mid, transl_module Tcoerce_none None target_phase modl,
+               body), size
       | Tstr_modtype _
       | Tstr_open _
       | Tstr_class_type _
