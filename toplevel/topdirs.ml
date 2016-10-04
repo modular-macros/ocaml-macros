@@ -483,11 +483,11 @@ let trim_signature = function
       Mty_signature
         (List.map
            (function
-               Sig_module (phase, id, md, rs) ->
-                 Sig_module (phase, id, {md with md_attributes =
+               Sig_module (id, md, phase, rs) ->
+                 Sig_module (id, {md with md_attributes =
                                     (Location.mknoloc "...", Parsetree.PStr [])
                                     :: md.md_attributes},
-                             rs)
+                             phase, rs)
              (*| Sig_modtype (id, Modtype_manifest mty) ->
                  Sig_modtype (id, Modtype_manifest (trim_modtype mty))*)
              | item -> item)
@@ -573,6 +573,7 @@ let () =
          let _, md = Typetexp.find_module env loc lid in
          let acc =
            Sig_module (id, {md with md_type = trim_signature md.md_type},
+                       Asttypes.Nonstatic (* macros: not sure *),
                        Trec_not) :: acc in
          match md.md_type with
          | Mty_alias path ->

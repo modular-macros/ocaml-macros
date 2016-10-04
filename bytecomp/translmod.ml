@@ -422,7 +422,9 @@ let rec transl_module cc rootpath target_phase mexp =
       | Tmod_constraint(arg, _, _, ccarg) ->
           transl_module (compose_coercions cc ccarg) rootpath target_phase arg
       | Tmod_unpack(arg, _) ->
-          apply_coercion target_phase Strict cc (Translcore.transl_exp arg)
+          if target_phase <> Static then
+            apply_coercion target_phase Strict cc (Translcore.transl_exp arg)
+          else zero_lam
 
 and transl_struct fields cc rootpath static_flag str =
   transl_structure fields cc rootpath static_flag

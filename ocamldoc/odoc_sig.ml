@@ -57,7 +57,7 @@ module Signature_search =
           Hashtbl.add table (C (Name.from_ident ident)) signat
       | Types.Sig_class_type (ident, _, _) ->
           Hashtbl.add table (CT (Name.from_ident ident)) signat
-      | Types.Sig_module (ident, _, _) ->
+      | Types.Sig_module (ident, _, _, _) ->
           Hashtbl.add table (M (Name.from_ident ident)) signat
       | Types.Sig_modtype (ident,_) ->
           Hashtbl.add table (MT (Name.from_ident ident)) signat
@@ -95,7 +95,7 @@ module Signature_search =
 
     let search_module table name =
       match Hashtbl.find table (M name) with
-      | (Types.Sig_module (_ident, md, _)) -> md.Types.md_type
+      | (Types.Sig_module (_ident, md, _, _)) -> md.Types.md_type
       | _ -> assert false
 
     let search_module_type table name =
@@ -343,13 +343,13 @@ module Analyser =
           (match List.filter (fun td -> not (Name.Set.mem td.Parsetree.ptype_name.txt erased)) types with
           | [] -> acc
           | types -> take_item (Parsetree.Psig_type (rf, types)))
-        | Parsetree.Psig_module {Parsetree.pmd_name=name}
+        | Parsetree.Psig_module (_, {Parsetree.pmd_name=name})
         | Parsetree.Psig_modtype {Parsetree.pmtd_name=name} as m ->
           if Name.Set.mem name.txt erased then acc else take_item m
-        | Parsetree.Psig_recmodule mods ->
+        | Parsetree.Psig_recmodule (_, mods) ->
           (match List.filter (fun pmd -> not (Name.Set.mem pmd.Parsetree.pmd_name.txt erased)) mods with
           | [] -> acc
-          | mods -> take_item (Parsetree.Psig_recmodule mods)))
+          | mods -> take_item (Parsetree.Psig_recmodule (Asttypes.Nonstatic, mods))))
         signature []
 
     (** Analysis of the elements of a class, from the information in the parsetree and in the class
@@ -864,7 +864,7 @@ module Analyser =
             in
             (0, env, ele_comments)
 
-        | Parsetree.Psig_module {Parsetree.pmd_name=name; pmd_type=module_type} ->
+        | Parsetree.Psig_module (_, {Parsetree.pmd_name=name; pmd_type=module_type}) ->
             let complete_name = Name.concat current_module_name name.txt in
             (* get the the module type in the signature by the module name *)
             let sig_module_type =
@@ -911,7 +911,7 @@ module Analyser =
             in
             (maybe_more, new_env2, [ Element_module new_module ])
 
-        | Parsetree.Psig_recmodule decls ->
+        | Parsetree.Psig_recmodule (_, decls) ->
             (* we start by extending the environment *)
             let new_env =
               List.fold_left
