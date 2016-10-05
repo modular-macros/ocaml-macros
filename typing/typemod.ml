@@ -1068,6 +1068,7 @@ let wrap_constraint env arg mty explicit =
 (* Type a module value expression *)
 
 let rec type_module ?(alias=false) sttn funct_body anchor env smod =
+  Printf.eprintf "type_module sees phase %d\n%!" (Env.cur_phase env);
   match smod.pmod_desc with
     Pmod_ident lid ->
       let path =
@@ -1209,6 +1210,7 @@ let rec type_module ?(alias=false) sttn funct_body anchor env smod =
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
 
 and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
+  Printf.eprintf "type_structure sees phase %d\n%!" (Env.cur_phase env);
   let names = new_names () in
 
   let type_str_item env srem {pstr_loc = loc; pstr_desc = desc} =
@@ -1300,10 +1302,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         Printf.eprintf "Pstr_module of phase (%d, %d)\n%!" (Env.cur_phase env) phase;
         check_name check_module names name;
         let id = Ident.create name.txt in (* create early for PR#6752 *)
-        let env =
-          if sf = Static then Env.with_phase 1 env
-          else env
-        in
+        let env = Env.with_phase phase env in
         Printf.eprintf "env. phase = %d\n%!" (Env.cur_phase env);
         let modl =
           Builtin_attributes.with_warning_attribute attrs
