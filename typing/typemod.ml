@@ -43,6 +43,7 @@ type error =
   | Recursive_module_require_explicit_type
   | Apply_generative
   | Cannot_scrape_alias of Path.t
+  | Static_inside_static
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -581,7 +582,9 @@ and transl_signature env sg =
         let loc = item.psig_loc in
         match item.psig_desc with
         | Psig_value (sf, sdesc) ->
-            if Env.cur_phase env > 0 && sf = Static then assert false;
+            if Env.cur_phase env > 0 && sf = Static then
+              raise (Error (sdesc.pval_loc, env, Static_inside_static))
+            ;
             let (tdesc, newenv) =
               Builtin_attributes.with_warning_attribute sdesc.pval_attributes
                 (fun () -> Typedecl.transl_value_decl env item.psig_loc sdesc)
@@ -1068,7 +1071,6 @@ let wrap_constraint env arg mty explicit =
 (* Type a module value expression *)
 
 let rec type_module ?(alias=false) sttn funct_body anchor env smod =
-  Printf.eprintf "type_module sees phase %d\n%!" (Env.cur_phase env);
   match smod.pmod_desc with
     Pmod_ident lid ->
       let path =
@@ -1210,7 +1212,6 @@ let rec type_module ?(alias=false) sttn funct_body anchor env smod =
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
 
 and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
-  Printf.eprintf "type_structure sees phase %d\n%!" (Env.cur_phase env);
   let names = new_names () in
 
   let type_str_item env srem {pstr_loc = loc; pstr_desc = desc} =
@@ -1237,7 +1238,6 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         in
         let old_phase = Env.cur_phase env in
         let phase = old_phase + Env.phase_of_sf static_flag in
-        Printf.eprintf "Pstr_value of phase (%d, %d)\n%!" old_phase phase;
         if phase = 0 then
           let (defs, newenv) =
             Typecore.type_binding
@@ -1261,7 +1261,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                   Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
                 (let_bound_idents defs),
               Env.with_phase old_phase newenv
-        else assert false
+        else raise (Error (loc, env, Static_inside_static))
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
         Tstr_primitive
@@ -1297,27 +1297,29 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
     | Pstr_module (sf,
         {pmb_name = name; pmb_expr = smodl; pmb_attributes = attrs;
          pmb_loc; }) ->
-        if Env.cur_phase env > 0 && sf = Static then assert false;
+        if Env.cur_phase env > 0 && sf = Static then
+          raise (Error (loc, env, Static_inside_static))
+        ;
         let phase = Env.cur_phase env + Env.phase_of_sf sf in
-        Printf.eprintf "Pstr_module of phase (%d, %d)\n%!" (Env.cur_phase env) phase;
         check_name check_module names name;
         let id = Ident.create name.txt in (* create early for PR#6752 *)
-        let env = Env.with_phase phase env in
-        Printf.eprintf "env. phase = %d\n%!" (Env.cur_phase env);
+        let newenv = Env.with_phase phase env in
         let modl =
           Builtin_attributes.with_warning_attribute attrs
             (fun () ->
                type_module ~alias:true true funct_body
-                 (anchor_submodule name.txt anchor) env smodl
+                 (anchor_submodule name.txt anchor) newenv smodl
             )
         in
         let md =
-          { md_type = enrich_module_type anchor name.txt modl.mod_type env;
+          { md_type = enrich_module_type anchor name.txt modl.mod_type newenv;
             md_attributes = attrs;
             md_loc = pmb_loc;
           }
         in
-        let newenv = Env.enter_module_declaration phase id md env in
+        (* Go back to old phase *)
+        let newenv' = Env.with_phase (Env.cur_phase env) @@
+          Env.enter_module_declaration phase id md newenv in
         Tstr_module (sf, {mb_id=id; mb_name=name; mb_expr=modl;
                      mb_attributes=attrs;  mb_loc=pmb_loc;
                     }),
@@ -1326,10 +1328,14 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                      md_attributes = attrs;
                      md_loc = pmb_loc;
                     }, sf, Trec_not)],
-        newenv
+        newenv'
     | Pstr_recmodule (sf, sbind) ->
-        if Env.cur_phase env > 0 && sf = Static then assert false;
+        if Env.cur_phase env > 0 && sf = Static then
+          raise (Error (loc, env, Static_inside_static))
+        ;
         let phase = Env.cur_phase env + Env.phase_of_sf sf in
+        let oldenv = env in
+        let env = Env.with_phase phase oldenv in
         let sbind =
           List.map
             (function
@@ -1383,6 +1389,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
             )
             env decls
         in
+        let newenv = Env.with_phase (Env.cur_phase oldenv) newenv in
         let bindings2 =
           check_recmodule_inclusion newenv bindings1 in
         Tstr_recmodule (sf, bindings2),
@@ -1843,6 +1850,9 @@ let report_error ppf = function
       fprintf ppf
         "This is an alias for module %a, which is missing"
         path p
+  | Static_inside_static ->
+      fprintf ppf
+        "Static definitions are not allowed inside static modules"
 
 let report_error env ppf err =
   Printtyp.wrap_printing_env env (fun () -> report_error ppf err)

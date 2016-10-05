@@ -74,6 +74,7 @@ type error =
   | Recursive_module_require_explicit_type
   | Apply_generative
   | Cannot_scrape_alias of Path.t
+  | Static_inside_static
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

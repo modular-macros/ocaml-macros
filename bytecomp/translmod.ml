@@ -550,7 +550,9 @@ and transl_structure fields cc rootpath target_phase item_postproc final_env = f
             Llet(Strict, Pgenval, id, transl_extension_constructor item.str_env path ext,
                  body), size
       | Tstr_module (sf, mb) ->
-          if sf = Static && target_phase = Nonstatic then (zero_lam, 0)
+          if sf = Static && target_phase = Nonstatic then
+            transl_structure fields cc rootpath target_phase item_postproc
+              final_env rem
           else
             let id = mb.mb_id in
             let body, size =
@@ -567,7 +569,9 @@ and transl_structure fields cc rootpath target_phase item_postproc final_env = f
                  module_body,
                  body), size
       | Tstr_recmodule (sf, bindings) ->
-          if sf = Static && target_phase = Nonstatic then (zero_lam, 0)
+          if sf = Static && target_phase = Nonstatic then
+            transl_structure fields cc rootpath target_phase item_postproc
+              final_env rem
           else
             let ext_fields =
               List.rev_append (List.map (fun mb -> mb.mb_id) bindings) fields
