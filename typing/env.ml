@@ -626,10 +626,21 @@ let find proj1 proj2 path env =
 
 let find_value =
   find (fun env -> env.values) (fun sc -> sc.comp_values)
+
 and find_phase path env =
   try
     find (fun env -> env.phases) (fun sc -> sc.comp_phases) path env
-  with Not_found -> 0
+  with Not_found ->
+    begin match path with
+    | Pident id ->
+        if Ident.persistent id && not (Ident.name id = !current_unit) then try
+          let _ = find_pers_struct (Ident.name id) in
+          if Ident.lifted id then 1 else 0
+        with Not_found -> 0
+        else 0
+    | _ -> 0
+    end
+
 and find_stage path env =
   try
     find (fun env -> env.stages) (fun sc -> sc.comp_stages) path env
