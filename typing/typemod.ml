@@ -1486,10 +1486,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
     | [] -> ([], [], env)
     | pstr :: srem ->
         let previous_saved_types = Cmt_format.get_saved_types () in
-        let desc, sg, new_env =
-          type_str_item
-          (Env.with_phase 0 env) (* Top-level phase should always be 0 *)
-          srem pstr in
+        let desc, sg, new_env = type_str_item env srem pstr in
         let str = { str_desc = desc; str_loc = pstr.pstr_loc; str_env = env } in
         Cmt_format.set_saved_types (Cmt_format.Partial_structure_item str
                                     :: previous_saved_types);
