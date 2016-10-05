@@ -858,13 +858,6 @@ let rec path_of_module mexp =
 let path_of_module mexp =
  try Some (path_of_module mexp) with Not_a_path -> None
 
-let rec phase_of_module {mod_desc = desc} env =
-  match desc with
-  | Tmod_ident (p,_) -> Env.find_phase p env
-  | Tmod_apply (funct,_,_) -> phase_of_module funct env
-  | Tmod_constraint (mexp,_,_,_) -> phase_of_module mexp env
-  | _ -> 0
-
 (* Check that all core type schemes in a structure are closed *)
 
 let rec closed_modtype env = function
@@ -1088,6 +1081,12 @@ let rec type_module ?(alias=false) sttn funct_body anchor env smod =
                  mod_env = env;
                  mod_attributes = smod.pmod_attributes;
                  mod_loc = smod.pmod_loc } in
+      (* Check for phase errors *)
+      let env_phase = Env.cur_phase env in
+      let mod_phase = Env.find_phase path env in
+      if mod_phase <> env_phase then
+        raise (Error (smod.pmod_loc, env, Phase (env_phase, mod_phase)))
+      ;
       let md =
         if alias && not (Env.is_functor_arg path env) then
           (Env.add_required_global (Path.head path); md)
@@ -1136,11 +1135,6 @@ let rec type_module ?(alias=false) sttn funct_body anchor env smod =
       let path = path_of_module arg in
       let funct =
         type_module (sttn && path <> None) funct_body None env sfunct in
-      let phase_funct = phase_of_module funct env in
-      let phase_arg = phase_of_module arg env in
-      if phase_funct <> phase_arg then
-        raise (Error (sarg.pmod_loc, env, Phase (phase_funct, phase_arg)))
-      ;
       begin match Env.scrape_alias env funct.mod_type with
         Mty_functor(param, mty_param, mty_res) as mty_functor ->
           let generative, mty_param =
@@ -1333,15 +1327,6 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         (* Go back to old phase *)
         let newenv' = Env.with_phase (Env.cur_phase env) @@
           Env.enter_module_declaration phase id md newenv in
-        (* Check for phase errors *)
-        begin match modl.mod_desc with
-        | Tmod_ident _ | Tmod_apply _ | Tmod_constraint _ ->
-            let phase_modl = phase_of_module modl newenv' in
-            let phase_mb = Env.phase_of_sf sf in
-            if phase_modl <> phase_mb then
-              raise (Error (pmb_loc, env, Phase (phase_mb, phase_modl)))
-        | _ -> ()
-        end;
         Tstr_module (sf, {mb_id=id; mb_name=name; mb_expr=modl;
                      mb_attributes=attrs;  mb_loc=pmb_loc;
                     }),
