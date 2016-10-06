@@ -24,9 +24,7 @@ let run_static ppf lam =
       Symtable.patch_object 1 code reloc;
       Symtable.check_global_initialized 1 reloc;
       Symtable.update_global_table ();
-      Printf.eprintf "before reify\n%!";
       let splices = (Meta.reify_bytecode code code_size) () in
-      Printf.eprintf "after reify\n%!";
       (Obj.obj splices : Parsetree.expression array)
     end else if Sys.backend_type = Sys.Native then
       let open Filename in

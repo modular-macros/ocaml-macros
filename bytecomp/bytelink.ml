@@ -98,34 +98,6 @@ type global_status =
   | Visited
     (* permanent mark for topological sort *)
 
-  (*
-let pp_lst ~sep pp_data fmt =
-  let rec aux = function
-    | [] -> ()
-    | [ x ] -> pp_data fmt x
-    | x :: r -> Format.fprintf fmt "%a%a" pp_data x sep (); aux r
-  in aux
-  *)
-
-  (*
-let fmt_unit_descr fmt = function
-  | Standalone (unit,_,p) ->
-      Format.fprintf fmt "Standalone %s%s"
-        (if p = 1 then "s" else "") unit.cu_name
-  | In_archive (unit,_,p) ->
-      Format.fprintf fmt "In_archive %s%s"
-        (if p = 1 then "^" else "") unit.cu_name
-  *)
-
-(*
-let fmt_global_status fmt = function
-  | Missing -> Format.fprintf fmt "Missing"
-  | Needed _ -> Format.fprintf fmt "Needed"
-  | Available _ -> Format.fprintf fmt "Available"
-  | Being_visited -> Format.fprintf fmt "Being_visited"
-  | Visited -> Format.fprintf fmt "Visited"
-*)
-
 let rec lift_reloc = function
   | [] -> []
   | (Reloc_getglobal id, pos) :: rem ->
@@ -833,9 +805,7 @@ let load_compunit ppf phase ic filename compunit =
     end in
   Meta.add_debug_info code code_size events;
   begin try
-    Printf.eprintf "loading file %s\nbefore reify\n%!" filename;
     ignore ((Meta.reify_bytecode code code_size) ());
-    Printf.eprintf "after reify\n%!"
   with exn ->
     Symtable.restore_state initial_symtable;
     raise exn
