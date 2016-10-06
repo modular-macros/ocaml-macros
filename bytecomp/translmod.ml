@@ -33,6 +33,140 @@ type error =
 
 exception Error of Location.t * error
 
+(* ordered array of lambda blocks for stage-0 splices *)
+let item_splices = ref ([] : lambda list)
+
+let transl_toplevel_splice exp =
+  List.fold_left
+    (fun lam id -> Translquote.wrap_local exp.exp_loc id.txt
+      (Location.mkloc (Ident.name id.txt) id.loc) lam)
+    (Translcore.transl_exp exp)
+    (Env.cross_stage_ids exp.exp_env)
+
+module TranslSplicesIterator = struct
+  open TypedtreeIter
+  include DefaultIteratorArgument
+
+  let depth = ref 0
+
+  let enter_expression expr =
+    match expr.exp_desc with
+    | Texp_escape e ->
+        if !depth = 0 then
+          let body = transl_toplevel_splice e in
+          item_splices := !item_splices @ [body];
+        else
+          ()
+    | Texp_quote _ ->
+        incr depth
+    | _ -> ()
+
+  let leave_expression expr =
+    match expr.exp_desc with
+    | Texp_quote _ ->
+        decr depth
+    | _ -> ()
+end
+
+module TranslSplices = TypedtreeIter.MakeIterator(TranslSplicesIterator)
+
+let splice_ids = ref ([] : Ident.t list)
+
+let transl_item_splices item item_lam =
+  (* Find splices in current structure item *)
+  TranslSplices.iter_structure_item item;
+  let item_splices_with_ids =
+    List.map (fun l -> (Ident.create "*splice*", l)) !item_splices
+  in
+  (* Add the code for running splices *)
+  let wrap_let str_lam (splice_id, splice_lam) =
+    Llet(Strict, Pgenval, splice_id, splice_lam, str_lam)
+  in
+  let lam = List.fold_left wrap_let item_lam item_splices_with_ids in
+  item_splices := [];
+  splice_ids := !splice_ids @ List.map fst item_splices_with_ids;
+  lam
+
+(* Wrap a module construction lambda inside a lambda that declares the module
+   global (as a side effect), constructs an array with all splices encountered
+   in this module and returns it. [splice_ids] should refer to these splices.
+   *)
+let rec insert_splice_array module_id splice_ids = function
+  | Llet (a,b,c,lam,rem) ->
+      Llet (a, b, c, lam, insert_splice_array module_id splice_ids rem)
+  | Lletrec (vbs, rem) ->
+      Lletrec (vbs, insert_splice_array module_id splice_ids rem)
+  | block ->
+      let splice_body =
+        Lprim (Pmakearray (Paddrarray, Mutable),
+          List.map
+          (fun id ->
+            Translquote.transl_close_expression Location.none (Lvar id))
+          splice_ids)
+      in
+      Lsequence (
+        Lprim (Psetglobal module_id, [block]),
+        splice_body)
+
+(* Wrap a piece of lambda code so that, if the original code returned a value,
+ * the result of this function will execute the original code, marshal the
+ * returned value to the file passed as the first command-line argument.
+ * Intended for wrapping of splice-producing code in [ocaml*.opt]. *)
+let wrap_marshal lam =
+  let apply fun_lam args =
+    Lapply {
+      ap_func = fun_lam;
+      ap_args = args;
+      ap_loc = Location.none;
+      ap_should_be_tailcall = false;
+      ap_inlined = Default_inline;
+      ap_specialised = Default_specialise;
+    }
+  in
+  let lam_id = Ident.create "let" in
+  let channel_id = Ident.create "channel" in
+  let marshal_to_channel =
+    Lprim (Pfield 0, (* ^Marshal.to_channel *)
+      [Lprim (Pgetglobal (Ident.create_persistent "^Marshal"), [])]
+    )
+  in
+  let get_filename =
+    (* ^Sys.argv.[1] *)
+    Lprim (
+      Pccall (
+        Primitive.simple
+          ~name:"caml_array_get" ~arity:2 ~alloc:true (* ? *)),
+      [Lprim
+        (Pfield 0, (* ^Sys.argv *)
+          [Lprim (Pgetglobal (Ident.create_persistent "^Sys"), [])]);
+        (* 1 *)
+        Lconst (Const_base (Const_int 1))
+      ]
+    )
+  in
+  let open_channel =
+    apply
+      (Lprim (Pfield 43, (* ^Pervasives.open_out_bin *)
+        [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])]
+      ))
+      [get_filename]
+  in
+  let write_lam =
+    Llet (Strict, Pgenval, channel_id, open_channel,
+      Lsequence (
+        apply
+          marshal_to_channel
+          [Lvar channel_id; Lvar lam_id; Lconst (Const_pointer 0)],
+        apply
+          (Lprim (Pfield 58, (* ^Pervasives.close_out *)
+            [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])]
+          ))
+          [Lvar channel_id]
+      )
+    )
+  in
+  Llet (Strict, Pgenval, lam_id, lam, write_lam)
+
 (* Keep track of the root path (from the root of the namespace to the
    currently compiled module expression).  Useful for naming extensions. *)
 
@@ -690,11 +824,21 @@ let transl_implementation_flambda module_name (str, cc) =
   in
   (module_id, size), wrap_globals ~flambda:true body
 
-let transl_implementation module_name (str, cc) =
-  let (module_id, _size), module_initializer =
-    transl_implementation_flambda module_name (str, cc)
-  in
-  Lprim (Psetglobal module_id, [module_initializer])
+let transl_implementation module_name target_phase (str, cc) =
+  if target_phase = Static then
+    let module_id = Ident.create_persistent module_name in
+    Translcore.set_transl_splices None;
+    splice_ids := [];
+    let (mod_body, _size) =
+      transl_structure [] cc (Some (Path.Pident module_id))
+        Static transl_item_splices str.str_final_env str.str_items
+    in
+    insert_splice_array module_id !splice_ids mod_body
+  else
+    let (module_id, _size), module_initializer =
+      transl_implementation_flambda module_name (str, cc)
+    in
+    Lprim (Psetglobal module_id, [module_initializer])
 
 (* Build the list of value identifiers defined by a toplevel structure
    (excluding primitive declarations and replacing different-phase identifiers
@@ -1155,88 +1299,148 @@ let close_toplevel_term (lam, ()) =
 (* This version of [transl_toplevel_item] translates only run-time components
    and ignores the static ones. The version in {!module:Translstatic} does the
    opposite. *)
-let transl_toplevel_item item =
-  match item.str_desc with
-    Tstr_eval (expr, _)
-  | Tstr_value(Nonstatic, Nonrecursive,
-               [{vb_pat = {pat_desc=Tpat_any};vb_expr = expr}]) ->
-      (* special compilation for toplevel "let _ = expr", so
-         that Toploop can display the result of the expression.
-         Otherwise, the normal compilation would result
-         in a Lsequence returning unit. *)
-      transl_exp expr
-  | Tstr_value(static_flag, rec_flag, pat_expr_list) ->
-    begin
-      match static_flag with
-      | Nonstatic ->
-        let idents = let_bound_idents pat_expr_list in
-        transl_let rec_flag pat_expr_list
-          (make_sequence toploop_setvalue_id idents)
-      | Static -> lambda_unit
-    end
-  | Tstr_typext(tyext) ->
-      let idents =
-        List.map (fun ext -> ext.ext_id) tyext.tyext_constructors
-      in
-      (* we need to use unique name in case of multiple
-         definitions of the same extension constructor in the toplevel *)
-      List.iter set_toplevel_unique_name idents;
-        transl_type_extension item.str_env None tyext
-          (make_sequence toploop_setvalue_id idents)
-  | Tstr_exception ext ->
-      set_toplevel_unique_name ext.ext_id;
-      toploop_setvalue ext.ext_id
-        (transl_extension_constructor item.str_env None ext)
-  | Tstr_module (sf, {mb_id=id; mb_expr=modl}) ->
-      if sf = Nonstatic then begin
-        (* we need to use the unique name for the module because of issues
-           with "open" (PR#1672) *)
-        set_toplevel_unique_name id;
-        let lam = transl_module Tcoerce_none (Some(Pident id)) Nonstatic modl in
-        toploop_setvalue id lam
-      end else lambda_unit
-  | Tstr_recmodule (sf, bindings) ->
-      if sf = Nonstatic then begin
-        let idents = List.map (fun mb -> mb.mb_id) bindings in
-        compile_recmodule
-          (fun id modl -> transl_module Tcoerce_none (Some(Pident id)) Nonstatic modl)
-          bindings
-          (make_sequence toploop_setvalue_id idents)
-      end else lambda_unit
-  | Tstr_class cl_list ->
-      (* we need to use unique names for the classes because there might
-         be a value named identically *)
-      let (ids, class_bindings) = transl_class_bindings cl_list in
-      List.iter set_toplevel_unique_name ids;
-      Lletrec(class_bindings, make_sequence toploop_setvalue_id ids)
-  | Tstr_include incl ->
-      let ids = bound_value_identifiers incl.incl_type in
-      let modl = incl.incl_mod in
-      let mid = Ident.create "include" in
-      let rec set_idents pos = function
-        [] ->
+let transl_toplevel_item target_phase item =
+  let item_lam =
+    match item.str_desc with
+      Tstr_eval (expr, _) ->
+        if target_phase = Nonstatic then
+          transl_exp expr
+        else lambda_unit
+    | Tstr_value(_, Nonrecursive,
+                 [{vb_pat = {pat_desc=Tpat_any};vb_expr = expr}]) ->
+        (* special compilation for toplevel "let _ = expr" or "static _ =
+           expr", so that Toploop can display the result of the expression.
+           Otherwise, the normal compilation would result in a Lsequence
+           returning unit. *)
+        transl_exp expr
+    | Tstr_value(static_flag, rec_flag, pat_expr_list) ->
+        if static_flag = target_phase then
+          let idents = let_bound_idents pat_expr_list in
+          transl_let rec_flag pat_expr_list
+            (make_sequence toploop_setvalue_id idents)
+        else lambda_unit
+    | Tstr_typext(tyext) ->
+        if target_phase = Nonstatic then
+          let idents =
+            List.map (fun ext -> ext.ext_id) tyext.tyext_constructors
+          in
+          (* we need to use unique name in case of multiple
+             definitions of the same extension constructor in the toplevel *)
+          List.iter set_toplevel_unique_name idents;
+            transl_type_extension item.str_env None tyext
+              (make_sequence toploop_setvalue_id idents)
+        else lambda_unit
+    | Tstr_exception ext ->
+        if target_phase = Nonstatic then
+          begin
+          set_toplevel_unique_name ext.ext_id;
+          toploop_setvalue ext.ext_id
+            (transl_extension_constructor item.str_env None ext)
+          end
+        else lambda_unit
+    | Tstr_module (sf, {mb_id=id; mb_expr=modl}) ->
+        if sf = Static && target_phase = Nonstatic then
           lambda_unit
-      | id :: ids ->
-          Lsequence(toploop_setvalue id (Lprim(Pfield pos, [Lvar mid])),
-                    set_idents (pos + 1) ids) in
-      Llet(Strict, Pgenval, mid,
-           transl_module Tcoerce_none None Nonstatic modl, set_idents 0 ids)
-  | Tstr_modtype _
-  | Tstr_open _
-  | Tstr_primitive _
-  | Tstr_type _
-  | Tstr_class_type _
-  | Tstr_attribute _ ->
-      lambda_unit
+        else begin
+          (* we need to use the unique name for the module because of issues
+             with "open" (PR#1672) *)
+          set_toplevel_unique_name id;
+          let lam =
+            transl_module Tcoerce_none (Some(Pident id)) target_phase modl
+          in
+          toploop_setvalue id lam
+        end
+    | Tstr_recmodule (sf, bindings) ->
+        if sf = Static && target_phase = Nonstatic then
+          lambda_unit
+        else begin
+          let idents = List.map (fun mb -> mb.mb_id) bindings in
+          compile_recmodule
+            (fun id modl ->
+              transl_module Tcoerce_none (Some(Pident id)) target_phase modl)
+            bindings
+            (make_sequence toploop_setvalue_id idents)
+        end
+    | Tstr_class cl_list ->
+        if target_phase = Nonstatic then begin
+          (* we need to use unique names for the classes because there might
+             be a value named identically *)
+          let (ids, class_bindings) = transl_class_bindings cl_list in
+          List.iter set_toplevel_unique_name ids;
+          Lletrec(class_bindings, make_sequence toploop_setvalue_id ids)
+        end
+        else lambda_unit
+    | Tstr_include incl ->
+        let ids = bound_value_identifiers incl.incl_type in
+        let modl = incl.incl_mod in
+        let mid = Ident.create "include" in
+        let rec set_idents pos = function
+          [] ->
+            lambda_unit
+        | id :: ids ->
+            Lsequence(toploop_setvalue id (Lprim(Pfield pos, [Lvar mid])),
+                      set_idents (pos + 1) ids) in
+        Llet(Strict, Pgenval, mid,
+             transl_module Tcoerce_none None target_phase modl, set_idents 0 ids)
+    | Tstr_modtype _
+    | Tstr_open _
+    | Tstr_primitive _
+    | Tstr_type _
+    | Tstr_class_type _
+    | Tstr_attribute _ ->
+        lambda_unit
+  in
+  if target_phase = Static then begin
+    TranslSplices.iter_structure_item item;
+    let item_splices_with_ids =
+      List.map (fun l -> (Ident.create "*splice*", l)) !item_splices
+    in
+    let wrap_let str_lam (splice_id, splice_lam) =
+      Llet (Strict, Pgenval, splice_id, splice_lam, str_lam)
+    in
+    let lam = List.fold_left wrap_let item_lam item_splices_with_ids in
+    item_splices := [];
+    splice_ids := !splice_ids @ List.map fst item_splices_with_ids;
+    lam
+  end
+  else
+    item_lam
 
-let transl_toplevel_item_and_close itm =
+let transl_toplevel_item_and_close target_phase itm =
   close_toplevel_term
-    (transl_label_init (fun () -> transl_toplevel_item itm, ()))
+    (transl_label_init (fun () -> transl_toplevel_item target_phase itm, ()))
 
-let transl_toplevel_definition str =
+let rec insert_splice_array_toplevel splice_ids = function
+  | Llet (a,b,c,lam,rem) ->
+      Llet (a,b,c,lam, insert_splice_array_toplevel splice_ids rem)
+  | Lletrec (vbs, rem) ->
+      Lletrec (vbs, insert_splice_array_toplevel splice_ids rem)
+  | other ->
+      let splice_body =
+        Lprim (Pmakearray (Paddrarray, Mutable),
+          List.map
+          (fun id ->
+            Translquote.transl_close_expression Location.none
+            (Lvar id))
+          (List.rev splice_ids))
+      in
+      Lsequence (
+        other,
+        splice_body)
+
+let transl_toplevel_definition target_phase str =
   reset_labels ();
   Hashtbl.clear used_primitives;
-  make_sequence transl_toplevel_item_and_close str.str_items
+  if target_phase = Static then begin
+    Translcore.set_transl_splices None;
+    splice_ids := [];
+    let lam =
+      make_sequence (transl_toplevel_item_and_close target_phase) str.str_items
+    in
+    insert_splice_array_toplevel !splice_ids lam
+  end
+  else
+    make_sequence (transl_toplevel_item_and_close target_phase) str.str_items
 
 (* Compile the initialization code for a packed library *)
 

@@ -261,7 +261,7 @@ let execute_phrase print_outcome ppf phr =
       let sg' = Typemod.simplify_signature sg in
       ignore (Includemod.signatures oldenv sg sg');
       Typecore.force_delayed_checks ();
-      let slam = Translstatic.transl_toplevel_definition str in
+      let slam = Translmod.transl_toplevel_definition Asttypes.Static str in
       let splices =
         begin try
           toplevel_env := newenv;
@@ -280,7 +280,7 @@ let execute_phrase print_outcome ppf phr =
       in
       Translcore.set_transl_splices
         (Some (ref (Obj.obj splices : Parsetree.expression array)));
-      let lam = Translmod.transl_toplevel_definition str in
+      let lam = Translmod.transl_toplevel_definition Asttypes.Nonstatic str in
       Warnings.check_fatal ();
       begin try
         toplevel_env := newenv;
