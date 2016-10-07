@@ -503,8 +503,10 @@ let rec static_module mexp =
 *)
 
 let rec transl_module cc rootpath target_phase mexp =
-  List.iter (Translattribute.check_attribute_on_module mexp)
-    mexp.mod_attributes;
+  if target_phase = Static then (* Avoid checking attributes twice *)
+    List.iter (Translattribute.check_attribute_on_module mexp)
+      mexp.mod_attributes
+  ;
   match mexp.mod_type with
     Mty_alias _ -> apply_coercion target_phase Alias cc lambda_unit
   | _ ->
@@ -694,7 +696,9 @@ and transl_structure fields cc rootpath target_phase item_postproc final_env = f
                 item_postproc final_env rem
             in
             let module_body =
-              Translattribute.add_inline_attribute
+              (if target_phase = Static then
+                Translattribute.add_inline_attribute
+              else fun lam _ _ -> lam)
                 (transl_module Tcoerce_none (field_path rootpath id)
                   target_phase mb.mb_expr)
                 mb.mb_loc mb.mb_attributes
@@ -992,27 +996,32 @@ let transl_store_structure target_phase glob map prims str =
       transl_store_subst := subst;
         lambda_unit
     | item :: rem ->
+        let should_translate sf item =
+          let item_phase = Env.cur_phase item.str_env + Env.phase_of_sf sf in
+          let target_phase = if target_phase = Static then 1 else 0 in
+          item_phase = target_phase
+        in
         match item.str_desc with
         | Tstr_eval (expr, _attrs) ->
-            Lsequence(subst_lambda subst (transl_exp expr),
-                      transl_store rootpath subst rem)
+            (* top-level expression are deemed run-time *)
+            if target_phase = Nonstatic then
+              Lsequence(subst_lambda subst (transl_exp expr),
+                        transl_store rootpath subst rem)
+            else
+              transl_store rootpath subst rem
         | Tstr_value(sf, rec_flag, pat_expr_list) ->
-          begin
-            let item_phase = Env.cur_phase item.str_env + Env.phase_of_sf sf in
-            let target_phase_n = if target_phase = Static then 1 else 0 in
-            assert (item_phase <= target_phase_n);
-            if item_phase = target_phase_n then
+            if should_translate sf item then
               let ids = let_bound_idents pat_expr_list in
               let lam = transl_let rec_flag pat_expr_list (store_idents ids) in
               Lsequence(subst_lambda subst lam,
                         transl_store rootpath
                           (add_idents false ids subst) rem)
             else
-              let _placeholders = List.map (fun _ -> Ident.create_persistent "0")
-                (let_bound_idents pat_expr_list)
+              let _placeholders =
+                List.map (fun _ -> Ident.create_persistent "0")
+                  (let_bound_idents pat_expr_list)
               in
               transl_store rootpath subst rem
-          end
         | Tstr_primitive descr ->
             begin if target_phase = Nonstatic then
               record_primitive descr.val_val
@@ -1031,19 +1040,25 @@ let transl_store_structure target_phase glob map prims str =
             Lsequence(subst_lambda subst lam,
                       transl_store rootpath (add_idents false ids subst) rem)
         | Tstr_exception ext ->
-            let id = ext.ext_id in
-            let path = field_path rootpath id in
-            let lam = transl_extension_constructor item.str_env path ext in
-            Lsequence(Llet(Strict, Pgenval, id,
-                           subst_lambda subst lam, store_ident id),
-                      transl_store rootpath (add_ident false id subst) rem)
+            if target_phase = Nonstatic then
+              let id = ext.ext_id in
+              let path = field_path rootpath id in
+              let lam = transl_extension_constructor item.str_env path ext in
+              Lsequence(Llet(Strict, Pgenval, id,
+                             subst_lambda subst lam, store_ident id),
+                        transl_store rootpath (add_ident false id subst) rem)
+            else
+              transl_store rootpath subst rem
         | Tstr_module (sf, {mb_id=id;
                             mb_expr={mod_desc = Tmod_structure str} as mexp;
                             mb_attributes}) ->
-            if sf = Static && target_phase = Nonstatic then zero_lam
-            else begin
+            if sf = Static then (* Avoid doing these checks twice *)
               List.iter (Translattribute.check_attribute_on_module mexp)
-                mb_attributes;
+                mb_attributes
+            ;
+            if sf = Static && target_phase = Nonstatic then
+              transl_store rootpath subst rem
+            else begin
               let lam =
                 transl_store (field_path rootpath id) subst str.str_items
               in
@@ -1068,12 +1083,15 @@ let transl_store_structure target_phase glob map prims str =
                   (Tcoerce_structure (map, _) as _cc))};
             mb_attributes
           }) ->
-            if sf = Static && target_phase = Nonstatic then zero_lam
+            if sf = Static then (* Avoid doing these checks twice *)
+              List.iter (Translattribute.check_attribute_on_module mexp)
+                mb_attributes
+            ;
+            if sf = Static && target_phase = Nonstatic then
+              transl_store rootpath subst rem
             else begin
               (*    Format.printf "coerc id %s: %a@." (Ident.unique_name id)
                                   Includemod.print_coercion cc; *)
-              List.iter (Translattribute.check_attribute_on_module mexp)
-                mb_attributes;
               let lam =
                 transl_store (field_path rootpath id) subst str.str_items
               in
@@ -1097,10 +1115,13 @@ let transl_store_structure target_phase glob map prims str =
                                                     rem)))
             end
         | Tstr_module (sf, {mb_id=id; mb_expr=modl; mb_loc; mb_attributes}) ->
-            if sf = Static && target_phase = Nonstatic then zero_lam
+            if sf = Static && target_phase = Nonstatic then
+              transl_store rootpath subst rem
             else
               let lam =
-                Translattribute.add_inline_attribute
+                (if target_phase = Static then
+                  Translattribute.add_inline_attribute
+                else fun lam _ _ -> lam)
                   (transl_module Tcoerce_none (field_path rootpath id) target_phase modl)
                   mb_loc mb_attributes
               in
@@ -1114,7 +1135,8 @@ let transl_store_structure target_phase glob map prims str =
                    Lsequence(store_ident id,
                              transl_store rootpath (add_ident true id subst) rem))
         | Tstr_recmodule (sf, bindings) ->
-            if sf = Static && target_phase = Nonstatic then zero_lam
+            if sf = Static && target_phase = Nonstatic then
+              transl_store rootpath subst rem
             else
               let ids = List.map (fun mb -> mb.mb_id) bindings in
               compile_recmodule
@@ -1127,9 +1149,13 @@ let transl_store_structure target_phase glob map prims str =
                            transl_store rootpath (add_idents true ids subst) rem))
         | Tstr_class cl_list ->
             let (ids, class_bindings) = transl_class_bindings cl_list in
-            let lam = Lletrec(class_bindings, store_idents ids) in
-            Lsequence(subst_lambda subst lam,
-                      transl_store rootpath (add_idents false ids subst) rem)
+            if target_phase = Static then
+              transl_store rootpath (add_idents false
+                (List.map (fun _ -> ident_zero) ids) subst) rem
+            else
+              let lam = Lletrec(class_bindings, store_idents ids) in
+              Lsequence(subst_lambda subst lam,
+                        transl_store rootpath (add_idents false ids subst) rem)
         | Tstr_include incl ->
             let ids = bound_value_identifiers incl.incl_type in
             let modl = incl.incl_mod in
@@ -1306,13 +1332,15 @@ let transl_toplevel_item target_phase item =
         if target_phase = Nonstatic then
           transl_exp expr
         else lambda_unit
-    | Tstr_value(_, Nonrecursive,
+    | Tstr_value(sf, Nonrecursive,
                  [{vb_pat = {pat_desc=Tpat_any};vb_expr = expr}]) ->
         (* special compilation for toplevel "let _ = expr" or "static _ =
            expr", so that Toploop can display the result of the expression.
            Otherwise, the normal compilation would result in a Lsequence
            returning unit. *)
-        transl_exp expr
+        if sf = target_phase then
+          transl_exp expr
+        else lambda_unit
     | Tstr_value(static_flag, rec_flag, pat_expr_list) ->
         if static_flag = target_phase then
           let idents = let_bound_idents pat_expr_list in

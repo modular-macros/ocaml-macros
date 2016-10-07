@@ -20,6 +20,7 @@ open Config
 open Format
 open Typedtree
 open Compenv
+open Asttypes
 
 (* Compile a .mli file *)
 
@@ -85,13 +86,14 @@ let implementation ppf sourcefile outputprefix ~backend =
     if not !Clflags.print_types then begin
       (* Run static code *)
       let stat_lam =
-        Translstatic.transl_implementation modulename typedtree coercion in
+        Translmod.transl_implementation modulename Static (typedtree, coercion)
+      in
       let sstat_lam =
         print_if ppf Clflags.dump_lambda Printlambda.lambda @@
         Simplif.simplify_lambda stat_lam in
       let w_stat_lam =
         if Sys.backend_type = Sys.Native then
-          Translstatic.wrap_marshal sstat_lam
+          Translmod.wrap_marshal sstat_lam
         else sstat_lam
       in
       let splices = Runstatic.run_static ppf w_stat_lam in
@@ -129,8 +131,7 @@ let implementation ppf sourcefile outputprefix ~backend =
         Clflags.use_inlining_arguments_set Clflags.classic_arguments;
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))
-            (Translmod.transl_store_implementation Asttypes.Nonstatic
-              modulename)
+            (Translmod.transl_store_implementation Nonstatic modulename)
         ++ print_if ppf Clflags.dump_rawlambda Printlambda.program
         ++ Timings.(time (Generate sourcefile))
             (fun { Lambda.code; main_module_block_size } ->
