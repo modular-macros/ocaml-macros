@@ -66,7 +66,7 @@
     Pstr_extension "foo"
     [
       structure_item (extensions.ml[5,72+7]..[5,72+24])
-        Pstr_module
+        Pstr_module Nonstatic
         "M" (extensions.ml[5,72+14]..[5,72+15])
           module_expr (extensions.ml[5,72+18]..[5,72+24])
             Pmod_extension "bar"
@@ -243,7 +243,7 @@
     Pstr_extension "foo"
     [
       signature_item (extensions.ml[15,355+8]..[15,355+25])
-        Psig_module "M" (extensions.ml[15,355+15]..[15,355+16])
+        Psig_module Nonstatic "M" (extensions.ml[15,355+15]..[15,355+16])
         module_type (extensions.ml[15,355+19]..[15,355+25])
           Pmod_extension "baz"
           []
