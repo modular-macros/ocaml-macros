@@ -141,15 +141,16 @@ let rec required_globals phase = function
       else id :: required_globals phase rem
   | _ :: rem -> required_globals phase rem
 
-(* Add entries for the explicitely provided .cmo and .cma files. [phase] is the
- * phase the units will be loaded into (e.g. if linking a normal executable it
- * will be 0, if linking a temporary, macro-producing code it will be 1. *)
-let scan_file phase obj_name =
+(* [unit_of_objfile phase filename] looks up the file name [filename] in the
+   include path and produces a [unit_descr] value for that file (or several
+   units, if [filename] points to a library file. *)
+let unit_of_objfile phase obj_name =
   let file_name =
     try
       find_in_path !load_path obj_name
     with Not_found ->
-      raise(Error(File_not_found obj_name)) in
+      raise (Error (File_not_found obj_name))
+  in
   let ic = open_in_bin file_name in
   let lift_globals = phase = 1 &&
     (Filename.check_suffix obj_name ".cmo"
@@ -169,8 +170,7 @@ let scan_file phase obj_name =
           lift_cu_globals compunit
         else compunit
       in
-      set_status_id (Needed (Standalone (compunit, file_name, phase)))
-        (get_unit_id compunit.cu_reloc)
+      [(Standalone (compunit, file_name, phase))]
     end
     else if buffer = cma_magic_number then begin
       (* This is an archive file. Each unit contained in it will be linked
@@ -188,23 +188,43 @@ let scan_file phase obj_name =
                 toc.lib_units }
         else toc
       in
-      List.iter
-          (fun compunit ->
-            let status =
-              if compunit.cu_force_link || !Clflags.link_everything then begin
-                Needed (In_archive (compunit, file_name, phase))
-              end else begin
-                Available (In_archive (compunit, file_name, phase))
-              end
-            in
-            set_status_id status (get_unit_id compunit.cu_reloc)
-          )
-          toc.lib_units
+      List.map
+        (fun compunit -> In_archive (compunit, file_name, phase))
+        toc.lib_units
     end
     else raise(Error(Not_an_object_file file_name))
   with
     End_of_file -> close_in ic; raise(Error(Not_an_object_file file_name))
   | x -> close_in ic; raise x
+
+(* Add entries for the explicitely provided .cmo and .cma files. [phase] is the
+ * phase the units will be loaded into (e.g. if linking a normal executable it
+ * will be 0, if linking a temporary, macro-producing code it will be 1. *)
+let scan_file phase obj_name =
+  let c_units = unit_of_objfile phase obj_name in
+  match c_units with
+  | [Standalone (compunit,_,_) as u] ->
+      set_status_id (Needed u)
+        (get_unit_id compunit.cu_reloc)
+  | l ->
+    begin
+      List.iter
+        (function
+        | Standalone (compunit,_,_) as u ->
+            (* this case should be unused, but who knows *)
+            set_status_id (Needed u) (get_unit_id compunit.cu_reloc)
+        | In_archive (compunit,_,_) as u ->
+            let status =
+              if compunit.cu_force_link || !Clflags.link_everything then begin
+                Needed u
+              end else begin
+                Available u
+              end
+            in
+            set_status_id status (get_unit_id compunit.cu_reloc)
+          )
+          l
+    end
 
 (* Attempts to find an object file (.cmo or .cmm) after an identifier. If the
    identifier is lifted, remove the lifting symbol before proceeding to lookup.
@@ -695,14 +715,18 @@ let fix_exec_name name =
 (* Main entry point (build a custom runtime if needed) *)
 
 let link ppf phase objfiles output_name =
-  begin if not !Clflags.nopervasives then
-    scan_file phase "stdlib.cma"
-  end;
+  let objfiles =
+    if !Clflags.nopervasives then objfiles
+    else "stdlib.cma" :: objfiles
+  in
   List.iter (scan_file phase) objfiles;
-  begin if not !Clflags.nopervasives && not !Clflags.output_c_object then
-    scan_file phase "std_exit.cmo"
-  end;
   let tolink = sort_and_discover phase in
+  let tolink =
+    if !Clflags.nopervasives || !Clflags.output_c_object then
+      tolink
+    else
+      tolink @ unit_of_objfile phase "std_exit.cmo"
+  in
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs; (* put user's libs last *)
   Clflags.all_ccopts := !lib_ccopts @ !Clflags.all_ccopts;
                                                    (* put user's opts first *)
@@ -865,12 +889,6 @@ let load ppf phase obj_names =
   load_bytecode ppf tolink
 
 let load_deps ppf phase obj_names reloc =
-  (*
-  let tolink =
-    if !Clflags.nopervasives then []
-    else scan_file phase "std_exit.cmo" []
-  in
-  *)
   List.iter (scan_file phase) obj_names;
   (if not (!Clflags.nopervasives || !Clflags.no_std_include) then
     scan_file phase "stdlib.cma")
