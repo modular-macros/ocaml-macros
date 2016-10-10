@@ -724,8 +724,10 @@ let link ppf phase objfiles output_name =
   let tolink =
     if !Clflags.nopervasives || !Clflags.output_c_object then
       tolink
-    else
-      tolink @ unit_of_objfile phase "std_exit.cmo"
+    else begin
+      scan_file phase "std_exit.cmo";
+      tolink @ sort_and_discover phase
+    end
   in
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs; (* put user's libs last *)
   Clflags.all_ccopts := !lib_ccopts @ !Clflags.all_ccopts;
