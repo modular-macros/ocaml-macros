@@ -490,7 +490,7 @@
                 []
     ]
   structure_item (shortcut_ext_attr.ml[57,1186+0]..[60,1242+22])
-    Pstr_module
+    Pstr_module Nonstatic
     "M" (shortcut_ext_attr.ml[57,1186+7]..[57,1186+8])
       module_expr (shortcut_ext_attr.ml[58,1197+2]..[60,1242+22])
         attribute "foo"
@@ -684,7 +684,7 @@
     Pstr_extension "foo"
     [
       structure_item (shortcut_ext_attr.ml[81,1615+0]..[81,1615+22])
-        Pstr_module
+        Pstr_module Nonstatic
         "M" (shortcut_ext_attr.ml[81,1615+17]..[81,1615+18])
           attribute "foo"
             []
@@ -695,7 +695,7 @@
     Pstr_extension "foo"
     [
       structure_item (shortcut_ext_attr.ml[82,1638+0]..[83,1669+19])
-        Pstr_recmodule
+        Pstr_recmodule Nonstatic
         [
           "M" (shortcut_ext_attr.ml[82,1638+21]..[82,1638+22])
             attribute "foo"
@@ -855,7 +855,7 @@
             Psig_extension "foo"
             [
               signature_item (shortcut_ext_attr.ml[100,1949+2]..[100,1949+24])
-                Psig_module "M" (shortcut_ext_attr.ml[100,1949+19]..[100,1949+20])
+                Psig_module Nonstatic "M" (shortcut_ext_attr.ml[100,1949+19]..[100,1949+20])
                   attribute "foo"
                     []
                 module_type (shortcut_ext_attr.ml[100,1949+23]..[100,1949+24])
@@ -865,7 +865,7 @@
             Psig_extension "foo"
             [
               signature_item (shortcut_ext_attr.ml[101,1974+2]..[102,2003+17])
-                Psig_recmodule
+                Psig_recmodule Nonstatic
                 [
                   "M" (shortcut_ext_attr.ml[101,1974+23]..[101,1974+24])
                     attribute "foo"
@@ -883,7 +883,7 @@
             Psig_extension "foo"
             [
               signature_item (shortcut_ext_attr.ml[103,2021+2]..[103,2021+24])
-                Psig_module "M" (shortcut_ext_attr.ml[103,2021+19]..[103,2021+20])
+                Psig_module Nonstatic "M" (shortcut_ext_attr.ml[103,2021+19]..[103,2021+20])
                   attribute "foo"
                     []
                 module_type (shortcut_ext_attr.ml[103,2021+23]..[103,2021+24])
