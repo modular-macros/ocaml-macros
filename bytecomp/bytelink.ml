@@ -136,7 +136,8 @@ let set_status_id status id =
 let rec required_globals phase = function
   | [] -> []
   | (Reloc_getglobal id, _pos) :: rem ->
-      if Symtable.is_global_defined (phase,id) || has_dot id then
+      if Symtable.is_global_defined (phase,id) || has_dot id
+          || Array.mem (Ident.name id) Runtimedef.builtin_exceptions then
         required_globals phase rem
       else id :: required_globals phase rem
   | _ :: rem -> required_globals phase rem
