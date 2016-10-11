@@ -308,10 +308,14 @@ let record_primitive = function
 
 (* Utilities for compiling "module rec" definitions *)
 
-let mod_prim name =
+let mod_prim phase name =
+  let mod_name =
+    if phase = Static then "^CamlinternalMod"
+    else "CamlinternalMod"
+  in
   try
     transl_normal_path
-      (fst (Env.lookup_value (Ldot (Lident "CamlinternalMod", name))
+      (fst (Env.lookup_value (Ldot (Lident mod_name, name))
                              Env.empty))
   with Not_found ->
     fatal_error ("Primitive " ^ name ^ " not found.")
@@ -411,7 +415,7 @@ let reorder_rec_bindings bindings =
 
 (* Generate lambda-code for a reordered list of bindings *)
 
-let eval_rec_bindings bindings cont =
+let eval_rec_bindings phase bindings cont =
   let rec bind_inits = function
     [] ->
       bind_strict bindings
@@ -421,7 +425,7 @@ let eval_rec_bindings bindings cont =
       Llet(Strict, Pgenval, id,
            Lapply{ap_should_be_tailcall=false;
                   ap_loc=Location.none;
-                  ap_func=mod_prim "init_mod";
+                  ap_func=mod_prim phase "init_mod";
                   ap_args=[loc; shape];
                   ap_inlined=Default_inline;
                   ap_specialised=Default_specialise},
@@ -441,7 +445,7 @@ let eval_rec_bindings bindings cont =
   | (id, Some(_loc, shape), rhs) :: rem ->
       Lsequence(Lapply{ap_should_be_tailcall=false;
                        ap_loc=Location.none;
-                       ap_func=mod_prim "update_mod";
+                       ap_func=mod_prim phase "update_mod";
                        ap_args=[shape; Lvar id; rhs];
                        ap_inlined=Default_inline;
                        ap_specialised=Default_specialise},
@@ -449,8 +453,8 @@ let eval_rec_bindings bindings cont =
   in
     bind_inits bindings
 
-let compile_recmodule compile_rhs bindings cont =
-  eval_rec_bindings
+let compile_recmodule phase compile_rhs bindings cont =
+  eval_rec_bindings phase
     (reorder_rec_bindings
        (List.map
           (fun {mb_id=id; mb_expr=modl; _} ->
@@ -718,7 +722,7 @@ and transl_structure fields cc rootpath target_phase item_postproc final_env = f
               transl_structure ext_fields cc rootpath target_phase
                 item_postproc final_env rem in
             let lam =
-              compile_recmodule
+              compile_recmodule target_phase
                 (fun id modl ->
                    transl_module Tcoerce_none (field_path rootpath id) target_phase modl)
                 bindings
@@ -1139,7 +1143,7 @@ let transl_store_structure target_phase glob map prims str =
               transl_store rootpath subst rem
             else
               let ids = List.map (fun mb -> mb.mb_id) bindings in
-              compile_recmodule
+              compile_recmodule target_phase
                 (fun id modl ->
                    subst_lambda subst
                      (transl_module Tcoerce_none
@@ -1383,7 +1387,7 @@ let transl_toplevel_item target_phase item =
           lambda_unit
         else begin
           let idents = List.map (fun mb -> mb.mb_id) bindings in
-          compile_recmodule
+          compile_recmodule target_phase
             (fun id modl ->
               transl_module Tcoerce_none (Some(Pident id)) target_phase modl)
             bindings
