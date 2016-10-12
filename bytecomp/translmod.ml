@@ -327,7 +327,7 @@ let undefined_location loc =
                       Const_base(Const_int line);
                       Const_base(Const_int char)]))
 
-let init_shape modl =
+let init_shape target_phase modl =
   let rec init_shape_mod env mty =
     match Mtype.scrape env mty with
       Mty_ident _ ->
@@ -368,8 +368,12 @@ let init_shape modl =
     | Sig_modtype(id, minfo) :: rem ->
         init_shape_struct (Env.add_modtype id minfo env) rem
     | Sig_class _ :: rem ->
-        Const_pointer 2 (* camlinternalMod.Class *)
-        :: init_shape_struct env rem
+        let x =
+          if target_phase = Static then
+            Const_block(1, [Const_base (Const_int 0)])
+          else Const_pointer 2 (* camlinternalMod.Class *)
+        in
+        x :: init_shape_struct env rem
     | Sig_class_type _ :: rem ->
         init_shape_struct env rem
   in
@@ -458,7 +462,7 @@ let compile_recmodule phase compile_rhs bindings cont =
     (reorder_rec_bindings
        (List.map
           (fun {mb_id=id; mb_expr=modl; _} ->
-            (id, modl.mod_loc, init_shape modl, compile_rhs id modl))
+            (id, modl.mod_loc, init_shape phase modl, compile_rhs id modl))
           bindings))
     cont
 
