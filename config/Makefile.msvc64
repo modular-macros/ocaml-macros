@@ -79,6 +79,11 @@ ASM_CFI_SUPPORTED=false
 UNIXLIB=win32unix
 GRAPHLIB=win32graph
 FLAMBDA=false
+WITH_SPACETIME=false
+LIBUNWIND_AVAILABLE=false
+LIBUNWIND_LINK_FLAGS=
+PROFINFO_WIDTH=26
+SAFE_STRING=false
 
 ########## Configuration for the bytecode compiler
 
@@ -89,7 +94,10 @@ BYTECC=cl -nologo -D_CRT_SECURE_NO_DEPRECATE
 BYTECCCOMPOPTS=-O2 -Gy- -MD
 
 ### Additional compile-time options for $(BYTECC).  (For debug version.)
-BYTECCDBGCOMPOPTS=-DDEBUG -Zi -W3 -Wp64
+BYTECCDBGCOMPOPTS=-Zi
+
+### Flag to use to rename object files.  (for debug version.)
+NAME_OBJ_FLAG=-Fo
 
 ### Additional link-time options for $(BYTECC).  (For static linking.)
 BYTECCLINKOPTS=

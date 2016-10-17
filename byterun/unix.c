@@ -13,6 +13,8 @@
 /*                                                                        */
 /**************************************************************************/
 
+#define CAML_INTERNALS
+
 /* Unix-specific stuff */
 
 #define _GNU_SOURCE
@@ -47,6 +49,7 @@
 #include "caml/osdeps.h"
 #include "caml/signals.h"
 #include "caml/sys.h"
+#include "caml/io.h"
 
 #ifndef S_ISREG
 #define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
@@ -78,9 +81,17 @@ int caml_write_fd(int fd, int flags, void * buf, int n)
 {
   int retcode;
  again:
+#if defined(NATIVE_CODE) && defined(WITH_SPACETIME)
+  if (flags & CHANNEL_FLAG_BLOCKING_WRITE) {
+    retcode = write(fd, buf, n);
+  } else {
+#endif
   caml_enter_blocking_section();
   retcode = write(fd, buf, n);
   caml_leave_blocking_section();
+#if defined(NATIVE_CODE) && defined(WITH_SPACETIME)
+  }
+#endif
   if (retcode == -1) {
     if (errno == EINTR) goto again;
     if ((errno == EAGAIN || errno == EWOULDBLOCK) && n > 1) {
@@ -322,7 +333,7 @@ char * caml_dlerror(void)
    the directory named [dirname].  No entries are added for [.] and [..].
    Return 0 on success, -1 on error; set errno in the case of error. */
 
-int caml_read_directory(char * dirname, struct ext_table * contents)
+CAMLexport int caml_read_directory(char * dirname, struct ext_table * contents)
 {
   DIR * d;
 #ifdef HAS_DIRENT

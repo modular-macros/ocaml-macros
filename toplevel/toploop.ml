@@ -162,7 +162,7 @@ let record_backtrace () =
 
 let load_lambda phase ppf lam =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
-  let slam = Simplif.simplify_lambda lam in
+  let slam = Simplif.simplify_lambda "//toplevel//" lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
   let (init_code, fun_code) = Bytegen.compile_phrase slam in
   if !Clflags.dump_instr then
@@ -393,6 +393,9 @@ let preprocess_phrase ppf phr =
         let str =
           Pparse.apply_rewriters_str ~restore:true ~tool_name:"ocaml" str
         in
+        let str =
+          Pparse.ImplementationHooks.apply_hooks
+            { Misc.sourcefile = "//toplevel//" } str in
         Ptop_def str
     | phr -> phr
   in
@@ -525,7 +528,9 @@ let set_paths () =
      but keep the directories that user code linked in with ocamlmktop
      may have added to load_path. *)
   load_path := !load_path @ [Filename.concat Config.standard_library "camlp4"];
-  load_path := "" :: (List.rev !Clflags.include_dirs @ !load_path);
+  load_path := "" :: List.rev (!Compenv.last_include_dirs @
+                               !Clflags.include_dirs @
+                               !Compenv.first_include_dirs) @ !load_path;
   Dll.add_path !load_path
 
 let initialize_toplevel_env () =

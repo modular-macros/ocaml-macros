@@ -320,11 +320,19 @@ let validate d m p =
   ucompare2 twoszp md < 0 && ucompare2 md (add2 twoszp twop1) <= 0
 *)
 
+let raise_regular dbg exc =
+  Csequence(
+    Cop(Cstore (Thirtytwo_signed, Assignment),
+        [(Cconst_symbol "caml_backtrace_pos"); Cconst_int 0]),
+      Cop(Craise (Raise_withtrace, dbg),[exc]))
+
+let raise_symbol dbg symb =
+  raise_regular dbg (Cconst_symbol symb)
+
 let rec div_int c1 c2 dbg =
   match (c1, c2) with
     (c1, Cconst_int 0) ->
-      Csequence(c1, Cop(Craise (Raise_regular, dbg),
-                        [Cconst_symbol "caml_exn_Division_by_zero"]))
+      Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero")
   | (c1, Cconst_int 1) ->
       c1
   | (Cconst_int 0 as c1, c2) ->
@@ -367,14 +375,12 @@ let rec div_int c1 c2 dbg =
       bind "divisor" c2 (fun c2 ->
         Cifthenelse(c2,
                     Cop(Cdivi, [c1; c2]),
-                    Cop(Craise (Raise_regular, dbg),
-                        [Cconst_symbol "caml_exn_Division_by_zero"])))
+                    raise_symbol dbg "caml_exn_Division_by_zero"))
 
 let mod_int c1 c2 dbg =
   match (c1, c2) with
     (c1, Cconst_int 0) ->
-      Csequence(c1, Cop(Craise (Raise_regular, dbg),
-                        [Cconst_symbol "caml_exn_Division_by_zero"]))
+      Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero")
   | (c1, Cconst_int (1 | (-1))) ->
       Csequence(c1, Cconst_int 0)
   | (Cconst_int 0, c2) ->
@@ -406,8 +412,7 @@ let mod_int c1 c2 dbg =
       bind "divisor" c2 (fun c2 ->
         Cifthenelse(c2,
                     Cop(Cmodi, [c1; c2]),
-                    Cop(Craise (Raise_regular, dbg),
-                        [Cconst_symbol "caml_exn_Division_by_zero"])))
+                    raise_symbol dbg "caml_exn_Division_by_zero"))
 
 (* Division or modulo on boxed integers.  The overflow case min_int / -1
    can occur, in which case we force x / -1 = -x and x mod -1 = 0. (PR#5513). *)
@@ -489,8 +494,8 @@ let rec remove_unit = function
       Clet(id, c1, remove_unit c2)
   | Cop(Capply (_mty, dbg), args) ->
       Cop(Capply (typ_void, dbg), args)
-  | Cop(Cextcall(proc, _mty, alloc, dbg), args) ->
-      Cop(Cextcall(proc, typ_void, alloc, dbg), args)
+  | Cop(Cextcall(proc, _mty, alloc, dbg, label_after), args) ->
+      Cop(Cextcall(proc, typ_void, alloc, dbg, label_after), args)
   | Cexit (_,_) as c -> c
   | Ctuple [] as c -> c
   | c -> Csequence(c, Ctuple [])
@@ -510,7 +515,14 @@ let set_field ptr n newval init =
   Cop(Cstore (Word_val, init), [field_address ptr n; newval])
 
 let header ptr =
-  Cop(Cload Word_int, [Cop(Cadda, [ptr; Cconst_int(-size_int)])])
+  if Config.spacetime then
+    let non_profinfo_mask = (1 lsl (64 - Config.profinfo_width)) - 1 in
+    Cop(Cand, [Cop (Cload Word_int,
+        [Cop(Cadda, [ptr; Cconst_int(-size_int)])]);
+      Cconst_int non_profinfo_mask;
+    ])
+  else
+    Cop(Cload Word_int, [Cop(Cadda, [ptr; Cconst_int(-size_int)])])
 
 let tag_offset =
   if big_endian then -1 else -size_int
@@ -587,7 +599,7 @@ let float_array_ref dbg arr ofs =
   box_float dbg (unboxed_float_array_ref arr ofs)
 
 let addr_array_set arr ofs newval =
-  Cop(Cextcall("caml_modify", typ_void, false, Debuginfo.none),
+  Cop(Cextcall("caml_modify", typ_void, false, Debuginfo.none, None),
       [array_indexing log2_size_addr arr ofs; newval])
 let int_array_set arr ofs newval =
   Cop(Cstore (Word_int, Assignment),
@@ -618,7 +630,8 @@ let string_length exp =
 
 let lookup_tag obj tag =
   bind "tag" tag (fun tag ->
-    Cop(Cextcall("caml_get_public_method", typ_val, false, Debuginfo.none),
+    Cop(Cextcall("caml_get_public_method", typ_val, false, Debuginfo.none,
+          None),
         [obj; tag]))
 
 let lookup_label obj lab =
@@ -646,7 +659,7 @@ let make_alloc_generic set_fn dbg tag wordsize args =
     | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int idx) e1,
                           fill_fields (idx + 2) el) in
     Clet(id,
-         Cop(Cextcall("caml_alloc", typ_val, true, Debuginfo.none),
+         Cop(Cextcall("caml_alloc", typ_val, true, Debuginfo.none, None),
                  [Cconst_int wordsize; Cconst_int tag]),
          fill_fields 1 args)
   end
@@ -707,6 +720,8 @@ let rec expr_size env = function
       RHS_floatblock (List.length args)
   | Uprim (Pduprecord ((Record_regular | Record_inlined _), sz), _, _) ->
       RHS_block sz
+  | Uprim (Pduprecord (Record_unboxed _, _), _, _) ->
+      assert false
   | Uprim (Pduprecord (Record_extension, sz), _, _) ->
       RHS_block (sz + 1)
   | Uprim (Pduprecord (Record_float, sz), _, _) ->
@@ -1714,7 +1729,7 @@ let rec transl env e =
 and transl_make_array dbg env kind args =
   match kind with
   | Pgenarray ->
-      Cop(Cextcall("caml_make_array", typ_val, true, Debuginfo.none),
+      Cop(Cextcall("caml_make_array", typ_val, true, Debuginfo.none, None),
           [make_alloc dbg 0 (List.map (transl env) args)])
   | Paddrarray | Pintarray ->
       make_alloc dbg 0 (List.map (transl env) args)
@@ -1752,12 +1767,12 @@ and transl_ccall env prim args dbg =
   let args = transl_args prim.prim_native_repr_args args in
   wrap_result
     (Cop(Cextcall(Primitive.native_name prim,
-                  typ_res, prim.prim_alloc, dbg), args))
+                  typ_res, prim.prim_alloc, dbg, None), args))
 
 and transl_prim_1 env p arg dbg =
   match p with
   (* Generic operations *)
-    Pidentity | Popaque ->
+    Pidentity | Pbytes_to_string | Pbytes_of_string | Popaque ->
       transl env arg
   | Pignore ->
       return_unit(remove_unit (transl env arg))
@@ -1774,8 +1789,14 @@ and transl_prim_1 env p arg dbg =
      Cop(Caddi, [transl env arg; Cconst_int (-1)])
      (* always a pointer outside the heap *)
   (* Exceptions *)
-  | Praise k ->
-      Cop(Craise (k, dbg), [transl env arg])
+  | Praise _ when not (!Clflags.debug) ->
+      Cop(Craise (Cmm.Raise_notrace, dbg), [transl env arg])
+  | Praise Lambda.Raise_notrace ->
+      Cop(Craise (Cmm.Raise_notrace, dbg), [transl env arg])
+  | Praise Lambda.Raise_reraise ->
+      Cop(Craise (Cmm.Raise_withtrace, dbg), [transl env arg])
+  | Praise Lambda.Raise_regular ->
+      raise_regular dbg (transl env arg)
   (* Integer operations *)
   | Pnegint ->
       Cop(Csubi, [Cconst_int 2; transl env arg])
@@ -1791,7 +1812,8 @@ and transl_prim_1 env p arg dbg =
         | Ostype_unix -> const_of_bool (Sys.os_type = "Unix")
         | Ostype_win32 -> const_of_bool (Sys.os_type = "Win32")
         | Ostype_cygwin -> const_of_bool (Sys.os_type = "Cygwin")
-        | Backend_type -> tag_int (Cconst_int 0) (* tag 0 is the same as Native here *)
+        | Backend_type ->
+            tag_int (Cconst_int 0) (* tag 0 is the same as Native here *)
       end
   | Poffsetint n ->
       if no_overflow_lsl n 1 then
@@ -1814,7 +1836,7 @@ and transl_prim_1 env p arg dbg =
   | Pabsfloat ->
       box_float dbg (Cop(Cabsf, [transl_unbox_float env arg]))
   (* String operations *)
-  | Pstringlength ->
+  | Pstringlength | Pbyteslength ->
       tag_int(string_length (transl env arg))
   (* Array operations *)
   | Parraylength kind ->
@@ -1855,11 +1877,11 @@ and transl_prim_1 env p arg dbg =
         | Pint32 -> "int32"
         | Pint64 -> "int64" in
       box_int dbg bi (Cop(Cextcall(Printf.sprintf "caml_%s_direct_bswap" prim,
-                               typ_int, false, Debuginfo.none),
+                               typ_int, false, Debuginfo.none, None),
                       [transl_unbox_int env bi arg]))
   | Pbswap16 ->
       tag_int (Cop(Cextcall("caml_bswap16_direct", typ_int, false,
-                            Debuginfo.none),
+                            Debuginfo.none, None),
                    [untag_int (transl env arg)]))
   | prim ->
       fatal_errorf "Cmmgen.transl_prim_1: %a" Printlambda.primitive prim
@@ -1870,7 +1892,8 @@ and transl_prim_2 env p arg1 arg2 dbg =
     Psetfield(n, ptr, init) ->
       begin match init, ptr with
       | Assignment, Pointer ->
-        return_unit(Cop(Cextcall("caml_modify", typ_void, false,Debuginfo.none),
+        return_unit(Cop(Cextcall("caml_modify", typ_void, false,Debuginfo.none,
+                          None),
                         [field_address (transl env arg1) n; transl env arg2]))
       | Assignment, Immediate
       | Initialization, (Immediate | Pointer) ->
@@ -1957,10 +1980,10 @@ and transl_prim_2 env p arg1 arg2 dbg =
                   [transl_unbox_float env arg1; transl_unbox_float env arg2]))
 
   (* String operations *)
-  | Pstringrefu ->
+  | Pstringrefu | Pbytesrefu ->
       tag_int(Cop(Cload Byte_unsigned,
                   [add_int (transl env arg1) (untag_int(transl env arg2))]))
-  | Pstringrefs ->
+  | Pstringrefs | Pbytesrefs ->
       tag_int
         (bind "str" (transl env arg1) (fun str ->
           bind "index" (untag_int (transl env arg2)) (fun idx ->
@@ -2141,11 +2164,11 @@ and transl_prim_2 env p arg1 arg2 dbg =
 and transl_prim_3 env p arg1 arg2 arg3 dbg =
   match p with
   (* String operations *)
-    Pstringsetu ->
+  | Pbytessetu ->
       return_unit(Cop(Cstore (Byte_unsigned, Assignment),
                       [add_int (transl env arg1) (untag_int(transl env arg2));
                         untag_int(transl env arg3)]))
-  | Pstringsets ->
+  | Pbytessets ->
       return_unit
         (bind "str" (transl env arg1) (fun str ->
           bind "index" (untag_int (transl env arg2)) (fun idx ->
@@ -2460,7 +2483,7 @@ and transl_letrec env bindings cont =
   let bsz =
     List.map (fun (id, exp) -> (id, exp, expr_size Ident.empty exp)) bindings in
   let op_alloc prim sz =
-    Cop(Cextcall(prim, typ_val, true, Debuginfo.none), [int_const sz]) in
+    Cop(Cextcall(prim, typ_val, true, Debuginfo.none, None), [int_const sz]) in
   let rec init_blocks = function
     | [] -> fill_nonrec bsz
     | (id, _exp, RHS_block sz) :: rem ->
@@ -2479,7 +2502,8 @@ and transl_letrec env bindings cont =
     | [] -> cont
     | (id, exp, (RHS_block _ | RHS_floatblock _)) :: rem ->
         let op =
-          Cop(Cextcall("caml_update_dummy", typ_void, false, Debuginfo.none),
+          Cop(Cextcall("caml_update_dummy", typ_void, false, Debuginfo.none,
+                None),
               [Cvar id; transl env exp]) in
         Csequence(op, fill_blocks rem)
     | (_id, _exp, RHS_nonrec) :: rem ->
@@ -2517,7 +2541,7 @@ let rec transl_all_functions already_translated cont =
     else begin
       transl_all_functions
         (StringSet.add f.label already_translated)
-        (transl_function f :: cont)
+        ((f.dbg, transl_function f) :: cont)
     end
   with Queue.Empty ->
     cont, already_translated
@@ -2669,16 +2693,27 @@ let emit_all_constants cont =
   emit_constants cont constants
 
 let transl_all_functions_and_emit_all_constants cont =
-  let rec aux already_translated cont =
+  let rec aux already_translated cont translated_functions =
     if Compilenv.structured_constants () = [] &&
        Queue.is_empty functions
-    then cont
+    then cont, translated_functions
     else
-      let cont, already_translated = transl_all_functions already_translated cont in
+      let translated_functions, already_translated =
+        transl_all_functions already_translated translated_functions
+      in
       let cont = emit_all_constants cont in
-      aux already_translated cont
+      aux already_translated cont translated_functions
   in
-  aux StringSet.empty cont
+  let cont, translated_functions =
+    aux StringSet.empty cont []
+  in
+  let translated_functions =
+    (* Sort functions according to source position *)
+    List.map snd
+      (List.sort (fun (dbg1, _) (dbg2, _) ->
+           Debuginfo.compare dbg1 dbg2) translated_functions)
+  in
+  translated_functions @ cont
 
 (* Build the NULL terminated array of gc roots *)
 
@@ -3089,6 +3124,18 @@ let frame_table namelist =
   in
   Cdata(Cglobal_symbol "caml_frametable" ::
         Cdefine_symbol "caml_frametable" ::
+        List.map mksym namelist
+        @ [cint_zero])
+
+(* Generate the master table of Spacetime shapes *)
+
+let spacetime_shapes namelist =
+  let mksym name =
+    Csymbol_address (
+      Compilenv.make_symbol ~unitname:name (Some "spacetime_shapes"))
+  in
+  Cdata(Cglobal_symbol "caml_spacetime_shapes" ::
+        Cdefine_symbol "caml_spacetime_shapes" ::
         List.map mksym namelist
         @ [cint_zero])
 

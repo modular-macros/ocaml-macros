@@ -68,9 +68,10 @@ let mkdll, mkexe, mkmaindll =
     "%%MKDLL%%", "%%MKEXE%%", "%%MKMAINDLL%%"
 
 let flambda = %%FLAMBDA%%
+let safe_string = %%SAFE_STRING%%
 
 let exec_magic_number = "Caml1999X011"
-and cmi_magic_number = "Caml1999I020"
+and cmi_magic_number = "Caml1999I021"
 and cmo_magic_number = "Caml1999O011"
 and cma_magic_number = "Caml1999A012"
 and cmx_magic_number =
@@ -86,7 +87,7 @@ and cmxa_magic_number =
 and ast_impl_magic_number = "Caml1999M019"
 and ast_intf_magic_number = "Caml1999N018"
 and cmxs_magic_number = "Caml2007D002"
-and cmt_magic_number = "Caml2012T007"
+and cmt_magic_number = "Caml2012T008"
 
 let load_path = ref ([] : string list)
 
@@ -109,6 +110,10 @@ let system = "%%SYSTEM%%"
 let asm = "%%ASM%%"
 let asm_cfi_supported = %%ASM_CFI_SUPPORTED%%
 let with_frame_pointers = %%WITH_FRAME_POINTERS%%
+let spacetime = %%WITH_SPACETIME%%
+let libunwind_available = %%LIBUNWIND_AVAILABLE%%
+let libunwind_link_flags = "%%LIBUNWIND_LINK_FLAGS%%"
+let profinfo_width = %%PROFINFO_WIDTH%%
 
 let ext_obj = "%%EXT_OBJ%%"
 let ext_asm = "%%EXT_ASM%%"
@@ -157,6 +162,8 @@ let print_config oc =
   p "host" host;
   p "target" target;
   p_bool "flambda" flambda;
+  p_bool "spacetime" spacetime;
+  p_bool "safe_string" safe_string;
 
   (* print the magic number *)
   p "exec_magic_number" exec_magic_number;

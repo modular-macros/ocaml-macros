@@ -115,7 +115,10 @@ coldstart:
 	cp byterun/ocamlrun.exe boot/ocamlrun.exe
 	cd yacc ; $(MAKEREC) $(BOOT_FLEXLINK_CMD) all
 	cp yacc/ocamlyacc.exe boot/ocamlyacc.exe
-	cd stdlib ; $(MAKEREC) $(BOOT_FLEXLINK_CMD) COMPILER="../boot/ocamlc -use-prims ../byterun/primitives" all
+	cd stdlib ; \
+	  $(MAKEREC) $(BOOT_FLEXLINK_CMD) \
+	             COMPILER="../boot/ocamlc -use-prims ../byterun/primitives"\
+	             all
 	cd stdlib ; cp $(LIBFILES) ../boot
 
 # Build the core system: the minimum needed to make depend and bootstrap
@@ -332,9 +335,11 @@ compilerlibs/ocamloptcomp.cma: $(MIDDLE_END) $(ASMCOMP)
 partialclean::
 	rm -f compilerlibs/ocamloptcomp.cma
 
-ocamlopt: compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma $(OPTSTART)
+ocamlopt: compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma \
+          compilerlibs/ocamlbytecomp.cma $(OPTSTART)
 	$(CAMLC) $(LINKFLAGS) -o ocamlopt \
-          compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma $(OPTSTART)
+          compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma \
+	  compilerlibs/ocamlbytecomp.cma $(OPTSTART)
 
 partialclean::
 	rm -f ocamlopt
@@ -359,9 +364,16 @@ partialclean::
 
 # The native toplevel
 
-ocamlnat: ocamlopt otherlibs/dynlink/dynlink.cmxa $(NATTOPOBJS:.cmo=.cmx)
-	$(CAMLOPT) $(LINKFLAGS) otherlibs/dynlink/dynlink.cmxa -o ocamlnat \
-	           $(NATTOPOBJS:.cmo=.cmx) -linkall
+compilerlibs/ocamlopttoplevel.cmxa: $(OPTTOPLEVEL:.cmo=.cmx)
+	$(CAMLOPT) -a -o $@ $(OPTTOPLEVEL:.cmo=.cmx)
+partialclean::
+	rm -f compilerlibs/ocamlopttoplevel.cmxa
+
+ocamlnat: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
+    compilerlibs/ocamlbytecomp.cmxa \
+    compilerlibs/ocamlopttoplevel.cmxa \
+    $(OPTTOPLEVELSTART:.cmo=.cmx)
+	$(CAMLOPT) $(LINKFLAGS) -linkall -o $@ $^
 
 toplevel/opttoploop.cmx: otherlibs/dynlink/dynlink.cmxa
 
@@ -397,6 +409,10 @@ utils/config.ml: utils/config.mlp config/Makefile
 	    -e 's|%%ASM%%|$(ASM)|' \
 	    -e 's|%%ASM_CFI_SUPPORTED%%|false|' \
 	    -e 's|%%WITH_FRAME_POINTERS%%|false|' \
+	    -e 's|%%WITH_SPACETIME%%|$(WITH_SPACETIME)|' \
+	    -e 's|%%PROFINFO_WIDTH%%|$(PROFINFO_WIDTH)|' \
+	    -e 's|%%LIBUNWIND_AVAILABLE%%|false|' \
+	    -e 's|%%LIBUNWIND_LINK_FLAGS%%||' \
 	    -e 's|%%MKDLL%%|$(MKDLL)|' \
 	    -e 's|%%MKEXE%%|$(MKEXE)|' \
 	    -e 's|%%MKMAINDLL%%|$(MKMAINDLL)|' \
@@ -404,6 +420,7 @@ utils/config.ml: utils/config.mlp config/Makefile
 	    -e 's|%%HOST%%|$(HOST)|' \
 	    -e 's|%%TARGET%%|$(TARGET)|' \
 	    -e 's|%%FLAMBDA%%|$(FLAMBDA)|' \
+	    -e 's|%%SAFE_STRING%%|$(SAFE_STRING)|' \
 	    -e 's|%%FLEXLINK_FLAGS%%|$(FLEXLINK_FLAGS)|' \
 	    utils/config.mlp > utils/config.ml
 
@@ -463,10 +480,12 @@ partialclean::
 	rm -f compilerlibs/ocamloptcomp.cmxa compilerlibs/ocamloptcomp.$(A)
 
 ocamlopt.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
+              compilerlibs/ocamlbytecomp.cmxa \
               $(OPTSTART:.cmo=.cmx)
 	$(CAMLOPT) $(LINKFLAGS) -o ocamlopt.opt \
-           compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
-           $(OPTSTART:.cmo=.cmx)
+          compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
+	  compilerlibs/ocamlbytecomp.cmxa \
+          $(OPTSTART:.cmo=.cmx)
 
 partialclean::
 	rm -f ocamlopt.opt
@@ -596,7 +615,7 @@ alldepend::
 runtimeopt: makeruntimeopt stdlib/libasmrun.$(A)
 
 makeruntimeopt:
-	cd asmrun ; $(MAKEREC) all
+	cd asmrun ; $(MAKEREC) $(BOOT_FLEXLINK_CMD) all
 stdlib/libasmrun.$(A): asmrun/libasmrun.$(A)
 	cp asmrun/libasmrun.$(A) stdlib/libasmrun.$(A)
 clean::
@@ -714,12 +733,18 @@ depend: beforedepend
 	 middle_end/base_types driver toplevel; \
 	 do $(CAMLDEP) -slash $(DEPFLAGS) $$d/*.mli $$d/*.ml; \
 	 done) > .depend
+	$(CAMLDEP) -slash $(DEPFLAGS) -native \
+		-impl driver/compdynlink.mlopt >> .depend
+	$(CAMLDEP) -slash $(DEPFLAGS) -bytecode \
+		-impl driver/compdynlink.mlbyte >> .depend
 
 alldepend:: depend
 
 distclean:
 	$(MAKEREC) clean
-	rm -f asmrun/.depend.nt byterun/.depend.nt
+	rm -f asmrun/.depend.nt byterun/.depend.nt \
+	            otherlibs/bigarray/.depend.nt  \
+		    otherlibs/str/.depend.nt
 	rm -f boot/ocamlrun boot/ocamlrun.exe boot/camlheader boot/ocamlyacc \
 	      boot/*.cm* boot/libcamlrun.a
 	rm -f config/Makefile config/m.h config/s.h

@@ -20,13 +20,6 @@
   an error.
 *)
 
-type backend_type = 
-  | Native
-  | Bytecode
-  | Other of string 
-(** Currently, the official distribution only supports [Native] and [Bytecode], 
-    but it can be other backends with alternative compilers, for example, javascript *)
-
 val argv : string array
 (** The command line arguments given to the process.
    The first element is the command name used to invoke the program.
@@ -93,8 +86,19 @@ val os_type : string
 -  ["Win32"] (for MS-Windows, OCaml compiled with MSVC++ or Mingw),
 -  ["Cygwin"] (for MS-Windows, OCaml compiled with Cygwin). *)
 
+type backend_type =
+  | Native
+  | Bytecode
+  | Other of string (**)
+(** Currently, the official distribution only supports [Native] and
+    [Bytecode], but it can be other backends with alternative
+    compilers, for example, javascript.
+
+    @since 4.04.0
+*)
+
 val backend_type : backend_type
-(** Backend type  currently executing the OCaml program. 
+(** Backend type  currently executing the OCaml program.
     @ since 4.04.0
  *)
 

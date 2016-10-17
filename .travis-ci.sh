@@ -40,6 +40,10 @@ EOF
     make install
     (cd testsuite && make all)
     (cd testsuite && make USE_RUNTIME="d" all)
+    # check_all_arches checks tries to compile all backends in place,
+    # we need to redo (small parts of) world.opt afterwards
+    make check_all_arches
+    make world.opt
     mkdir external-packages
     cd external-packages
     git clone git://github.com/ocaml/ocamlbuild
@@ -53,7 +57,7 @@ EOF
           OCAML_NATIVE_TOOLS=true &&
         make all &&
         make install)
-    git clone git://github.com/ocaml/camlp4
+    git clone git://github.com/ocaml/camlp4 -b 4.04
     (cd camlp4 &&
      ./configure --bindir=$PREFIX/bin --libdir=$PREFIX/lib/ocaml \
        --pkgdir=$PREFIX/lib/ocaml && \

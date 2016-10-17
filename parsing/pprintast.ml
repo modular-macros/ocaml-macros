@@ -414,6 +414,14 @@ and simple_pattern ctxt (f:Format.formatter) (x:pattern) : unit =
     | Ppat_exception p ->
         pp f "@[<2>exception@;%a@]" (pattern1 ctxt) p
     | Ppat_extension e -> extension ctxt f e
+    | Ppat_open (lid, p) ->
+        let with_paren =
+        match p.ppat_desc with
+        | Ppat_array _ | Ppat_record _
+        | Ppat_construct (({txt=Lident ("()"|"[]");_}), _) -> false
+        | _ -> true in
+        pp f "@[<2>%a.%a @]" longident_loc lid
+          (paren with_paren @@ pattern1 ctxt) p
     | _ -> paren true (pattern ctxt) f x
 
 and label_exp ctxt f (l,opt,p) =
@@ -506,10 +514,12 @@ and expression ctxt f x =
           (expression reset_ctxt) e (case_list ctxt) l
 
     | Pexp_try (e, l) ->
-        pp f "@[<0>@[<hv2>try@ %a@]@ @[<0>with%a@]@]" (* "try@;@[<2>%a@]@\nwith@\n%a"*)
+        pp f "@[<0>@[<hv2>try@ %a@]@ @[<0>with%a@]@]"
+             (* "try@;@[<2>%a@]@\nwith@\n%a"*)
           (expression reset_ctxt) e  (case_list ctxt) l
     | Pexp_let (rf, l, e) ->
-        (* pp f "@[<2>let %a%a in@;<1 -2>%a@]" (\*no identation here, a new line*\) *)
+        (* pp f "@[<2>let %a%a in@;<1 -2>%a@]"
+           (*no identation here, a new line*) *)
         (*   rec_flag rf *)
         pp f "@[<2>%a in@;<1 -2>%a@]"
           (bindings reset_ctxt) (Nonstatic, rf,l)
@@ -1126,7 +1136,8 @@ and structure_item ctxt f x =
         (item_attributes ctxt) attrs
   | Pstr_type (_, []) -> assert false
   | Pstr_type (rf, l)  -> type_def_list ctxt f (rf, l)
-  | Pstr_value (sf, rf, l) -> (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
+  | Pstr_value (sf, rf, l) ->
+      (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
       pp f "@[<2>%a@]" (bindings ctxt) (sf, rf,l)
   | Pstr_typext te -> type_extension ctxt f te
   | Pstr_exception ed -> exception_declaration ctxt f ed

@@ -18,6 +18,8 @@
 #ifndef CAML_STACK_H
 #define CAML_STACK_H
 
+#ifdef CAML_INTERNALS
+
 /* Macros to access the stack frame */
 
 #ifdef TARGET_sparc
@@ -79,6 +81,9 @@ struct caml_context {
   char * bottom_of_stack;       /* beginning of OCaml stack chunk */
   uintnat last_retaddr;         /* last return address in OCaml code */
   value * gc_regs;              /* pointer to register block */
+#ifdef WITH_SPACETIME
+  void* trie_node;
+#endif
 };
 
 /* Structure of frame descriptors */
@@ -113,7 +118,12 @@ extern uintnat caml_last_return_address;
 extern value * caml_gc_regs;
 extern char * caml_exception_pointer;
 extern value * caml_globals[];
+extern char caml_globals_map[];
 extern intnat caml_globals_inited;
 extern intnat * caml_frametable[];
+
+CAMLextern frame_descr * caml_next_frame_descriptor(uintnat * pc, char ** sp);
+
+#endif /* CAML_INTERNALS */
 
 #endif /* CAML_STACK_H */

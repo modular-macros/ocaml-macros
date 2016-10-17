@@ -21,13 +21,13 @@ open Lambda
 open Asttypes
 
 val transl_implementation: string -> static_flag -> structure * module_coercion
-  -> lambda
+  -> Lambda.program
 val transl_store_phrases: static_flag -> string -> structure -> int * lambda
 val transl_store_implementation:
       static_flag -> string -> structure * module_coercion -> Lambda.program
 
 val transl_implementation_flambda:
-  string -> structure * module_coercion -> (Ident.t * int) * lambda
+  string -> structure * module_coercion -> Lambda.program
 
 val transl_toplevel_definition: static_flag -> structure -> lambda
 val transl_package:

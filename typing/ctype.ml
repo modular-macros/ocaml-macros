@@ -749,40 +749,36 @@ let rec update_level env level ty =
 
 (* Generalize and lower levels of contravariant branches simultaneously *)
 
-let generalize_contravariant env =
-  if !Clflags.principal then generalize_structure else update_level env
-
-let rec generalize_expansive env var_level ty =
+let rec generalize_expansive env var_level visited ty =
   let ty = repr ty in
-  if ty.level <> generic_level then begin
-    if ty.level > var_level then begin
-      set_level ty generic_level;
-      match ty.desc with
-        Tconstr (path, tyl, abbrev) ->
-          let variance =
-            try (Env.find_type path env).type_variance
-            with Not_found -> List.map (fun _ -> Variance.may_inv) tyl in
-          abbrev := Mnil;
-          List.iter2
-            (fun v t ->
-              if Variance.(mem May_weak v)
-              then generalize_contravariant env var_level t
-              else generalize_expansive env var_level t)
-            variance tyl
-      | Tpackage (_, _, tyl) ->
-          List.iter (generalize_contravariant env var_level) tyl
-      | Tarrow (_, t1, t2, _) ->
-          generalize_contravariant env var_level t1;
-          generalize_expansive env var_level t2
-      | _ ->
-          iter_type_expr (generalize_expansive env var_level) ty
-    end
+  if ty.level = generic_level || ty.level <= var_level then () else
+  if not (Hashtbl.mem visited ty.id) then begin
+    Hashtbl.add visited ty.id ();
+    match ty.desc with
+      Tconstr (path, tyl, abbrev) ->
+        let variance =
+          try (Env.find_type path env).type_variance
+          with Not_found -> List.map (fun _ -> Variance.may_inv) tyl in
+        abbrev := Mnil;
+        List.iter2
+          (fun v t ->
+            if Variance.(mem May_weak v)
+            then generalize_structure var_level t
+            else generalize_expansive env var_level visited t)
+          variance tyl
+    | Tpackage (_, _, tyl) ->
+        List.iter (generalize_structure var_level) tyl
+    | Tarrow (_, t1, t2, _) ->
+        generalize_structure var_level t1;
+        generalize_expansive env var_level visited t2
+    | _ ->
+        iter_type_expr (generalize_expansive env var_level visited) ty
   end
 
 let generalize_expansive env ty =
   simple_abbrevs := Mnil;
   try
-    generalize_expansive env !nongen_level ty
+    generalize_expansive env !nongen_level (Hashtbl.create 7) ty
   with Unify ([_, ty'] as tr) ->
     raise (Unify ((ty, ty') :: tr))
 
@@ -1104,6 +1100,7 @@ let new_declaration newtype manifest =
     type_loc = Location.none;
     type_attributes = [];
     type_immediate = false;
+    type_unboxed = unboxed_false_default_false;
   }
 
 let instance_constructor ?in_pattern cstr =
@@ -1387,32 +1384,35 @@ let expand_abbrev_gen kind find_type_expansion env ty =
               ()
             end;
           let ty' = repr ty' in
-          assert (ty != ty');
+          (* assert (ty != ty'); *) (* PR#7324 *)
           ty'
       | None ->
-          let (params, body, lv) =
-            try find_type_expansion path env with Not_found ->
-              raise Cannot_expand
-          in
-          (* prerr_endline
-            ("add a "^string_of_kind kind^" expansion for "^Path.name path);*)
-          let ty' = subst env level kind abbrev (Some ty) params args body in
-          (* Hack to name the variant type *)
-          begin match repr ty' with
-            {desc=Tvariant row} as ty when static_row row ->
-              ty.desc <- Tvariant { row with row_name = Some (path, args) }
-          | _ -> ()
-          end;
-          (* For gadts, remember type as non exportable *)
-          (* The ambiguous level registered for ty' should be the highest *)
-          if !trace_gadt_instances then begin
-            match max lv (Env.gadt_instance_level env ty) with
-              None -> ()
-            | Some lv ->
-                if level < lv then raise (Unify [(ty, newvar2 level)]);
-                Env.add_gadt_instances env lv [ty; ty']
-          end;
-          ty'
+          match find_type_expansion path env with
+          | exception Not_found ->
+            (* another way to expand is to normalize the path itself *)
+            let path' = Env.normalize_path None env path in
+            if Path.same path path' then raise Cannot_expand
+            else newty2 level (Tconstr (path', args, abbrev))
+          | (params, body, lv) ->
+            (* prerr_endline
+              ("add a "^string_of_kind kind^" expansion for "^Path.name path);*)
+            let ty' = subst env level kind abbrev (Some ty) params args body in
+            (* Hack to name the variant type *)
+            begin match repr ty' with
+              {desc=Tvariant row} as ty when static_row row ->
+                ty.desc <- Tvariant { row with row_name = Some (path, args) }
+            | _ -> ()
+            end;
+            (* For gadts, remember type as non exportable *)
+            (* The ambiguous level registered for ty' should be the highest *)
+            if !trace_gadt_instances then begin
+              match max lv (Env.gadt_instance_level env ty) with
+                None -> ()
+              | Some lv ->
+                  if level < lv then raise (Unify [(ty, newvar2 level)]);
+                  Env.add_gadt_instances env lv [ty; ty']
+            end;
+            ty'
       end
   | _ ->
       assert false
@@ -1635,7 +1635,8 @@ let occur_in env ty0 t =
 (* PR#6405: not needed since we allow recursion and work on normalized types *)
 (* PR#6992: we actually need it for contractiveness *)
 (* This is a simplified version of occur, only for the rectypes case *)
-let rec local_non_recursive_abbrev visited env p ty =
+let rec local_non_recursive_abbrev strict visited env p ty =
+  (*Format.eprintf "@[Check %s =@ %a@]@." (Path.name p) !Btype.print_raw ty;*)
   let ty = repr ty in
   if not (List.memq ty visited) then begin
     match ty.desc with
@@ -1643,19 +1644,20 @@ let rec local_non_recursive_abbrev visited env p ty =
         if Path.same p p' then raise Occur;
         if is_contractive env p' then () else
         let visited = ty :: visited in
-        begin try
-          List.iter (local_non_recursive_abbrev visited env p) args
-        with Occur -> try
-          local_non_recursive_abbrev visited env p
+        begin try (* try expanding first, since [p] could be hidden *)
+          local_non_recursive_abbrev strict visited env p
             (try_expand_head try_expand_once env ty)
         with Cannot_expand ->
-          raise Occur
+          List.iter (local_non_recursive_abbrev true visited env p) args
         end
-    | _ -> ()
+    | _ ->
+        if strict then (* PR#7374 *)
+          let visited = ty :: visited in
+          iter_type_expr (local_non_recursive_abbrev true visited env p) ty
   end
 
 let local_non_recursive_abbrev env p ty =
-  try local_non_recursive_abbrev [] env p ty; true
+  try local_non_recursive_abbrev false [] env p ty; true
   with Occur -> false
 
 
@@ -1944,7 +1946,7 @@ let is_instantiable env p =
     decl.type_manifest = None &&
     not (non_aliasable p decl)
   with Not_found -> false
-  
+
 
 (* PR#7113: -safe-string should be a global property *)
 let compatible_paths p1 p2 =
@@ -2043,9 +2045,11 @@ and mcomp_fields type_pairs env ty1 ty2 =
   let (fields2, rest2) = flatten_fields ty2 in
   let (fields1, rest1) = flatten_fields ty1 in
   let (pairs, miss1, miss2) = associate_fields fields1 fields2 in
+  let has_present =
+    List.exists (fun (_, k, _) -> field_kind_repr k = Fpresent) in
   mcomp type_pairs env rest1 rest2;
-  if miss1 <> []  && (object_row ty1).desc = Tnil
-  || miss2 <> []  && (object_row ty2).desc = Tnil then raise (Unify []);
+  if has_present miss1  && (object_row ty2).desc = Tnil
+  || has_present miss2  && (object_row ty1).desc = Tnil then raise (Unify []);
   List.iter
     (function (_n, k1, t1, k2, t2) ->
        mcomp_kind k1 k2;
@@ -2056,9 +2060,9 @@ and mcomp_kind k1 k2 =
   let k1 = field_kind_repr k1 in
   let k2 = field_kind_repr k2 in
   match k1, k2 with
-    (Fvar _, Fvar _)
-  | (Fpresent, Fpresent) -> ()
-  | _                    -> raise (Unify [])
+    (Fpresent, Fabsent)
+  | (Fabsent, Fpresent) -> raise (Unify [])
+  | _                   -> ()
 
 and mcomp_row type_pairs env row1 row2 =
   let row1 = row_repr row1 and row2 = row_repr row2 in
@@ -4134,12 +4138,21 @@ exception Non_closed0
 let visited = ref TypeSet.empty
 
 let rec closed_schema_rec env ty =
-  let ty = expand_head env ty in
+  let ty = repr ty in
   if TypeSet.mem ty !visited then () else begin
     visited := TypeSet.add ty !visited;
     match ty.desc with
       Tvar _ when ty.level <> generic_level ->
         raise Non_closed0
+    | Tconstr _ ->
+        let old = !visited in
+        begin try iter_type_expr (closed_schema_rec env) ty
+        with Non_closed0 -> try
+          visited := old;
+          closed_schema_rec env (try_expand_head try_expand_safe env ty)
+        with Cannot_expand ->
+          raise Non_closed0
+        end
     | Tfield(_, kind, t1, t2) ->
         if field_kind_repr kind = Fpresent then
           closed_schema_rec env t1;
@@ -4357,6 +4370,7 @@ let nondep_type_decl env mid id is_covariant decl =
       type_loc = decl.type_loc;
       type_attributes = decl.type_attributes;
       type_immediate = decl.type_immediate;
+      type_unboxed = decl.type_unboxed;
     }
   with Not_found ->
     clear_hash ();

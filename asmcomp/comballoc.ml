@@ -32,12 +32,14 @@ let rec combine i allocstate =
   match i.desc with
     Iend | Ireturn | Iexit _ | Iraise _ ->
       (i, allocated_size allocstate)
-  | Iop(Ialloc sz) ->
+  | Iop(Ialloc { words = sz; _ }) ->
       begin match allocstate with
         No_alloc ->
           let (newnext, newsz) =
             combine i.next (Pending_alloc(i.res.(0), sz)) in
-          (instr_cons (Iop(Ialloc newsz)) i.arg i.res newnext, 0)
+          (instr_cons_debug (Iop(Ialloc {words = newsz; spacetime_index = 0;
+              label_after_call_gc = None; }))
+            i.arg i.res i.dbg newnext, 0)
       | Pending_alloc(reg, ofs) ->
           if ofs + sz < Config.max_young_wosize * Arch.size_addr then begin
             let (newnext, newsz) =
@@ -47,11 +49,13 @@ let rec combine i allocstate =
           end else begin
             let (newnext, newsz) =
               combine i.next (Pending_alloc(i.res.(0), sz)) in
-            (instr_cons (Iop(Ialloc newsz)) i.arg i.res newnext, ofs)
+            (instr_cons_debug (Iop(Ialloc { words = newsz; spacetime_index = 0;
+                label_after_call_gc = None; }))
+              i.arg i.res i.dbg newnext, ofs)
           end
       end
-  | Iop(Icall_ind | Icall_imm _ | Iextcall _ |
-        Itailcall_ind | Itailcall_imm _) ->
+  | Iop(Icall_ind _ | Icall_imm _ | Iextcall _ |
+        Itailcall_ind _ | Itailcall_imm _) ->
       let newnext = combine_restart i.next in
       (instr_cons_debug i.desc i.arg i.res i.dbg newnext,
        allocated_size allocstate)
@@ -88,4 +92,5 @@ and combine_restart i =
   let (newi, _) = combine i No_alloc in newi
 
 let fundecl f =
-  {f with fun_body = combine_restart f.fun_body}
+  if Config.spacetime then f
+  else {f with fun_body = combine_restart f.fun_body}

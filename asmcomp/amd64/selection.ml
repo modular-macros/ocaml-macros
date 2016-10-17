@@ -123,15 +123,17 @@ let inline_ops =
 
 class selector = object (self)
 
-inherit Selectgen.selector_generic as super
+inherit Spacetime_profiling.instruction_selection as super
 
-method is_immediate n = n <= 0x7FFFFFFF && n >= -0x80000000
+method is_immediate n = n <= 0x7FFF_FFFF && n >= (-1-0x7FFF_FFFF)
+  (* -1-.... : hack so that this can be compiled on 32-bit
+     (cf 'make check_all_arches') *)
 
 method is_immediate_natint n = n <= 0x7FFFFFFFn && n >= -0x80000000n
 
 method! is_simple_expr e =
   match e with
-  | Cop(Cextcall(fn, _, _, _), args)
+  | Cop(Cextcall (fn, _, _, _, _), args)
     when List.mem fn inline_ops ->
       (* inlined ops are simple if their arguments are *)
       List.for_all self#is_simple_expr args
@@ -141,7 +143,7 @@ method! is_simple_expr e =
 method select_addressing _chunk exp =
   let (a, d) = select_addr exp in
   (* PR#4625: displacement must be a signed 32-bit immediate *)
-  if d < -0x8000_0000 || d > 0x7FFF_FFFF
+  if not (self # is_immediate d)
   then (Iindexed 0, exp)
   else match a with
     | Asymbol s ->
@@ -159,8 +161,10 @@ method! select_store is_assign addr exp =
   match exp with
     Cconst_int n when self#is_immediate n ->
       (Ispecific(Istore_int(Nativeint.of_int n, addr, is_assign)), Ctuple [])
-  | (Cconst_natint n | Cblockheader (n, _))
-        when self#is_immediate_natint n ->
+  | (Cconst_natint n) when self#is_immediate_natint n ->
+      (Ispecific(Istore_int(n, addr, is_assign)), Ctuple [])
+  | (Cblockheader(n, _dbg))
+      when self#is_immediate_natint n && not Config.spacetime ->
       (Ispecific(Istore_int(n, addr, is_assign)), Ctuple [])
   | Cconst_pointer n when self#is_immediate n ->
       (Ispecific(Istore_int(Nativeint.of_int n, addr, is_assign)), Ctuple [])
@@ -189,7 +193,7 @@ method! select_operation op args =
       self#select_floatarith true Imulf Ifloatmul args
   | Cdivf ->
       self#select_floatarith false Idivf Ifloatdiv args
-  | Cextcall("sqrt", _, false, _) ->
+  | Cextcall("sqrt", _, false, _, _) ->
      begin match args with
        [Cop(Cload (Double|Double_u as chunk), [loc])] ->
          let (addr, arg) = self#select_addressing chunk loc in
@@ -209,12 +213,12 @@ method! select_operation op args =
       | _ ->
           super#select_operation op args
       end
-  | Cextcall("caml_bswap16_direct", _, _, _) ->
+  | Cextcall("caml_bswap16_direct", _, _, _, _) ->
       (Ispecific (Ibswap 16), args)
-  | Cextcall("caml_int32_direct_bswap", _, _, _) ->
+  | Cextcall("caml_int32_direct_bswap", _, _, _, _) ->
       (Ispecific (Ibswap 32), args)
-  | Cextcall("caml_int64_direct_bswap", _, _, _)
-  | Cextcall("caml_nativeint_direct_bswap", _, _, _) ->
+  | Cextcall("caml_int64_direct_bswap", _, _, _, _)
+  | Cextcall("caml_nativeint_direct_bswap", _, _, _, _) ->
       (Ispecific (Ibswap 64), args)
   (* AMD64 does not support immediate operands for multiply high signed *)
   | Cmulhi ->
