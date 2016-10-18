@@ -22,7 +22,10 @@ let combinator modname field =
      | (Path.Pdot(Path.Pdot(Path.Pident ident, _, pos1), _, pos2), _) ->
          Lprim(Pfield pos2,
                [Lprim(Pfield pos1,
-                     [Lprim(Pgetglobal ident, [])])])
+                     [Lprim(Pgetglobal ident, [],
+                            Location.none)],
+                      Location.none)],
+               Location.none)
      | _ ->
          fatal_error @@
            "Primitive " ^ stdmod_path ^ "." ^ modname ^ "." ^ field
@@ -44,11 +47,13 @@ module Name = struct
   let unmarshal = combinator "Name" "unmarshal"
 end
 
+(*
 module Var = struct
   (*
   let name = combinator "Var" "name"
   *)
 end
+*)
 
 module Constant = struct
   let unmarshal = combinator "Constant" "unmarshal"
@@ -186,7 +191,7 @@ let false_ = Lconst(Const_pointer 0)
 
 let none =  Lconst(Const_pointer 0)
 
-let some x = Lprim(Pmakeblock(0, Immutable, None), [x])
+let some x = Lprim(Pmakeblock(0, Immutable, None), [x], Location.none)
 
 let option opt =
   match opt with
@@ -195,7 +200,7 @@ let option opt =
 
 let nil = Lconst(Const_pointer 0)
 
-let cons hd tl = Lprim(Pmakeblock(0, Immutable, None), [hd; tl])
+let cons hd tl = Lprim(Pmakeblock(0, Immutable, None), [hd; tl], Location.none)
 
 let rec list l =
   match l with
@@ -203,10 +208,10 @@ let rec list l =
   | hd :: tl -> cons hd (list tl)
 
 let pair (x, y) =
-  Lprim(Pmakeblock(0, Immutable, None), [x; y])
+  Lprim(Pmakeblock(0, Immutable, None), [x; y], Location.none)
 
 let triple (x, y, z) =
-  Lprim(Pmakeblock(0, Immutable, None), [x; y; z])
+  Lprim(Pmakeblock(0, Immutable, None), [x; y; z], Location.none)
 
 let func id body =
   Lfunction {
@@ -214,17 +219,20 @@ let func id body =
     params = [id];
     body = body;
     attr = default_function_attribute;
+    loc = Location.none;
   }
 
 let list_func ids body =
   let rec loop list_id = function
     | [] -> body
     | [id] ->
-        Llet(Alias, Pgenval, id, Lprim(Pfield 0, [Lvar list_id]), body)
+        Llet(Alias, Pgenval, id, Lprim(Pfield 0, [Lvar list_id], Location.none),
+             body)
     | id :: ids ->
         let tail_id = Ident.create "tl" in
-        Llet(Alias, Pgenval, id, Lprim(Pfield 0, [Lvar list_id]),
-          Llet(Alias, Pgenval, tail_id, Lprim(Pfield 1, [Lvar list_id]),
+        Llet(Alias, Pgenval, id, Lprim(Pfield 0, [Lvar list_id], Location.none),
+          Llet(Alias, Pgenval, tail_id,
+               Lprim(Pfield 1, [Lvar list_id], Location.none),
                loop tail_id ids))
   in
   let list_id = Ident.create "list" in
@@ -234,6 +242,7 @@ let list_func ids body =
     params = [list_id];
     body = body;
     attr = default_function_attribute;
+    loc = Location.none;
   }
 
 let bind id def body =
@@ -263,7 +272,7 @@ let quote_name loc (str : string loc) =
 let quote_variant loc (variant : label) =
   apply loc Variant.of_string [string variant]
 
-let wrap_local loc id name body =
+let wrap_local loc id (name : string loc) body =
   let name = quote_name name.loc name in
   apply loc Exp.local [quote_loc loc; name; func id body]
 
@@ -370,7 +379,7 @@ let rec quote_pattern p =
   | Tpat_record(lbl_pats, closed) ->
       let lbl_pats =
         List.map
-          (fun (lid, lbl, pat) ->
+          (fun ((lid : Longident.t loc), lbl, pat) ->
             let lbl = quote_record_label env lid.loc lbl in
             let pat = quote_pattern pat in
             pair (lbl, pat))
@@ -424,7 +433,9 @@ let rec case_binding exn transl stage case : case_binding =
           | id_names ->
               let ids = List.map fst id_names in
               let names =
-                List.map (fun (_, name) -> quote_name name.loc name) id_names
+                List.map
+                  (fun (_, (name : string loc)) -> quote_name name.loc name)
+                  id_names
               in
               let pat = quote_pattern pat in
               let pat =
@@ -447,7 +458,9 @@ let rec case_binding exn transl stage case : case_binding =
       let id_names = pat_bound_idents case.c_lhs in
       let ids = List.map fst id_names in
       let names =
-        List.map (fun (_, name) -> quote_name name.loc name) id_names
+        List.map
+          (fun (_, (name : string loc)) -> quote_name name.loc name)
+          id_names
       in
       let pat = quote_pattern case.c_lhs in
       let pat =
@@ -503,7 +516,7 @@ and quote_nonrecursive_let transl stage vbs body =
               let ids = List.map fst id_names in
               let names =
                 List.map
-                  (fun (_, name) -> quote_name name.loc name)
+                  (fun (_, (name : string loc)) -> quote_name name.loc name)
                   id_names
               in
               let pat = quote_pattern pat in
@@ -637,14 +650,21 @@ and quote_expression transl stage e =
       let variant = quote_variant loc variant in
       let argo = Misc.may_map (quote_expression transl stage) argo in
       apply loc Exp.variant [quote_loc loc; variant; option argo]
-  | Texp_record(lbl_exps, base) ->
+  | Texp_record { fields=fields; extended_expression=base } ->
       let lbl_exps =
         List.map
-          (fun (lid, lbl, exp) ->
+          (function
+          | (lbl, (Overridden ((lid:Longident.t loc), exp))) ->
             let lbl = quote_record_label env lid.loc lbl in
             let exp = quote_expression transl stage exp in
-            pair (lbl, exp))
-          lbl_exps
+            pair (lbl, exp)
+          | _ -> assert false (*unused*)
+          ) @@
+        List.filter
+          (function
+           | (_, (Overridden _)) -> true
+           | _ -> false) @@
+        Array.to_list fields
       in
       let base = Misc.may_map (quote_expression transl stage) base in
       apply loc Exp.record [quote_loc loc; list lbl_exps; option base]

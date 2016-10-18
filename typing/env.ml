@@ -458,7 +458,7 @@ module Persistent_signature = struct
       cmi : Cmi_format.cmi_infos }
 
   let load = ref (fun ~unit_name ->
-    let unit_name' = Path.unlift_string unit_name in
+    let unit_name' = Ident.unlift_string unit_name in
     match find_in_path_uncap !load_path (unit_name' ^ ".cmi") with
     | filename -> Some { filename; cmi = read_cmi filename }
     | exception Not_found -> None)
@@ -1856,7 +1856,7 @@ and add_cltype id ty env =
   store_cltype None id (Pident id) ty env env
 
 let add_module_with_phase ~check ?arg phase id mty env =
-  add_module_declaration ?arg phase id (md mty) env
+  add_module_declaration ?arg ~check phase id (md mty) env
 
 let add_module ?arg id mty env =
   add_module_with_phase ~check:false ?arg env.cur_env_phase id mty env

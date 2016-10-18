@@ -397,7 +397,8 @@ and remove_aliases_sig env excl sg =
       in
       Sig_module(id, {md with md_type = mty} , sf, rs) ::
       remove_aliases_sig
-        (Env.add_module_with_phase (Env.phase_of_sf sf) id mty env) excl rem
+        (Env.add_module_with_phase ~check:false (Env.phase_of_sf sf) id mty env)
+        excl rem
   | Sig_modtype(id, mtd) :: rem ->
       Sig_modtype(id, mtd) ::
       remove_aliases_sig (Env.add_modtype id mtd env) excl rem

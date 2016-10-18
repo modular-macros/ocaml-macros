@@ -316,7 +316,6 @@ let execute_phrase print_outcome ppf phr =
           remember module_ident 0 sg';
           module_ident, close_phrase res, required_globals, size
         else
-<<<<<<< HEAD
           let size, res = Translmod.transl_store_phrases Asttypes.Nonstatic !phrase_name str in
           Ident.create_persistent !phrase_name, res, Ident.Set.empty, size
       in

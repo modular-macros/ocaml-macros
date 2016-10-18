@@ -143,7 +143,7 @@ let rec required_by_reloc phase = function
 (* Returns the globals required by compilation unit, excluding those
    already defined in the symbol table and those containing a dot (which are
    not really global but should be defined in the unit). *)
-let rec required_globals phase compunit =
+let required_globals phase compunit =
   required_by_reloc phase compunit.cu_reloc @ compunit.cu_required_globals
 
 (* [unit_of_objfile phase filename] looks up the file name [filename] in the

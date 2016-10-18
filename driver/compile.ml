@@ -83,13 +83,16 @@ let implementation ppf sourcefile outputprefix =
       Stypes.dump (Some (outputprefix ^ ".annot"))
     end else begin
       (* Run static code *)
+      let sprogram =
+        Translmod.transl_implementation modulename Static (typedtree, coercion)
+      in
       let stat_lam =
         print_if ppf Clflags.dump_rawlambda Printlambda.lambda @@
-        Translmod.transl_implementation modulename Static (typedtree, coercion)
+        sprogram.Lambda.code
       in
       let sstat_lam =
         print_if ppf Clflags.dump_lambda Printlambda.lambda @@
-        Simplif.simplify_lambda stat_lam in
+        Simplif.simplify_lambda sourcefile stat_lam in
       let w_stat_lam =
         if Sys.backend_type = Sys.Native then
           Translmod.wrap_marshal sstat_lam
@@ -134,7 +137,8 @@ let implementation ppf sourcefile outputprefix =
         let s_oc = open_out_bin static_objfile in
         try
           stat_bytecode
-          ++ (Emitcode.to_file s_oc modulename static_objfile);
+          ++ (Emitcode.to_file s_oc modulename static_objfile
+                ~required_globals:Ident.Set.empty);
           close_out s_oc
         with x ->
           close_out s_oc;

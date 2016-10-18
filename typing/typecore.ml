@@ -2400,6 +2400,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let fields =
         Array.map2 (fun descr def -> descr, def)
           label_descriptions label_definitions
+      in
       let env =
         List.fold_left ccross
           (Stdlib.Option.value_default (ccross env) ~default:env opt_exp)
