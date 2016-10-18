@@ -822,8 +822,11 @@ let load_compunit ppf phase ic filename compunit =
   String.unsafe_blit "\000\000\000\001\000\000\000" 0
                      code (compunit.cu_codesize + 1) 7;
   let initial_symtable = Symtable.current_state () in
+  Printf.eprintf "a\n%!";
   Symtable.patch_object phase code compunit.cu_reloc;
+  Printf.eprintf "b\n%!";
   Symtable.update_global_table ();
+  Printf.eprintf "c\n%!";
   let events =
     if compunit.cu_debug = 0 then [| |]
     else begin

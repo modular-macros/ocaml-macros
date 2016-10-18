@@ -15,16 +15,22 @@
 let run_static ppf lam =
   let splices =
     if Sys.backend_type = Sys.Bytecode then begin
-      ignore (Symtable.init_static ());
+      ignore (Symtable.init ());
       let (init_code, fun_code) = Bytegen.compile_phrase lam in
       let (code, code_size, reloc, _) =
         Emitcode.to_memory init_code fun_code
       in
+      Printf.eprintf "a\n%!";
       Bytelink.load_deps ppf 1 !Clflags.static_deps reloc;
+      Printf.eprintf "b\n%!";
       Symtable.patch_object 1 code reloc;
+      Printf.eprintf "c\n%!";
       Symtable.check_global_initialized 1 reloc;
+      Printf.eprintf "d\n%!";
       Symtable.update_global_table ();
+      Printf.eprintf "before reify\n%!";
       let splices = (Meta.reify_bytecode code code_size) () in
+      Printf.eprintf "after reify\n%!";
       (Obj.obj splices : Parsetree.expression array)
     end else if Sys.backend_type = Sys.Native then
       let open Filename in
