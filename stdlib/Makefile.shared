@@ -41,6 +41,7 @@ OTHERS=list.cmo char.cmo bytes.cmo string.cmo sys.cmo \
   camlinternalLazy.cmo lazy.cmo stream.cmo \
   buffer.cmo camlinternalFormat.cmo printf.cmo \
   format.cmo camlinternalQuote.cmo \
+  expr.cmo \
   arg.cmo printexc.cmo gc.cmo \
   digest.cmo random.cmo hashtbl.cmo weak.cmo \
   uchar.cmo scanf.cmo callback.cmo \
@@ -50,7 +51,6 @@ OTHERS=list.cmo char.cmo bytes.cmo string.cmo sys.cmo \
   arrayLabels.cmo listLabels.cmo bytesLabels.cmo \
   stringLabels.cmo moreLabels.cmo stdLabels.cmo \
   spacetime.cmo
-# expr.cmo after camlinternalQuote.cmo
 
 all: stdlib.cma std_exit.cmo camlheader target_camlheader camlheader_ur
 
@@ -103,42 +103,42 @@ clean::
 .ml.cmo:
 	$(CAMLC) $(COMPFLAGS) `./Compflags $@` -c $<
 
-#expr.cmo expr.cmm: expr.ml pervasives.cmo camlinternalQuote.cmo \
-#  camlinternalFormat.cmo
-#	$(CAMLC) $(COMPFLAGS) `./Compflags $@` \
-#	  -m camlinternalFormatBasics.cmo -m pervasives.cmo -m list.cmo \
-#	  -m char.cmo -m bytes.cmo -m marshal.cmo -m string.cmo -m sys.cmo \
-#	  -m buffer.cmo \
-#	  -m camlinternalFormat.cmo \
-#	  -m format.cmo -m map.cmo \
-#	  -m camlinternalQuote.cmo -c $<
+expr.cmo expr.cmm: expr.ml pervasives.cmo camlinternalQuote.cmo \
+  camlinternalFormat.cmo
+	$(CAMLC) $(COMPFLAGS) `./Compflags $@` \
+	  -m camlinternalFormatBasics.cmo -m pervasives.cmo -m list.cmo \
+	  -m char.cmo -m bytes.cmo -m marshal.cmo -m string.cmo -m sys.cmo \
+	  -m buffer.cmo \
+	  -m camlinternalFormat.cmo \
+	  -m format.cmo -m map.cmo \
+	  -m camlinternalQuote.cmo -c $<
 
 .ml.cmx:
 	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` -c $<
 
-#expr.cmx: expr.ml pervasives.cmx camlinternalQuote.cmx \
-#  camlinternalFormat.cmx
-#	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` \
-#	  -m camlinternalFormatBasics.cmo -m pervasives.cmo -m list.cmo \
-#	  -m char.cmo -m bytes.cmo -m marshal.cmo -m string.cmo -m sys.cmo \
-#	  -m buffer.cmo \
-#	  -m camlinternalFormat.cmo \
-#	  -m format.cmo -m map.cmo \
-#	  -m camlinternalQuote.cmo -c $<
+
+
+
+
+
+
+
+
+
 
 .ml.p.cmx:
 	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` \
 	           -p -c -o $*.p.cmx $<
 
-#expr.p.cmx: expr.ml pervasives.p.cmx camlinternalQuote.p.cmx \
-#  camlinternalFormat.p.cmx
-#	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` \
-#	  -m camlinternalFormatBasics.cmo -m pervasives.cmo -m list.cmo \
-#	  -m char.cmo -m bytes.cmo -m marshal.cmo -m string.cmo -m sys.cmo \
-#	  -m buffer.cmo \
-#	  -m camlinternalFormat.cmo \
-#	  -m format.cmo -m map.cmo \
-#	  -m camlinternalQuote.cmo -p -c -o $@ $<
+expr.p.cmx: expr.ml pervasives.p.cmx camlinternalQuote.p.cmx \
+  camlinternalFormat.p.cmx
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) `./Compflags $@` \
+	  -m camlinternalFormatBasics.cmo -m pervasives.cmo -m list.cmo \
+	  -m char.cmo -m bytes.cmo -m marshal.cmo -m string.cmo -m sys.cmo \
+	  -m buffer.cmo \
+	  -m camlinternalFormat.cmo \
+	  -m format.cmo -m map.cmo \
+	  -m camlinternalQuote.cmo -p -c -o $@ $<
 
 # Dependencies on the compiler
 COMPILER_DEPS=$(filter-out -use-prims, $(COMPILER))

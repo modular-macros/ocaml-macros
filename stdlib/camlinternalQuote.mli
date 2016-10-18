@@ -214,7 +214,4 @@ and Exp : sig
 
 end
 
-(*
 val ast_to_expr : Exp.t -> 'a expr
-*)
-
