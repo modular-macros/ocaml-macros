@@ -813,6 +813,7 @@ let link ppf phase objfiles output_name =
   end
 
 let load_compunit ppf phase ic filename compunit =
+  Printf.eprintf "load_compunit %s\n%!" filename;
   check_consistency ppf filename compunit;
   seek_in ic compunit.cu_pos;
   let code_size = compunit.cu_codesize + 8 in
@@ -822,11 +823,11 @@ let load_compunit ppf phase ic filename compunit =
   String.unsafe_blit "\000\000\000\001\000\000\000" 0
                      code (compunit.cu_codesize + 1) 7;
   let initial_symtable = Symtable.current_state () in
-  Printf.eprintf "a\n%!";
+  Printf.eprintf "aa\n%!";
   Symtable.patch_object phase code compunit.cu_reloc;
-  Printf.eprintf "b\n%!";
+  Printf.eprintf "bb\n%!";
   Symtable.update_global_table ();
-  Printf.eprintf "c\n%!";
+  Printf.eprintf "cc\n%!";
   let events =
     if compunit.cu_debug = 0 then [| |]
     else begin
@@ -835,17 +836,25 @@ let load_compunit ppf phase ic filename compunit =
     end in
   Meta.add_debug_info code code_size events;
   begin try
-    ignore ((Meta.reify_bytecode code code_size) ());
+    begin
+      Printf.eprintf "before reify\n%!";
+      ignore ((Meta.reify_bytecode code code_size) ());
+      Printf.eprintf "after reify\n%!"
+    end
   with exn ->
     Symtable.restore_state initial_symtable;
     raise exn
   end
 
 let load_object ppf phase filename compunit =
+  Printf.eprintf "load_object %s\n%!" filename;
   let inchan = open_in_bin filename in
+  Printf.eprintf "after open_in_bin\n%!";
   try
     load_compunit ppf phase inchan filename compunit;
-    close_in inchan
+    Printf.eprintf "after load_compunit\n%!";
+    close_in inchan;
+    Printf.eprintf "end of load_object\n%!"
   with
   | Symtable.Error msg ->
       close_in inchan; raise (Error (Symbol_error (filename, msg)))
@@ -870,12 +879,14 @@ let load_archive ppf phase filename units_required =
 
 let load_file ppf = function
   | Standalone (unit, filename, phase) ->
-      load_object ppf phase filename unit
+      load_object ppf phase filename unit;
+      Printf.eprintf "end of load_file(Standalone)\n%!"
   | In_archive (unit, filename, phase) ->
       load_object ppf phase filename unit
 
 let load_bytecode ppf tolink =
-  List.iter (load_file ppf) tolink
+  List.iter (load_file ppf) tolink;
+  Printf.eprintf "end of load_bytecode\n%!"
 
 let load ppf phase obj_names =
   let obj_names =
@@ -916,7 +927,8 @@ let load_deps ppf phase obj_names reloc =
   with Failure reason -> raise(Error(Cannot_open_dll reason))
   end;
   *)
-  load_bytecode ppf tolink
+  load_bytecode ppf tolink;
+  Printf.eprintf "end of load_deps\n%!"
 
 (* Error report *)
 

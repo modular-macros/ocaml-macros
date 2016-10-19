@@ -261,9 +261,9 @@ let data_global_map () =
 let update_global_table () =
   let ng = !global_table.num_cnt in
   Printf.eprintf "ng %d\n%!" ng;
-  Printf.eprintf "a\n%!";
+  Printf.eprintf "aaa\n%!";
   if ng > Array.length(Meta.global_data()) then (Printf.eprintf "realloc\n%!";Meta.realloc_global_data ng);
-  Printf.eprintf "b\n%!";
+  Printf.eprintf "bbb\n%!";
   let glob = Meta.global_data() in
   List.iter
     (fun (slot, cst) ->
