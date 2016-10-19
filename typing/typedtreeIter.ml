@@ -25,7 +25,7 @@ open Typedtree
 module type IteratorArgument = sig
 
     val enter_structure : structure -> unit
-    val enter_value_description : value_description -> unit
+    val enter_value_description : (static_flag * value_description) -> unit
     val enter_type_extension : type_extension -> unit
     val enter_extension_constructor : extension_constructor -> unit
     val enter_pattern : pattern -> unit
@@ -51,7 +51,7 @@ module type IteratorArgument = sig
 
 
     val leave_structure : structure -> unit
-    val leave_value_description : value_description -> unit
+    val leave_value_description : (static_flag * value_description) -> unit
     val leave_type_extension : type_extension -> unit
     val leave_extension_constructor : extension_constructor -> unit
     val leave_pattern : pattern -> unit
@@ -136,14 +136,15 @@ module MakeIterator(Iter : IteratorArgument) : sig
       begin
         match item.str_desc with
           Tstr_eval (exp, _attrs) -> iter_expression exp
-        | Tstr_value (rec_flag, list) ->
+        | Tstr_value (_, rec_flag, list) ->
             iter_bindings rec_flag list
-        | Tstr_primitive vd -> iter_value_description vd
+        | Tstr_primitive vd -> iter_value_description (Nonstatic, vd)
         | Tstr_type (rf, list) -> iter_type_declarations rf list
         | Tstr_typext tyext -> iter_type_extension tyext
         | Tstr_exception ext -> iter_extension_constructor ext
-        | Tstr_module x -> iter_module_binding x
-        | Tstr_recmodule list -> List.iter iter_module_binding list
+        | Tstr_module (_sf, x) -> iter_module_binding x
+            (* macros: no handling of static modifier *)
+        | Tstr_recmodule (_sf, list) -> List.iter iter_module_binding list
         | Tstr_modtype mtd -> iter_module_type_declaration mtd
         | Tstr_open _ -> ()
         | Tstr_class list ->
@@ -161,10 +162,10 @@ module MakeIterator(Iter : IteratorArgument) : sig
     and iter_module_binding x =
       iter_module_expr x.mb_expr
 
-    and iter_value_description v =
-      Iter.enter_value_description v;
+    and iter_value_description (sf, v) =
+      Iter.enter_value_description (sf, v);
       iter_core_type v.val_desc;
-      Iter.leave_value_description v
+      Iter.leave_value_description (sf, v)
 
     and iter_constructor_arguments = function
       | Cstr_tuple l -> List.iter iter_core_type l
@@ -355,6 +356,8 @@ module MakeIterator(Iter : IteratorArgument) : sig
             iter_class_structure cl
         | Texp_pack (mexpr) ->
             iter_module_expr mexpr
+        | Texp_quote exp -> iter_expression exp
+        | Texp_escape exp -> iter_expression exp
         | Texp_unreachable ->
             ()
         | Texp_extension_constructor _ ->
@@ -376,17 +379,17 @@ module MakeIterator(Iter : IteratorArgument) : sig
       Iter.enter_signature_item item;
       begin
         match item.sig_desc with
-          Tsig_value vd ->
-            iter_value_description vd
+          Tsig_value (sf, vd) ->
+            iter_value_description (sf, vd)
         | Tsig_type (rf, list) ->
             iter_type_declarations rf list
         | Tsig_exception ext ->
             iter_extension_constructor ext
         | Tsig_typext tyext ->
             iter_type_extension tyext
-        | Tsig_module md ->
+        | Tsig_module (_sf, md) ->
             iter_module_type md.md_type
-        | Tsig_recmodule list ->
+        | Tsig_recmodule (_sf, list) ->
             List.iter (fun md -> iter_module_type md.md_type) list
         | Tsig_modtype mtd ->
             iter_module_type_declaration mtd

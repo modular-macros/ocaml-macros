@@ -247,3 +247,25 @@ include Identifiable.Make (struct
   let equal = same
 end)
 let equal = original_equal
+
+let lifted_string str =
+  String.length str > 0 && str.[0] = '^'
+
+let lift_string str =
+  if lifted_string str then str
+  else "^" ^ str
+
+let unlift_string str =
+  if lifted_string str then String.sub str 1 (String.length str - 1)
+  else str
+
+let lifted id = lifted_string id.name
+
+let lift_persistent id =
+  if lifted id then id
+  else create_persistent @@ lift_string @@ name id
+
+let unlift_persistent id =
+  if lifted id then create_persistent @@ unlift_string @@ name id
+  else id
+

@@ -41,6 +41,12 @@ let empty_numtable = { num_cnt = 0; num_tbl = Tbl.empty }
 let find_numtable nt key =
   Tbl.find key nt.num_tbl
 
+let map_keys (f : 'a -> 'c) (tbl : ('a, 'b) Tbl.t) : ('c, 'b) Tbl.t =
+  let add_new_key k x tbl =
+    Tbl.add (f k) x tbl
+  in
+  Tbl.fold add_new_key tbl Tbl.empty
+
 let enter_numtable nt key =
   let n = !nt.num_cnt in
   nt := { num_cnt = n + 1; num_tbl = Tbl.add key n !nt.num_tbl };
@@ -53,15 +59,16 @@ let incr_numtable nt =
 
 (* Global variables *)
 
-let global_table = ref(empty_numtable : Ident.t numtable)
+let global_table = ref(empty_numtable : (Types.phase * Ident.t) numtable)
 and literal_table = ref([] : (int * structured_constant) list)
 
 let is_global_defined id =
   Tbl.mem id (!global_table).num_tbl
 
-let slot_for_getglobal id =
+let slot_for_getglobal (phase, id) =
   try
-    find_numtable !global_table id
+    let n = find_numtable !global_table (phase, id) in
+    n
   with Not_found ->
     raise(Error(Undefined_global(Ident.name id)))
 
@@ -144,13 +151,18 @@ let init () =
       let id =
         try List.assoc name Predef.builtin_values
         with Not_found -> fatal_error "Symtable.init" in
-      let c = slot_for_setglobal id in
+      let c = slot_for_setglobal (0, id) in
       let cst = Const_block(Obj.object_tag,
                             [Const_base(Const_string (name, None));
                              Const_base(Const_int (-i-1))
                             ])
       in
-      literal_table := (c, cst) :: !literal_table)
+      literal_table := (c, cst) :: !literal_table;
+      (* Add the lifted version of this literal as a pointer to the unlifted
+         version (the only one actually existing in the runtime *)
+      let lifted_id = Ident.lift_persistent id in
+      global_table := { !global_table with
+        num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
     Runtimedef.builtin_exceptions;
   (* Initialize the known C primitives *)
   if String.length !Clflags.use_prims > 0 then begin
@@ -190,21 +202,21 @@ let gen_patch_int str_set buff pos n =
   str_set buff (pos + 2) (Char.unsafe_chr (n asr 16));
   str_set buff (pos + 3) (Char.unsafe_chr (n asr 24))
 
-let gen_patch_object str_set buff patchlist =
+let gen_patch_object phase str_set buff patchlist =
   List.iter
     (function
         (Reloc_literal sc, pos) ->
           gen_patch_int str_set buff pos (slot_for_literal sc)
       | (Reloc_getglobal id, pos) ->
-          gen_patch_int str_set buff pos (slot_for_getglobal id)
+          gen_patch_int str_set buff pos (slot_for_getglobal (phase, id))
       | (Reloc_setglobal id, pos) ->
-          gen_patch_int str_set buff pos (slot_for_setglobal id)
+          gen_patch_int str_set buff pos (slot_for_setglobal (phase, id))
       | (Reloc_primitive name, pos) ->
           gen_patch_int str_set buff pos (num_of_prim name))
     patchlist
 
-let patch_object = gen_patch_object Bytes.unsafe_set
-let ls_patch_object = gen_patch_object LongString.set
+let patch_object phase = gen_patch_object phase Bytes.unsafe_set
+let ls_patch_object phase = gen_patch_object phase LongString.set
 
 (* Translate structured constants *)
 
@@ -238,11 +250,6 @@ let initial_global_table () =
   literal_table := [];
   glob
 
-(* Save the table of globals *)
-
-let output_global_map oc =
-  output_value oc !global_table
-
 let data_global_map () =
   Obj.repr !global_table
 
@@ -255,7 +262,8 @@ let update_global_table () =
   if ng > Array.length(Meta.global_data()) then Meta.realloc_global_data ng;
   let glob = Meta.global_data() in
   List.iter
-    (fun (slot, cst) -> glob.(slot) <- transl_const cst)
+    (fun (slot, cst) ->
+      glob.(slot) <- transl_const cst)
     !literal_table;
   literal_table := []
 
@@ -284,13 +292,48 @@ let read_sections () =
       read_struct = Bytesections.read_section_struct ic;
       close_reader = fun () -> close_in ic }
 
+(* Load the table of globals, all saved globals having phase 0. *)
+
+type saved_global_map = Ident.t numtable
+
+(* "Filter" the global map according to some predicate.
+   Used to expunge the global map for the toplevel. *)
+
+let filter_global_map p gmap =
+  let newtbl = ref Tbl.empty in
+  Tbl.iter
+    (fun id num -> if p id then newtbl := Tbl.add id num !newtbl)
+    gmap.num_tbl;
+  {num_cnt = gmap.num_cnt; num_tbl = !newtbl}
+
+(* Save the table of globals *)
+
+let output_global_map oc =
+  output_value oc ({ (!global_table : (Types.phase * Ident.t) numtable) with num_tbl =
+    (map_keys (fun (_,id) -> id) (filter_global_map (fun (p,_) -> p = 0) !global_table).num_tbl) }
+    : Ident.t numtable)
+
+let saved_to_runtime id_numtable =
+  { id_numtable with
+      num_tbl = map_keys (fun id -> (0, id)) id_numtable.num_tbl }
+
+let runtime_to_saved numtable =
+  { numtable with
+      num_tbl = map_keys (fun (_, id) -> id)
+        (filter_global_map (fun (p,_) -> p = 0) numtable).num_tbl }
+
 (* Initialize the linker for toplevel use *)
+
+(* Find the value of a global identifier *)
+
+let get_global_position id = slot_for_getglobal id
 
 let init_toplevel () =
   try
     let sect = read_sections () in
     (* Locations of globals *)
-    global_table := (Obj.magic (sect.read_struct "SYMB") : Ident.t numtable);
+    global_table := saved_to_runtime
+      (Obj.magic (sect.read_struct "SYMB") : Ident.t numtable);
     (* Primitives *)
     let prims = sect.read_string "PRIM" in
     c_prim_table := empty_numtable;
@@ -310,23 +353,85 @@ let init_toplevel () =
       with Not_found -> [] in
     (* Done *)
     sect.close_reader();
+    (* Add lifted version of the `Toploop` module to phase 1 *)
+    let id = Ident.create_persistent "Toploop" in
+    let pos = get_global_position (0, id) in
+    global_table := { !global_table
+      with num_tbl = Tbl.add (1, id) pos !global_table.num_tbl };
+    (* Add built-in exceptions to phase 1 *)
+    Array.iter
+      (fun name ->
+        let id =
+          try List.assoc name Predef.builtin_values
+          with Not_found -> fatal_error "Symtable.init" in
+        let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
+        let pos = get_global_position (0, id) in
+        global_table := { !global_table with
+          num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
+      Runtimedef.builtin_exceptions;
+    Bytesections.reset ();
     crcintfs
   with Bytesections.Bad_magic_number | Not_found | Failure _ ->
     fatal_error "Toplevel bytecode executable is corrupted"
-
-(* Find the value of a global identifier *)
-
-let get_global_position id = slot_for_getglobal id
 
 let get_global_value id =
   (Meta.global_data()).(slot_for_getglobal id)
 let assign_global_value id v =
   (Meta.global_data()).(slot_for_getglobal id) <- v
 
+(* Initialize the linker for running static code *)
+
+let init_static () =
+  if Sys.backend_type = Sys.Bytecode then
+    (begin try
+      let sect = read_sections () in
+      (* Locations of globals *)
+      global_table := saved_to_runtime
+        (Obj.magic (sect.read_struct "SYMB") : Ident.t numtable);
+      (* Primitives *)
+      let prims = sect.read_string "PRIM" in
+      c_prim_table := empty_numtable;
+      let pos = ref 0 in
+      while !pos < String.length prims do
+        let i = String.index_from prims !pos '\000' in
+        set_prim_table (String.sub prims !pos (i - !pos));
+        pos := i + 1
+      done;
+      (* DLL initialization *)
+      let dllpath = try sect.read_string "DLPT" with Not_found -> "" in
+      Dll.init_toplevel dllpath;
+      let crc =
+        try
+          (Obj.magic (sect.read_struct "CRCS") : (string * Digest.t option) list)
+        with Not_found -> []
+      in
+      sect.close_reader();
+      (* Add built-in exceptions to phase 1 *)
+      Array.iter
+        (fun name ->
+          let id =
+            try List.assoc name Predef.builtin_values
+            with Not_found -> fatal_error "Symtable.init" in
+          let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
+          let pos = get_global_position (0, id) in
+          global_table := { !global_table with
+            num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
+        Runtimedef.builtin_exceptions;
+      Bytesections.reset ();
+      crc
+    with Bytesections.Bad_magic_number | Not_found | Failure _ ->
+      fatal_error "Toplevel bytecode executable is corrupted"
+    end : (string * Digest.t option) list)
+  else if Sys.backend_type = Sys.Native then begin
+    init ();
+    []
+  end
+  else assert false
+
 (* Check that all globals referenced in the given patch list
    have been initialized already *)
 
-let check_global_initialized patchlist =
+let check_global_initialized phase patchlist =
   (* First determine the globals we will define *)
   let defined_globals =
     List.fold_left
@@ -339,14 +444,14 @@ let check_global_initialized patchlist =
   let check_reference = function
       (Reloc_getglobal id, _pos) ->
         if not (List.mem id defined_globals)
-        && Obj.is_int (get_global_value id)
+        && Obj.is_int (get_global_value (phase, id))
         then raise (Error(Uninitialized_global(Ident.name id)))
     | _ -> () in
   List.iter check_reference patchlist
 
 (* Save and restore the current state *)
 
-type global_map = Ident.t numtable
+type global_map = (Types.phase * Ident.t) numtable
 
 let current_state () = !global_table
 
@@ -358,16 +463,6 @@ let hide_additions st =
   global_table :=
     { num_cnt = !global_table.num_cnt;
       num_tbl = st.num_tbl }
-
-(* "Filter" the global map according to some predicate.
-   Used to expunge the global map for the toplevel. *)
-
-let filter_global_map p gmap =
-  let newtbl = ref Tbl.empty in
-  Tbl.iter
-    (fun id num -> if p id then newtbl := Tbl.add id num !newtbl)
-    gmap.num_tbl;
-  {num_cnt = gmap.num_cnt; num_tbl = !newtbl}
 
 (* Error report *)
 

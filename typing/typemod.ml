@@ -43,6 +43,8 @@ type error =
   | Recursive_module_require_explicit_type
   | Apply_generative
   | Cannot_scrape_alias of Path.t
+  | Static_inside_static
+  | Phase of phase * phase
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -138,8 +140,8 @@ let update_rec_next rs rem =
       match rem with
         Sig_type (id, decl, Trec_next) :: rem ->
           Sig_type (id, decl, rs) :: rem
-      | Sig_module (id, mty, Trec_next) :: rem ->
-          Sig_module (id, mty, rs) :: rem
+      | Sig_module (id, mty, sf, Trec_next) :: rem ->
+          Sig_module (id, mty, sf, rs) :: rem
       | _ -> rem
 
 let make p n i =
@@ -218,15 +220,15 @@ let merge_constraint initial_env loc sg constr =
         real_id := Some id;
         (Pident id, lid, Twith_typesubst tdecl),
         update_rec_next rs rem
-    | (Sig_module(id, md, rs) :: rem, [s], Pwith_module (_, lid'))
+    | (Sig_module(id, md, sf, rs) :: rem, [s], Pwith_module (_, lid'))
       when Ident.name id = s ->
         let path, md' = Typetexp.find_module initial_env loc lid'.txt in
         let md'' = {md' with md_type = Mtype.remove_aliases env md'.md_type} in
         let newmd = Mtype.strengthen_decl ~aliasable:false env md'' path in
         ignore(Includemod.modtypes env newmd.md_type md.md_type);
         (Pident id, lid, Twith_module (path, lid')),
-        Sig_module(id, newmd, rs) :: rem
-    | (Sig_module(id, md, rs) :: rem, [s], Pwith_modsubst (_, lid'))
+        Sig_module(id, newmd, sf, rs) :: rem
+    | (Sig_module(id, md, _sf, rs) :: rem, [s], Pwith_modsubst (_, lid'))
       when Ident.name id = s ->
         let path, md' = Typetexp.find_module initial_env loc lid'.txt in
         let newmd = Mtype.strengthen_decl ~aliasable:false env md' path in
@@ -234,12 +236,12 @@ let merge_constraint initial_env loc sg constr =
         real_id := Some id;
         (Pident id, lid, Twith_modsubst (path, lid')),
         update_rec_next rs rem
-    | (Sig_module(id, md, rs) :: rem, s :: namelist, _)
+    | (Sig_module(id, md, sf, rs) :: rem, s :: namelist, _)
       when Ident.name id = s ->
         let ((path, _path_loc, tcstr), newsg) =
           merge env (extract_sig env loc md.md_type) namelist None in
         (path_concat id path, lid, tcstr),
-        Sig_module(id, {md with md_type=Mty_signature newsg}, rs) :: rem
+        Sig_module(id, {md with md_type=Mty_signature newsg}, sf, rs) :: rem
     | (item :: rem, _, _) ->
         let (cstr, items) = merge (Env.add_item item env) rem namelist row_id
         in
@@ -367,12 +369,13 @@ and approx_sig env ssg =
           let rem = approx_sig env srem in
           map_rec_type ~rec_flag
             (fun rs (id, info) -> Sig_type(id, info, rs)) decls rem
-      | Psig_module pmd ->
+      | Psig_module (sf, pmd) ->
           let id = Ident.create pmd.pmd_name.txt in
           let md = approx_module_declaration env pmd in
-          let newenv = Env.enter_module_declaration id md env in
-          Sig_module(id, md, Trec_not) :: approx_sig newenv srem
-      | Psig_recmodule sdecls ->
+          let newenv =
+            Env.enter_module_declaration (Env.phase_of_sf sf) id md env in
+          Sig_module(id, md, sf, Trec_not) :: approx_sig newenv srem
+      | Psig_recmodule (sf, sdecls) ->
           let decls =
             List.map
               (fun pmd ->
@@ -383,10 +386,11 @@ and approx_sig env ssg =
           in
           let newenv =
             List.fold_left
-              (fun env (id, md) -> Env.add_module_declaration ~check:false
+              (fun env (id, md) ->
+                Env.add_module_declaration ~check:false (Env.phase_of_sf sf)
                   id md env)
               env decls in
-          map_rec (fun rs (id, md) -> Sig_module(id, md, rs)) decls
+          map_rec (fun rs (id, md) -> Sig_module(id, md, sf, rs)) decls
                   (approx_sig newenv srem)
       | Psig_modtype d ->
           let info = approx_modtype_info env d in
@@ -474,7 +478,7 @@ let check_typext names loc s = check "extension constructor" loc names.typexts s
 
 let check_sig_item names loc = function
   | Sig_type(id, _, _) -> check_type names loc (Ident.name id)
-  | Sig_module(id, _, _) -> check_module names loc (Ident.name id)
+  | Sig_module(id, _, _, _) -> check_module names loc (Ident.name id)
   | Sig_modtype(id, _) -> check_modtype names loc (Ident.name id)
   | Sig_typext(id, _, _) -> check_typext names loc (Ident.name id)
   | _ -> ()
@@ -487,7 +491,7 @@ let check_sig_item names loc = function
 let simplify_signature sg =
   let rec aux = function
     | [] -> [], StringSet.empty
-    | (Sig_value(id, _descr) as component) :: sg ->
+    | (Sig_value(id, _sf, _descr) as component) :: sg ->
         let (sg, val_names) as k = aux sg in
         let name = Ident.name id in
         if StringSet.mem name val_names then k
@@ -581,14 +585,17 @@ and transl_signature env sg =
     | item :: srem ->
         let loc = item.psig_loc in
         match item.psig_desc with
-        | Psig_value sdesc ->
+        | Psig_value (sf, sdesc) ->
+            if Env.cur_phase env > 0 && sf = Static then
+              raise (Error (sdesc.pval_loc, env, Static_inside_static))
+            ;
             let (tdesc, newenv) =
               Builtin_attributes.with_warning_attribute sdesc.pval_attributes
                 (fun () -> Typedecl.transl_value_decl env item.psig_loc sdesc)
             in
             let (trem,rem, final_env) = transl_sig newenv srem in
-            mksig (Tsig_value tdesc) env loc :: trem,
-            Sig_value(tdesc.val_id, tdesc.val_val) :: rem,
+            mksig (Tsig_value (sf, tdesc)) env loc :: trem,
+            Sig_value(tdesc.val_id, sf, tdesc.val_val) :: rem,
               final_env
         | Psig_type (rec_flag, sdecls) ->
             List.iter
@@ -622,7 +629,7 @@ and transl_signature env sg =
             mksig (Tsig_exception ext) env loc :: trem,
             Sig_typext(ext.ext_id, ext.ext_type, Text_exception) :: rem,
             final_env
-        | Psig_module pmd ->
+        | Psig_module (sf, pmd) ->
             check_name check_module names pmd.pmd_name;
             let id = Ident.create pmd.pmd_name.txt in
             let tmty =
@@ -635,28 +642,30 @@ and transl_signature env sg =
               md_loc=pmd.pmd_loc;
             }
             in
-            let newenv = Env.enter_module_declaration id md env in
+            let newenv = Env.enter_module_declaration
+              (Env.cur_phase env + Env.phase_of_sf sf) id md env in
             let (trem, rem, final_env) = transl_sig newenv srem in
-            mksig (Tsig_module {md_id=id; md_name=pmd.pmd_name; md_type=tmty;
-                                md_loc=pmd.pmd_loc;
-                                md_attributes=pmd.pmd_attributes})
+            mksig (Tsig_module
+              (sf, {md_id=id; md_name=pmd.pmd_name; md_type=tmty;
+                    md_loc=pmd.pmd_loc;
+                    md_attributes=pmd.pmd_attributes}))
               env loc :: trem,
-            Sig_module(id, md, Trec_not) :: rem,
+            Sig_module(id, md, sf, Trec_not) :: rem,
             final_env
-        | Psig_recmodule sdecls ->
+        | Psig_recmodule (sf, sdecls) ->
             List.iter
               (fun pmd -> check_name check_module names pmd.pmd_name)
               sdecls;
             let (decls, newenv) =
               transl_recmodule_modtypes env sdecls in
             let (trem, rem, final_env) = transl_sig newenv srem in
-            mksig (Tsig_recmodule decls) env loc :: trem,
+            mksig (Tsig_recmodule (sf, decls)) env loc :: trem,
             map_rec (fun rs md ->
                 let d = {Types.md_type = md.md_type.mty_type;
                          md_attributes = md.md_attributes;
                          md_loc = md.md_loc;
                         } in
-                Sig_module(md.md_id, d, rs))
+                Sig_module(md.md_id, d, sf, rs))
               decls rem,
             final_env
         | Psig_modtype pmtd ->
@@ -865,16 +874,16 @@ let rec closed_modtype env = function
       closed_modtype env body
 
 and closed_signature_item env = function
-    Sig_value(_id, desc) -> Ctype.closed_schema env desc.val_type
-  | Sig_module(_id, md, _) -> closed_modtype env md.md_type
+    Sig_value(_id, _sf, desc) -> Ctype.closed_schema env desc.val_type
+  | Sig_module(_id, md, _, _) -> closed_modtype env md.md_type
   | _ -> true
 
 let check_nongen_scheme env sig_item =
   match sig_item with
-    Sig_value(_id, vd) ->
+    Sig_value(_id, _sf, vd) ->
       if not (Ctype.closed_schema env vd.val_type) then
         raise (Error (vd.val_loc, env, Non_generalizable vd.val_type))
-  | Sig_module (_id, md, _) ->
+  | Sig_module (_id, md, _, _) ->
       if not (closed_modtype env md.md_type) then
         raise(Error(md.md_loc, env, Non_generalizable_module md.md_type))
   | _ -> ()
@@ -1003,7 +1012,7 @@ let rec package_constraints env loc mty constrs =
           when List.mem_assoc [Ident.name id] constrs ->
             let ty = List.assoc [Ident.name id] constrs in
             Sig_type (id, {td with type_manifest = Some ty}, rs)
-        | Sig_module (id, md, rs) ->
+        | Sig_module (id, md, sf, rs) ->
             let rec aux = function
               | (m :: ((_ :: _) as l), t) :: rest when m = Ident.name id ->
                   (l, t) :: aux rest
@@ -1015,7 +1024,7 @@ let rec package_constraints env loc mty constrs =
                md_type = package_constraints env loc md.md_type (aux constrs)
               }
             in
-            Sig_module (id, md, rs)
+            Sig_module (id, md, sf, rs)
         | item -> item
       )
       sg
@@ -1074,6 +1083,12 @@ let rec type_module ?(alias=false) sttn funct_body anchor env smod =
                  mod_attributes = smod.pmod_attributes;
                  mod_loc = smod.pmod_loc } in
       let aliasable = not (Env.is_functor_arg path env) in
+      (* Check for phase errors *)
+      let env_phase = Env.cur_phase env in
+      let mod_phase = Env.find_phase path env in
+      if mod_phase <> env_phase then
+        raise (Error (smod.pmod_loc, env, Phase (env_phase, mod_phase)))
+      ;
       let md =
         if alias && aliasable then
           (Env.add_required_global (Path.head path); md)
@@ -1220,7 +1235,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
             (fun () -> Typecore.type_expression env sexpr)
         in
         Tstr_eval (expr, attrs), [], env
-    | Pstr_value(rec_flag, sdefs) ->
+    | Pstr_value(static_flag, rec_flag, sdefs) ->
         let scope =
           match rec_flag with
           | Recursive ->
@@ -1234,17 +1249,36 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
               in
               Some (Annot.Idef {scope with Location.loc_start = start})
         in
-        let (defs, newenv) =
-          Typecore.type_binding env rec_flag sdefs scope in
-        (* Note: Env.find_value does not trigger the value_used event. Values
-           will be marked as being used during the signature inclusion test. *)
-        Tstr_value(rec_flag, defs),
-        List.map (fun id -> Sig_value(id, Env.find_value (Pident id) newenv))
-          (let_bound_idents defs),
-        newenv
+        let old_phase = Env.cur_phase env in
+        let phase = old_phase + Env.phase_of_sf static_flag in
+        if phase = 0 then
+          let (defs, newenv) =
+            Typecore.type_binding
+              (Env.with_phase 0 env) rec_flag sdefs scope in
+          (* Note: Env.find_value does not trigger the value_used event.
+             Values will be marked as being used during the signature
+             inclusion test. *)
+          Tstr_value(static_flag, rec_flag, defs),
+          List.map
+            (fun id ->
+              Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
+            (let_bound_idents defs),
+          Env.with_phase old_phase newenv
+        else if phase = 1 then
+              let (defs, newenv) =
+                Typecore.type_binding
+                  (Env.with_phase 1 env) rec_flag sdefs scope in
+              Tstr_value(static_flag, rec_flag, defs),
+              List.map
+                (fun id ->
+                  Sig_value(id, static_flag, Env.find_value (Pident id) newenv))
+                (let_bound_idents defs),
+              Env.with_phase old_phase newenv
+        else raise (Error (loc, env, Static_inside_static))
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
-        Tstr_primitive desc, [Sig_value(desc.val_id, desc.val_val)], newenv
+        Tstr_primitive
+          desc, [Sig_value(desc.val_id, Nonstatic, desc.val_val)], newenv
     | Pstr_type (rec_flag, sdecls) ->
         List.iter
           (fun decl -> check_name check_type names decl.ptype_name)
@@ -1273,35 +1307,48 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         Tstr_exception ext,
         [Sig_typext(ext.ext_id, ext.ext_type, Text_exception)],
         newenv
-    | Pstr_module {pmb_name = name; pmb_expr = smodl; pmb_attributes = attrs;
-                   pmb_loc;
-                  } ->
+    | Pstr_module (sf,
+        {pmb_name = name; pmb_expr = smodl; pmb_attributes = attrs;
+         pmb_loc; }) ->
+        if Env.cur_phase env > 0 && sf = Static then
+          raise (Error (loc, env, Static_inside_static))
+        ;
+        let phase = Env.cur_phase env + Env.phase_of_sf sf in
         check_name check_module names name;
         let id = Ident.create name.txt in (* create early for PR#6752 *)
+        let newenv = Env.with_phase phase env in
         let modl =
           Builtin_attributes.with_warning_attribute attrs
             (fun () ->
                type_module ~alias:true true funct_body
-                 (anchor_submodule name.txt anchor) env smodl
+                 (anchor_submodule name.txt anchor) newenv smodl
             )
         in
         let md =
-          { md_type = enrich_module_type anchor name.txt modl.mod_type env;
+          { md_type = enrich_module_type anchor name.txt modl.mod_type newenv;
             md_attributes = attrs;
             md_loc = pmb_loc;
           }
         in
-        let newenv = Env.enter_module_declaration id md env in
-        Tstr_module {mb_id=id; mb_name=name; mb_expr=modl;
+        (* Go back to old phase *)
+        let newenv' = Env.with_phase (Env.cur_phase env) @@
+          Env.enter_module_declaration phase id md newenv in
+        Tstr_module (sf, {mb_id=id; mb_name=name; mb_expr=modl;
                      mb_attributes=attrs;  mb_loc=pmb_loc;
-                    },
+                    }),
         [Sig_module(id,
                     {md_type = modl.mod_type;
                      md_attributes = attrs;
                      md_loc = pmb_loc;
-                    }, Trec_not)],
-        newenv
-    | Pstr_recmodule sbind ->
+                    }, sf, Trec_not)],
+        newenv'
+    | Pstr_recmodule (sf, sbind) ->
+        if Env.cur_phase env > 0 && sf = Static then
+          raise (Error (loc, env, Static_inside_static))
+        ;
+        let phase = Env.cur_phase env + Env.phase_of_sf sf in
+        let oldenv = env in
+        let env = Env.with_phase phase oldenv in
         let sbind =
           List.map
             (function
@@ -1351,19 +1398,21 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                    md_loc = md.md_loc;
                  }
                in
-               Env.add_module_declaration ~check:true md.md_id mdecl env
+               Env.add_module_declaration ~check:true phase md.md_id
+                 mdecl env
             )
             env decls
         in
+        let newenv = Env.with_phase (Env.cur_phase oldenv) newenv in
         let bindings2 =
           check_recmodule_inclusion newenv bindings1 in
-        Tstr_recmodule bindings2,
+        Tstr_recmodule (sf, bindings2),
         map_rec (fun rs mb ->
             Sig_module(mb.mb_id, {
                 md_type=mb.mb_expr.mod_type;
                 md_attributes=mb.mb_attributes;
                 md_loc=mb.mb_loc;
-              }, rs))
+              }, sf, rs))
            bindings2 [],
         newenv
     | Pstr_modtype pmtd ->
@@ -1505,8 +1554,8 @@ let rec normalize_modtype env = function
 and normalize_signature env = List.iter (normalize_signature_item env)
 
 and normalize_signature_item env = function
-    Sig_value(_id, desc) -> Ctype.normalize_type env desc.val_type
-  | Sig_module(_id, md, _) -> normalize_modtype env md.md_type
+    Sig_value(_id, _sf, desc) -> Ctype.normalize_type env desc.val_type
+  | Sig_module(_id, md, _, _) -> normalize_modtype env md.md_type
   | _ -> ()
 
 (* Extract the module type of a module expression *)
@@ -1582,7 +1631,6 @@ let () =
   Typecore.type_package := type_package;
   type_module_type_of_fwd := type_module_type_of
 
-
 (* Typecheck an implementation file *)
 
 let type_implementation sourcefile outputprefix modulename initial_env ast =
@@ -1601,7 +1649,8 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
   if !Clflags.print_types then begin
     Printtyp.wrap_printing_env initial_env
       (fun () -> fprintf std_formatter "%a@." Printtyp.signature simple_sg);
-    (str, Tcoerce_none)   (* result is ignored by Compile.implementation *)
+    (* result is ignored by Compile.implementation *)
+    (str, Tcoerce_none)
   end else begin
     let sourceintf =
       Filename.remove_extension sourcefile ^ !Config.interface_suffix in
@@ -1613,8 +1662,11 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
           raise(Error(Location.in_file sourcefile, Env.empty,
                       Interface_not_compiled sourceintf)) in
       let dclsig = Env.read_signature modulename intf_file in
+      (* First check that the inferred signature is included in the declared
+         one, then get separate coercions for runtime and static parts. *)
       let coercion =
-        Includemod.compunit initial_env sourcefile sg intf_file dclsig in
+        Includemod.compunit initial_env sourcefile sg intf_file dclsig
+      in
       Typecore.force_delayed_checks ();
       (* It is important to run these checks after the inclusion test above,
          so that value declarations which are not used internally but exported
@@ -1626,8 +1678,9 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
       check_nongen_schemes finalenv sg;
       normalize_signature finalenv simple_sg;
       let coercion =
-        Includemod.compunit initial_env sourcefile sg
-                            "(inferred signature)" simple_sg in
+        Includemod.compunit initial_env sourcefile
+          sg "(inferred signature)" simple_sg
+      in
       Typecore.force_delayed_checks ();
       (* See comment above. Here the target signature contains all
          the value being exported. We can still capture unused
@@ -1681,6 +1734,7 @@ let rec package_signatures subst = function
                          md_attributes=[];
                          md_loc=Location.none;
                         },
+                 Nonstatic, (* macros: not sure *)
                  Trec_not) ::
       package_signatures (Subst.add_module oldid (Pident newid) subst) rem
 
@@ -1819,6 +1873,13 @@ let report_error ppf = function
       fprintf ppf
         "This is an alias for module %a, which is missing"
         path p
+  | Static_inside_static ->
+      fprintf ppf
+        "Static definitions are not allowed inside static modules"
+  | Phase (funct, arg) ->
+      fprintf ppf
+        "Expected module of phase %d, but this expression has phase %d"
+        funct arg
 
 let report_error env ppf err =
   Printtyp.wrap_printing_env env (fun () -> report_error ppf err)

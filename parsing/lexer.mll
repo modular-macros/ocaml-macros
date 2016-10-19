@@ -76,6 +76,7 @@ let keyword_table =
     "private", PRIVATE;
     "rec", REC;
     "sig", SIG;
+    "static", STATIC;
     "struct", STRUCT;
     "then", THEN;
     "to", TO;
@@ -290,6 +291,10 @@ let identchar_latin1 =
   ['A'-'Z' 'a'-'z' '_' '\192'-'\214' '\216'-'\246' '\248'-'\255' '\'' '0'-'9']
 let symbolchar =
   ['!' '$' '%' '&' '*' '+' '-' '.' '/' ':' '<' '=' '>' '?' '@' '^' '|' '~']
+let symbolcharnoless =
+  ['!' '$' '%' '&' '*' '+' '-' '.' '/' ':' '=' '>' '?' '@' '^' '|' '~']
+let symbolcharnogreater =
+  ['!' '$' '%' '&' '*' '+' '-' '.' '/' ':' '<' '=' '?' '@' '^' '|' '~']
 let decimal_literal =
   ['0'-'9'] ['0'-'9' '_']*
 let hex_literal =
@@ -323,6 +328,9 @@ rule token = parse
         EOL }
   | blank +
       { token lexbuf }
+  | "<<" { LESSLESS }
+  | ">>" { GREATERGREATER }
+  | "$" { DOLLAR }
   | "_"
       { UNDERSCORE }
   | "~"
@@ -343,7 +351,7 @@ rule token = parse
         with Not_found -> LIDENT s }
   | lowercase_latin1 identchar_latin1 *
       { warn_latin1 lexbuf; LIDENT (Lexing.lexeme lexbuf) }
-  | uppercase identchar *
+  | "^" ? uppercase identchar *
       { UIDENT(Lexing.lexeme lexbuf) }       (* No capitalized keywords *)
   | uppercase_latin1 identchar_latin1 *
       { warn_latin1 lexbuf; UIDENT(Lexing.lexeme lexbuf) }
@@ -503,7 +511,7 @@ rule token = parse
             { PREFIXOP(Lexing.lexeme lexbuf) }
   | ['~' '?'] symbolchar +
             { PREFIXOP(Lexing.lexeme lexbuf) }
-  | ['=' '<' '>' '|' '&' '$'] symbolchar *
+  | ['<' '>' '=' '|' '&' '$'] symbolchar *
             { INFIXOP0(Lexing.lexeme lexbuf) }
   | ['@' '^'] symbolchar *
             { INFIXOP1(Lexing.lexeme lexbuf) }

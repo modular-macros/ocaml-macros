@@ -17,7 +17,8 @@ open Typedtree
 
 module type MapArgument = sig
   val enter_structure : structure -> structure
-  val enter_value_description : value_description -> value_description
+  val enter_value_description : Asttypes.static_flag * value_description
+    -> Asttypes.static_flag * value_description
   val enter_type_declaration : type_declaration -> type_declaration
   val enter_type_extension : type_extension -> type_extension
   val enter_extension_constructor :
@@ -46,7 +47,8 @@ module type MapArgument = sig
   val enter_structure_item : structure_item -> structure_item
 
   val leave_structure : structure -> structure
-  val leave_value_description : value_description -> value_description
+  val leave_value_description : Asttypes.static_flag * value_description
+    -> Asttypes.static_flag * value_description
   val leave_type_declaration : type_declaration -> type_declaration
   val leave_type_extension : type_extension -> type_extension
   val leave_extension_constructor :

@@ -874,7 +874,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^cl.cl_name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" source: " ^ Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
 
@@ -888,9 +888,9 @@ class man =
 
         bs b ".SH NAME\n";
         bs b (cl.cl_name^" \\- "^abstract^"\n");
-        bs b (".SH "^Odoc_messages.clas^"\n");
+        bs b (".SH " ^ Odoc_messages.clas^"\n");
         bs b (Odoc_messages.clas^"   "^cl.cl_name^"\n");
-        bs b (".SH "^Odoc_messages.documentation^"\n");
+        bs b (".SH " ^ Odoc_messages.documentation^"\n");
         bs b ".sp\n";
         self#man_of_class b cl;
 
@@ -932,7 +932,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^ct.clt_name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" source: " ^ Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
 
@@ -946,9 +946,9 @@ class man =
 
         bs b ".SH NAME\n";
         bs b (ct.clt_name^" \\- "^abstract^"\n");
-        bs b (".SH "^Odoc_messages.class_type^"\n");
+        bs b (".SH " ^ Odoc_messages.class_type^"\n");
         bs b (Odoc_messages.class_type^"   "^ct.clt_name^"\n");
-        bs b (".SH "^Odoc_messages.documentation^"\n");
+        bs b (".SH " ^ Odoc_messages.documentation^"\n");
         bs b ".sp\n";
 
         self#man_of_class_type b ct;
@@ -1024,7 +1024,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^mt.mt_name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" source: " ^ Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
 
@@ -1037,9 +1037,9 @@ class man =
         in
         bs b ".SH NAME\n";
         bs b (mt.mt_name^" \\- "^abstract^"\n");
-        bs b (".SH "^Odoc_messages.module_type^"\n");
+        bs b (".SH " ^ Odoc_messages.module_type^"\n");
         bs b (Odoc_messages.module_type^"   "^mt.mt_name^"\n");
-        bs b (".SH "^Odoc_messages.documentation^"\n");
+        bs b (".SH " ^ Odoc_messages.documentation^"\n");
         bs b ".sp\n";
         bs b (Odoc_messages.module_type^"\n");
         bs b (".BI \""^(Name.simple mt.mt_name)^"\"\n");
@@ -1106,7 +1106,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^m.m_name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" source: " ^ Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
 
@@ -1120,9 +1120,9 @@ class man =
 
         bs b ".SH NAME\n";
         bs b (m.m_name^" \\- "^abstract^"\n");
-        bs b (".SH "^Odoc_messages.modul^"\n");
+        bs b (".SH " ^ Odoc_messages.modul^"\n");
         bs b (Odoc_messages.modul^"   "^m.m_name^"\n");
-        bs b (".SH "^Odoc_messages.documentation^"\n");
+        bs b (".SH " ^ Odoc_messages.documentation^"\n");
         bs b ".sp\n";
         bs b (Odoc_messages.modul^"\n");
         bs b (".BI \""^(Name.simple m.m_name)^"\"\n");
@@ -1212,7 +1212,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" source: " ^ Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
         bs b ".SH NAME\n";
@@ -1221,28 +1221,28 @@ class man =
         let f ele =
           match ele with
             Res_value v ->
-              bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father v.val_name)^"\n");
+              bs b ("\n.SH " ^ Odoc_messages.modul^" "^(Name.father v.val_name)^"\n");
               self#man_of_value b v
           | Res_type t ->
-              bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father t.ty_name)^"\n");
+              bs b ("\n.SH " ^ Odoc_messages.modul^" "^(Name.father t.ty_name)^"\n");
               self#man_of_type b t
           | Res_extension x ->
-              bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father x.xt_name)^"\n");
+              bs b ("\n.SH " ^ Odoc_messages.modul^" "^(Name.father x.xt_name)^"\n");
               self#man_of_type_extension b (Name.father x.xt_name) x.xt_type_extension
           | Res_exception e ->
-              bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father e.ex_name)^"\n");
+              bs b ("\n.SH " ^ Odoc_messages.modul^" "^(Name.father e.ex_name)^"\n");
               self#man_of_exception b e
           | Res_attribute a ->
-              bs b ("\n.SH "^Odoc_messages.clas^" "^(Name.father a.att_value.val_name)^"\n");
+              bs b ("\n.SH " ^ Odoc_messages.clas^" "^(Name.father a.att_value.val_name)^"\n");
               self#man_of_attribute b a
           | Res_method m ->
-              bs b ("\n.SH "^Odoc_messages.clas^" "^(Name.father m.met_value.val_name)^"\n");
+              bs b ("\n.SH " ^ Odoc_messages.clas^" "^(Name.father m.met_value.val_name)^"\n");
               self#man_of_method b m
           | Res_class c ->
-              bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father c.cl_name)^"\n");
+              bs b ("\n.SH " ^ Odoc_messages.modul^" "^(Name.father c.cl_name)^"\n");
               self#man_of_class b c
           | Res_class_type ct ->
-              bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father ct.clt_name)^"\n");
+              bs b ("\n.SH " ^ Odoc_messages.modul^" "^(Name.father ct.clt_name)^"\n");
               self#man_of_class_type b ct
           | Res_recfield (ty,f) ->
                bs b ("\n.SH Type "^(ty.ty_name)^"\n");
@@ -1253,7 +1253,7 @@ class man =
           | Res_module m ->
               if Name.father m.m_name <> "" then
                 begin
-                  bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father m.m_name)^"\n");
+                  bs b ("\n.SH " ^ Odoc_messages.modul^" "^(Name.father m.m_name)^"\n");
                   bs b (Odoc_messages.modul^"\n");
                   bs b (".BI \""^(Name.simple m.m_name)^"\"\n");
                   bs b " : ";
@@ -1261,7 +1261,7 @@ class man =
                 end
               else
                 begin
-                  bs b ("\n.SH "^Odoc_messages.modul^" "^m.m_name^"\n");
+                  bs b ("\n.SH " ^ Odoc_messages.modul^" "^m.m_name^"\n");
                   bs b " : ";
                   self#man_of_module_type b (Name.father m.m_name) m.m_type;
                 end;
@@ -1269,7 +1269,7 @@ class man =
               self#man_of_module_body b m
 
           | Res_module_type mt ->
-              bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father mt.mt_name)^"\n");
+              bs b ("\n.SH " ^ Odoc_messages.modul^" "^(Name.father mt.mt_name)^"\n");
               bs b (Odoc_messages.module_type^"\n");
               bs b (".BI \""^(Name.simple mt.mt_name)^"\"\n");
               bs b " = ";

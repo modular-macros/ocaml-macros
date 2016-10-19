@@ -349,7 +349,7 @@ let rec rename_bound_idents s idents = function
   | Sig_type(id, _, _) :: sg ->
       let id' = Ident.rename id in
       rename_bound_idents (add_type id (Pident id') s) (id' :: idents) sg
-  | Sig_module(id, _, _) :: sg ->
+  | Sig_module(id, _, _, _) :: sg ->
       let id' = Ident.rename id in
       rename_bound_idents (add_module id (Pident id') s) (id' :: idents) sg
   | Sig_modtype(id, _) :: sg ->
@@ -360,7 +360,7 @@ let rec rename_bound_idents s idents = function
       (* cheat and pretend they are types cf. PR#6650 *)
       let id' = Ident.rename id in
       rename_bound_idents (add_type id (Pident id') s) (id' :: idents) sg
-  | (Sig_value(id, _) | Sig_typext(id, _, _)) :: sg ->
+  | (Sig_value(id, _, _) | Sig_typext(id, _, _)) :: sg ->
       let id' = Ident.rename id in
       rename_bound_idents s (id' :: idents) sg
 
@@ -393,14 +393,14 @@ and signature s sg =
 
 and signature_component s comp newid =
   match comp with
-    Sig_value(_id, d) ->
-      Sig_value(newid, value_description s d)
+    Sig_value(_id, sf, d) ->
+      Sig_value(newid, sf, value_description s d)
   | Sig_type(_id, d, rs) ->
       Sig_type(newid, type_declaration s d, rs)
   | Sig_typext(_id, ext, es) ->
       Sig_typext(newid, extension_constructor s ext, es)
-  | Sig_module(_id, d, rs) ->
-      Sig_module(newid, module_declaration s d, rs)
+  | Sig_module(_id, d, sf, rs) ->
+      Sig_module(newid, module_declaration s d, sf, rs)
   | Sig_modtype(_id, d) ->
       Sig_modtype(newid, modtype_declaration s d)
   | Sig_class(_id, d, rs) ->

@@ -130,7 +130,7 @@ let load_compunit ic filename ppf compunit =
   String.unsafe_blit "\000\000\000\001\000\000\000" 0
                      code (compunit.cu_codesize + 1) 7;
   let initial_symtable = Symtable.current_state() in
-  Symtable.patch_object code compunit.cu_reloc;
+  Symtable.patch_object 0 code compunit.cu_reloc;
   Symtable.update_global_table();
   let events =
     if compunit.cu_debug = 0 then [| |]
@@ -178,7 +178,7 @@ and really_load_file recursive ppf name filename ic =
         List.iter
           (function
             | (Reloc_getglobal id, _)
-              when not (Symtable.is_global_defined id) ->
+              when not (Symtable.is_global_defined (0, id)) ->
                 let file = Ident.name id ^ ".cmo" in
                 begin match try Some (Misc.find_in_path_uncap !Config.load_path
                                         file)
@@ -483,11 +483,11 @@ let trim_signature = function
       Mty_signature
         (List.map
            (function
-               Sig_module (id, md, rs) ->
+               Sig_module (id, md, phase, rs) ->
                  Sig_module (id, {md with md_attributes =
                                     (Location.mknoloc "...", Parsetree.PStr [])
                                     :: md.md_attributes},
-                             rs)
+                             phase, rs)
              (*| Sig_modtype (id, Modtype_manifest mty) ->
                  Sig_modtype (id, Modtype_manifest (trim_modtype mty))*)
              | item -> item)
@@ -531,7 +531,7 @@ let () =
   reg_show_prim "show_val"
     (fun env loc id lid ->
        let _path, desc = Typetexp.find_value env loc lid in
-       [ Sig_value (id, desc) ]
+       [ Sig_value (id, Asttypes.Nonstatic, desc) ]
     )
     "Print the signature of the corresponding value."
 
@@ -573,6 +573,7 @@ let () =
          let md = Env.find_module path env in
          let acc =
            Sig_module (id, {md with md_type = trim_signature md.md_type},
+                       Asttypes.Nonstatic (* macros: not sure *),
                        Trec_not) :: acc in
          match md.md_type with
          | Mty_alias(_, path) -> accum_aliases path acc

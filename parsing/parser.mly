@@ -383,7 +383,7 @@ let mklbs ext rf lb =
 let addlb lbs lb =
   { lbs with lbs_bindings = lb :: lbs.lbs_bindings }
 
-let val_of_let_bindings lbs =
+let val_of_let_bindings static_flag lbs =
   let bindings =
     List.map
       (fun lb ->
@@ -393,7 +393,7 @@ let val_of_let_bindings lbs =
            lb.lb_pattern lb.lb_expression)
       lbs.lbs_bindings
   in
-  let str = mkstr(Pstr_value(lbs.lbs_rec, List.rev bindings)) in
+  let str = mkstr(Pstr_value(static_flag, lbs.lbs_rec, List.rev bindings)) in
   match lbs.lbs_extension with
   | None -> str
   | Some id -> ghstr (Pstr_extension((id, PStr [str]), []))
@@ -464,6 +464,9 @@ let package_type_of_module_type pmty =
 
 /* Tokens */
 
+%token LESSLESS
+%token GREATERGREATER
+%token DOLLAR
 %token AMPERAMPER
 %token AMPERSAND
 %token AND
@@ -564,6 +567,7 @@ let package_type_of_module_type pmty =
 %token HASH
 %token <string> HASHOP
 %token SIG
+%token STATIC
 %token STAR
 %token <string * string option> STRING
 %token STRUCT
@@ -612,6 +616,7 @@ The precedences must be listed from low to high.
 %nonassoc below_SEMI
 %nonassoc SEMI                          /* below EQUAL ({lbl=...; lbl=...}) */
 %nonassoc LET                           /* above SEMI ( ...; let ... in ...) */
+%nonassoc STATIC
 %nonassoc below_WITH
 %nonassoc FUNCTION WITH                 /* below BAR  (match ... with ...) */
 %nonassoc AND             /* above WITH (module rec A: SIG with ... and ...) */
@@ -647,8 +652,8 @@ The precedences must be listed from low to high.
 /* Finally, the first tokens of simple_expr are above everything else. */
 %nonassoc BACKQUOTE BANG BEGIN CHAR FALSE FLOAT INT
           LBRACE LBRACELESS LBRACKET LBRACKETBAR LIDENT LPAREN
-          NEW PREFIXOP STRING TRUE UIDENT
-          LBRACKETPERCENT LBRACKETPERCENTPERCENT
+          NEW NATIVEINT PREFIXOP STRING TRUE UIDENT DOLLAR
+          LBRACKETPERCENT LBRACKETPERCENTPERCENT LESSLESS
 
 
 /* Entry points */
@@ -818,11 +823,13 @@ structure_tail:
 ;
 structure_item:
     let_bindings
-      { val_of_let_bindings $1 }
+      { val_of_let_bindings Nonstatic $1 }
+  | static_bindings
+      { val_of_let_bindings Static $1 }
   | primitive_declaration
       { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
   | value_description
-      { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
+      { let (_, (body, ext)) = $1 in mkstr_ext (Pstr_primitive body) ext }
   | type_declarations
       { let (nr, l, ext ) = $1 in mkstr_ext (Pstr_type (nr, List.rev l)) ext }
   | str_type_extension
@@ -830,9 +837,9 @@ structure_item:
   | str_exception_declaration
       { let (l, ext) = $1 in mkstr_ext (Pstr_exception l) ext }
   | module_binding
-      { let (body, ext) = $1 in mkstr_ext (Pstr_module body) ext }
+      { let (sf, body, ext) = $1 in mkstr_ext (Pstr_module (sf, body)) ext }
   | rec_module_bindings
-      { let (l, ext) = $1 in mkstr_ext (Pstr_recmodule(List.rev l)) ext }
+      { let (sf, l, ext) = $1 in mkstr_ext (Pstr_recmodule(sf, List.rev l)) ext }
   | module_type_declaration
       { let (body, ext) = $1 in mkstr_ext (Pstr_modtype body) ext }
   | open_statement
@@ -867,19 +874,33 @@ module_binding_body:
 module_binding:
     MODULE ext_attributes UIDENT module_binding_body post_item_attributes
       { let (ext, attrs) = $2 in
-        Mb.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
+        Nonstatic
+      , Mb.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
+            ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
+      , ext }
+  | STATIC MODULE ext_attributes UIDENT module_binding_body post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Mb.mk (mkrhs $4 3) $5 ~attrs:(attrs@$6)
             ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
       , ext }
 ;
 rec_module_bindings:
-    rec_module_binding                     { let (b, ext) = $1 in ([b], ext) }
+    rec_module_binding { let (sf, b, ext) = $1 in (sf, [b], ext) }
   | rec_module_bindings and_module_binding
-      { let (l, ext) = $1 in ($2 :: l, ext) }
+      { let (sf, l, ext) = $1 in (sf, $2 :: l, ext) }
 ;
 rec_module_binding:
     MODULE ext_attributes REC UIDENT module_binding_body post_item_attributes
       { let (ext, attrs) = $2 in
-        Mb.mk (mkrhs $4 4) $5 ~attrs:(attrs@$6)
+        Nonstatic
+      , Mb.mk (mkrhs $4 4) $5 ~attrs:(attrs@$6)
+            ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
+      , ext }
+  | STATIC MODULE ext_attributes REC UIDENT module_binding_body post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Mb.mk (mkrhs $5 4) $6 ~attrs:(attrs@$7)
             ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
       , ext }
 ;
@@ -930,9 +951,9 @@ signature:
 ;
 signature_item:
     value_description
-      { let (body, ext) = $1 in mksig_ext (Psig_value body) ext }
+      { let (sf, (body, ext)) = $1 in mksig_ext (Psig_value (sf, body)) ext }
   | primitive_declaration
-      { let (body, ext) = $1 in mksig_ext (Psig_value body) ext}
+      { let (body, ext) = $1 in mksig_ext (Psig_value (Nonstatic, body)) ext}
   | type_declarations
       { let (nr, l, ext) = $1 in mksig_ext (Psig_type (nr, List.rev l)) ext }
   | sig_type_extension
@@ -940,11 +961,11 @@ signature_item:
   | sig_exception_declaration
       { let (l, ext) = $1 in mksig_ext (Psig_exception l) ext }
   | module_declaration
-      { let (body, ext) = $1 in mksig_ext (Psig_module body) ext }
+      { let (sf, body, ext) = $1 in mksig_ext (Psig_module (sf, body)) ext }
   | module_alias
-      { let (body, ext) = $1 in mksig_ext (Psig_module body) ext }
+      { let (sf, body, ext) = $1 in mksig_ext (Psig_module (sf, body)) ext }
   | rec_module_declarations
-      { let (l, ext) = $1 in mksig_ext (Psig_recmodule (List.rev l)) ext }
+      { let (sf, l, ext) = $1 in mksig_ext (Psig_recmodule (sf, List.rev l)) ext }
   | module_type_declaration
       { let (body, ext) = $1 in mksig_ext (Psig_modtype body) ext }
   | open_statement
@@ -986,28 +1007,50 @@ module_declaration_body:
 module_declaration:
     MODULE ext_attributes UIDENT module_declaration_body post_item_attributes
       { let (ext, attrs) = $2 in
-        Md.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
+        Nonstatic
+      , Md.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
+          ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+      , ext }
+  | STATIC MODULE ext_attributes UIDENT module_declaration_body post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Md.mk (mkrhs $4 3) $5 ~attrs:(attrs@$6)
           ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext }
 ;
 module_alias:
     MODULE ext_attributes UIDENT EQUAL mod_longident post_item_attributes
       { let (ext, attrs) = $2 in
-        Md.mk (mkrhs $3 3)
+        Nonstatic
+      , Md.mk (mkrhs $3 3)
           (Mty.alias ~loc:(rhs_loc 5) (mkrhs $5 5)) ~attrs:(attrs@$6)
+             ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+      , ext }
+  | STATIC MODULE ext_attributes UIDENT EQUAL mod_longident post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Md.mk (mkrhs $4 3)
+          (Mty.alias ~loc:(rhs_loc 5) (mkrhs $6 5)) ~attrs:(attrs@$7)
              ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext }
 ;
 rec_module_declarations:
     rec_module_declaration
-      { let (body, ext) = $1 in ([body], ext) }
+      { let (sf, body, ext) = $1 in (sf, [body], ext) }
   | rec_module_declarations and_module_declaration
-      { let (l, ext) = $1 in ($2 :: l, ext) }
+      { let (sf, l, ext) = $1 in (sf, $2 :: l, ext) }
 ;
 rec_module_declaration:
     MODULE ext_attributes REC UIDENT COLON module_type post_item_attributes
       { let (ext, attrs) = $2 in
-        Md.mk (mkrhs $4 4) $6 ~attrs:(attrs@$7)
+        Nonstatic
+      , Md.mk (mkrhs $4 4) $6 ~attrs:(attrs@$7)
+            ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+      , ext}
+  | STATIC MODULE ext_attributes REC UIDENT COLON module_type post_item_attributes
+      { let (ext, attrs) = $3 in
+        Static
+      , Md.mk (mkrhs $5 4) $7 ~attrs:(attrs@$8)
             ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext}
 ;
@@ -1480,6 +1523,10 @@ simple_expr:
       { reloc_exp $2 }
   | LPAREN seq_expr error
       { unclosed "(" 1 ")" 3 }
+  | LESSLESS seq_expr GREATERGREATER
+      { mkexp(Pexp_quote $2) }
+  | DOLLAR simple_expr
+      { mkexp(Pexp_escape $2) }
   | BEGIN ext_attributes seq_expr END
       { wrap_exp_attrs (reloc_exp $3) $2 (* check location *) }
   | BEGIN ext_attributes END
@@ -1643,6 +1690,19 @@ let_binding:
 and_let_binding:
     AND attributes let_binding_body post_item_attributes
       { mklb false $3 ($2@$4) }
+;
+static_bindings:
+    static_binding                      { $1 }
+  | static_bindings and_static_bindings { addlb $1 $2 }
+;
+static_binding:
+  STATIC ext_attributes rec_flag let_binding_body post_item_attributes
+    { let (ext, attr) = $2 in
+      mklbs ext $3 (mklb true $4 (attr@$5)) }
+;
+and_static_bindings:
+  AND attributes let_binding_body post_item_attributes
+    { mklb false $3 ($2@$4) }
 ;
 fun_binding:
     strict_binding
@@ -1894,10 +1954,15 @@ opt_pattern_type_constraint:
 
 value_description:
     VAL ext_attributes val_ident COLON core_type post_item_attributes
-      { let (ext, attrs) = $2 in
-        Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
-              ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
-      , ext }
+      { (Nonstatic, let (ext, attrs) = $2 in
+          Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
+                ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+        , ext) }
+  | STATIC VAL ext_attributes val_ident COLON core_type post_item_attributes
+      { (Static, let (ext, attrs) = $3 in
+          Val.mk (mkrhs $4 3) $6 ~attrs:(attrs@$7)
+                ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+        , ext) }
 ;
 
 /* Primitive declarations */
@@ -2407,6 +2472,7 @@ operator:
   | PLUSEQ                                      { "+=" }
   | PERCENT                                     { "%" }
 ;
+
 constr_ident:
     UIDENT                                      { $1 }
   | LBRACKET RBRACKET                           { "[]" }

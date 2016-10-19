@@ -89,6 +89,12 @@ let fmt_closed_flag f x =
   | Closed -> fprintf f "Closed"
   | Open -> fprintf f "Open"
 
+let fmt_static_flag f x =
+  match x with
+  | Nonstatic -> fprintf f "Nonstatic";
+  | Static -> fprintf f "Static";
+;;
+
 let fmt_rec_flag f x =
   match x with
   | Nonrecursive -> fprintf f "Nonrec";
@@ -392,6 +398,12 @@ and expression i ppf x =
   | Texp_pack me ->
       line i ppf "Texp_pack";
       module_expr i ppf me
+  | Texp_quote e ->
+      line i ppf "Pexp_quote";
+      expression i ppf e
+  | Texp_escape e ->
+      line i ppf "Pexp_escape";
+      expression i ppf e
   | Texp_unreachable ->
       line i ppf "Texp_unreachable"
   | Texp_extension_constructor (li, _) ->
@@ -638,8 +650,8 @@ and signature_item i ppf x =
   line i ppf "signature_item %a\n" fmt_location x.sig_loc;
   let i = i+1 in
   match x.sig_desc with
-  | Tsig_value vd ->
-      line i ppf "Tsig_value\n";
+  | Tsig_value (sf, vd) ->
+      line i ppf "Tsig_value %a\n" fmt_static_flag sf;
       value_description i ppf vd;
   | Tsig_type (rf, l) ->
       line i ppf "Tsig_type %a\n" fmt_rec_flag rf;
@@ -650,12 +662,13 @@ and signature_item i ppf x =
   | Tsig_exception ext ->
       line i ppf "Tsig_exception\n";
       extension_constructor i ppf ext
-  | Tsig_module md ->
-      line i ppf "Tsig_module \"%a\"\n" fmt_ident md.md_id;
+  | Tsig_module (sf, md) ->
+      line i ppf "Tsig_module %a \"%a\"\n" fmt_static_flag sf
+        fmt_ident md.md_id;
       attributes i ppf md.md_attributes;
       module_type i ppf md.md_type
-  | Tsig_recmodule decls ->
-      line i ppf "Tsig_recmodule\n";
+  | Tsig_recmodule (sf, decls) ->
+      line i ppf "Tsig_recmodule %a\n" fmt_static_flag sf;
       list i module_declaration ppf decls;
   | Tsig_modtype x ->
       line i ppf "Tsig_modtype \"%a\"\n" fmt_ident x.mtd_id;
@@ -741,8 +754,8 @@ and structure_item i ppf x =
       line i ppf "Tstr_eval\n";
       attributes i ppf attrs;
       expression i ppf e;
-  | Tstr_value (rf, l) ->
-      line i ppf "Tstr_value %a\n" fmt_rec_flag rf;
+  | Tstr_value (sf, rf, l) ->
+      line i ppf "Tstr_value %a %a\n" fmt_static_flag sf fmt_rec_flag rf;
       list i value_binding ppf l;
   | Tstr_primitive vd ->
       line i ppf "Tstr_primitive\n";
@@ -756,11 +769,11 @@ and structure_item i ppf x =
   | Tstr_exception ext ->
       line i ppf "Tstr_exception\n";
       extension_constructor i ppf ext;
-  | Tstr_module x ->
-      line i ppf "Tstr_module\n";
+  | Tstr_module (sf, x) ->
+      line i ppf "Tstr_module %a\n" fmt_static_flag sf;
       module_binding i ppf x
-  | Tstr_recmodule bindings ->
-      line i ppf "Tstr_recmodule\n";
+  | Tstr_recmodule (sf, bindings) ->
+      line i ppf "Tstr_recmodule %a\n" fmt_static_flag sf;
       list i module_binding ppf bindings
   | Tstr_modtype x ->
       line i ppf "Tstr_modtype \"%a\"\n" fmt_ident x.mtd_id;

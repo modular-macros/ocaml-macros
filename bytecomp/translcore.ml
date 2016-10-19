@@ -700,6 +700,15 @@ let rec cut n l =
 
 let try_ids = Hashtbl.create 8
 
+let splice_array = ref (None : Parsetree.expression array ref option)
+let splice_index = ref 0
+
+let set_transl_splices opt =
+  splice_index := 0;
+  match opt with
+  | None -> splice_array := None
+  | Some a -> splice_array := Some a
+
 let rec transl_exp e =
   List.iter (Translattribute.check_attribute e) e.exp_attributes;
   let eval_once =
@@ -1078,6 +1087,21 @@ and transl_exp0 e =
           cl_env = e.exp_env;
           cl_attributes = [];
          }
+  | Texp_quote e -> Translquote.quote_expression transl_exp e
+  | Texp_escape e ->
+    begin
+      match !splice_array with
+      | Some arr_ref ->
+        let parsetree = Array.get !arr_ref !splice_index in
+        incr splice_index;
+        let lam =
+          transl_exp @@
+          Typecore.type_expression (Env.with_phase_down e.exp_env) parsetree
+        in
+        lam
+      | None ->
+        lambda_unit
+    end
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
 

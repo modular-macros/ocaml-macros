@@ -24,6 +24,7 @@
 open Parsetree
 open Ast_helper
 open Location
+open Asttypes
 
 type mapper = {
   attribute: mapper -> attribute -> attribute;
@@ -50,8 +51,10 @@ type mapper = {
   include_description: mapper -> include_description -> include_description;
   label_declaration: mapper -> label_declaration -> label_declaration;
   location: mapper -> Location.t -> Location.t;
-  module_binding: mapper -> module_binding -> module_binding;
-  module_declaration: mapper -> module_declaration -> module_declaration;
+  module_binding: mapper -> static_flag -> module_binding
+    -> static_flag * module_binding;
+  module_declaration: mapper -> static_flag -> module_declaration
+    -> static_flag * module_declaration;
   module_expr: mapper -> module_expr -> module_expr;
   module_type: mapper -> module_type -> module_type;
   module_type_declaration: mapper -> module_type_declaration
@@ -68,7 +71,8 @@ type mapper = {
   type_extension: mapper -> type_extension -> type_extension;
   type_kind: mapper -> type_kind -> type_kind;
   value_binding: mapper -> value_binding -> value_binding;
-  value_description: mapper -> value_description -> value_description;
+  value_description: mapper -> (Asttypes.static_flag * value_description)
+    -> (Asttypes.static_flag * value_description);
   with_constraint: mapper -> with_constraint -> with_constraint;
 }
 
@@ -79,6 +83,8 @@ let map_tuple3 f1 f2 f3 (x, y, z) = (f1 x, f2 y, f3 z)
 let map_opt f = function None -> None | Some x -> Some (f x)
 
 let map_loc sub {loc; txt} = {loc = sub.location sub loc; txt}
+
+let uncurry f (a, b) = f a b
 
 module T = struct
   (* Type expressions for the core language *)
@@ -244,13 +250,16 @@ module MT = struct
     let open Sig in
     let loc = sub.location sub loc in
     match desc with
-    | Psig_value vd -> value ~loc (sub.value_description sub vd)
+    | Psig_value (sf, vd) ->
+        let (sf', vd') = (sub.value_description sub (sf, vd)) in
+        value ~loc sf' vd'
     | Psig_type (rf, l) -> type_ ~loc rf (List.map (sub.type_declaration sub) l)
     | Psig_typext te -> type_extension ~loc (sub.type_extension sub te)
     | Psig_exception ed -> exception_ ~loc (sub.extension_constructor sub ed)
-    | Psig_module x -> module_ ~loc (sub.module_declaration sub x)
-    | Psig_recmodule l ->
-        rec_module ~loc (List.map (sub.module_declaration sub) l)
+    | Psig_module (sf, x) -> uncurry (module_ ~loc) (sub.module_declaration sub sf x)
+    | Psig_recmodule (sf, l) ->
+        rec_module ~loc sf (List.map
+          (fun expr -> snd (sub.module_declaration sub sf expr)) l)
     | Psig_modtype x -> modtype ~loc (sub.module_type_declaration sub x)
     | Psig_open x -> open_ ~loc (sub.open_description sub x)
     | Psig_include x -> include_ ~loc (sub.include_description sub x)
@@ -291,13 +300,17 @@ module M = struct
     match desc with
     | Pstr_eval (x, attrs) ->
         eval ~loc ~attrs:(sub.attributes sub attrs) (sub.expr sub x)
-    | Pstr_value (r, vbs) -> value ~loc r (List.map (sub.value_binding sub) vbs)
-    | Pstr_primitive vd -> primitive ~loc (sub.value_description sub vd)
+    | Pstr_value (s, r, vbs) ->
+        value ~loc s r (List.map (sub.value_binding sub) vbs)
+    | Pstr_primitive vd ->
+        primitive ~loc @@ snd (sub.value_description sub (Asttypes.Nonstatic, vd))
     | Pstr_type (rf, l) -> type_ ~loc rf (List.map (sub.type_declaration sub) l)
     | Pstr_typext te -> type_extension ~loc (sub.type_extension sub te)
     | Pstr_exception ed -> exception_ ~loc (sub.extension_constructor sub ed)
-    | Pstr_module x -> module_ ~loc (sub.module_binding sub x)
-    | Pstr_recmodule l -> rec_module ~loc (List.map (sub.module_binding sub) l)
+    | Pstr_module (sf, x) -> uncurry (module_ ~loc) (sub.module_binding sub sf x)
+    | Pstr_recmodule (sf, l) ->
+        rec_module ~loc sf (List.map
+          (fun expr -> snd (sub.module_binding sub sf expr)) l)
     | Pstr_modtype x -> modtype ~loc (sub.module_type_declaration sub x)
     | Pstr_open x -> open_ ~loc (sub.open_description sub x)
     | Pstr_class l -> class_ ~loc (List.map (sub.class_declaration sub) l)
@@ -383,6 +396,8 @@ module E = struct
     | Pexp_pack me -> pack ~loc ~attrs (sub.module_expr sub me)
     | Pexp_open (ovf, lid, e) ->
         open_ ~loc ~attrs ovf (map_loc sub lid) (sub.expr sub e)
+    | Pexp_quote e -> quote ~loc ~attrs (sub.expr sub e)
+    | Pexp_escape e -> escape ~loc ~attrs (sub.expr sub e)
     | Pexp_extension x -> extension ~loc ~attrs (sub.extension sub x)
     | Pexp_unreachable -> unreachable ~loc ~attrs ()
 end
@@ -513,26 +528,29 @@ let default_mapper =
     type_extension = T.map_type_extension;
     extension_constructor = T.map_extension_constructor;
     value_description =
-      (fun this {pval_name; pval_type; pval_prim; pval_loc;
-                 pval_attributes} ->
+      (fun this (sf, {pval_name; pval_type; pval_prim; pval_loc;
+                      pval_attributes}) ->
+        (sf,
         Val.mk
           (map_loc this pval_name)
           (this.typ this pval_type)
           ~attrs:(this.attributes this pval_attributes)
           ~loc:(this.location this pval_loc)
           ~prim:pval_prim
+        )
       );
 
     pat = P.map;
     expr = E.map;
 
     module_declaration =
-      (fun this {pmd_name; pmd_type; pmd_attributes; pmd_loc} ->
+      (fun this sf {pmd_name; pmd_type; pmd_attributes; pmd_loc} ->
+        (sf,
          Md.mk
            (map_loc this pmd_name)
            (this.module_type this pmd_type)
            ~attrs:(this.attributes this pmd_attributes)
-           ~loc:(this.location this pmd_loc)
+           ~loc:(this.location this pmd_loc))
       );
 
     module_type_declaration =
@@ -545,10 +563,11 @@ let default_mapper =
       );
 
     module_binding =
-      (fun this {pmb_name; pmb_expr; pmb_attributes; pmb_loc} ->
-         Mb.mk (map_loc this pmb_name) (this.module_expr this pmb_expr)
+      (fun this sf {pmb_name; pmb_expr; pmb_attributes; pmb_loc} ->
+        (sf,
+          Mb.mk (map_loc this pmb_name) (this.module_expr this pmb_expr)
            ~attrs:(this.attributes this pmb_attributes)
-           ~loc:(this.location this pmb_loc)
+           ~loc:(this.location this pmb_loc))
       );
 
 

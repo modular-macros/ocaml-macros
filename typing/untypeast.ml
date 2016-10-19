@@ -63,7 +63,8 @@ type mapper = {
   type_extension: mapper -> T.type_extension -> type_extension;
   type_kind: mapper -> T.type_kind -> type_kind;
   value_binding: mapper -> T.value_binding -> value_binding;
-  value_description: mapper -> T.value_description -> value_description;
+  value_description: mapper -> static_flag * T.value_description
+    -> static_flag * value_description;
   with_constraint:
     mapper -> (Path.t * Longident.t Location.loc * T.with_constraint)
     -> with_constraint;
@@ -142,20 +143,22 @@ let structure_item sub item =
   let desc =
     match item.str_desc with
       Tstr_eval (exp, attrs) -> Pstr_eval (sub.expr sub exp, attrs)
-    | Tstr_value (rec_flag, list) ->
-        Pstr_value (rec_flag, List.map (sub.value_binding sub) list)
+    | Tstr_value (static_flag, rec_flag, list) ->
+        Pstr_value
+          (static_flag, rec_flag, List.map (sub.value_binding sub) list)
     | Tstr_primitive vd ->
-        Pstr_primitive (sub.value_description sub vd)
+        Pstr_primitive (snd (sub.value_description sub (Nonstatic, vd)))
     | Tstr_type (rec_flag, list) ->
         Pstr_type (rec_flag, List.map (sub.type_declaration sub) list)
     | Tstr_typext tyext ->
         Pstr_typext (sub.type_extension sub tyext)
     | Tstr_exception ext ->
         Pstr_exception (sub.extension_constructor sub ext)
-    | Tstr_module mb ->
-        Pstr_module (sub.module_binding sub mb)
-    | Tstr_recmodule list ->
-        Pstr_recmodule (List.map (sub.module_binding sub) list)
+    | Tstr_module (sf, mb) ->
+        Pstr_module (sf, sub.module_binding sub mb)
+        (* macros: no handling of static modifier here for now *)
+    | Tstr_recmodule (sf, list) ->
+        Pstr_recmodule (sf, List.map (sub.module_binding sub) list)
     | Tstr_modtype mtd ->
         Pstr_modtype (sub.module_type_declaration sub mtd)
     | Tstr_open od ->
@@ -177,13 +180,15 @@ let structure_item sub item =
   in
   Str.mk ~loc desc
 
-let value_description sub v =
+let value_description sub (sf, v) =
   let loc = sub.location sub v.val_loc in
   let attrs = sub.attributes sub v.val_attributes in
+  (sf,
   Val.mk ~loc ~attrs
     ~prim:v.val_prim
     (map_loc sub v.val_name)
     (sub.typ sub v.val_desc)
+  )
 
 let module_binding sub mb =
   let loc = sub.location sub mb.mb_loc; in
@@ -457,6 +462,8 @@ let expression sub exp =
                            sub.expr sub exp)
     | Texp_assert exp -> Pexp_assert (sub.expr sub exp)
     | Texp_lazy exp -> Pexp_lazy (sub.expr sub exp)
+    | Texp_quote exp -> Pexp_quote (sub.expr sub exp)
+    | Texp_escape exp -> Pexp_escape (sub.expr sub exp)
     | Texp_object (cl, _) ->
         Pexp_object (sub.class_structure sub cl)
     | Texp_pack (mexpr) ->
@@ -491,18 +498,19 @@ let signature_item sub item =
   let loc = sub.location sub item.sig_loc; in
   let desc =
     match item.sig_desc with
-      Tsig_value v ->
-        Psig_value (sub.value_description sub v)
+      Tsig_value (sf, v) ->
+        let (sf, v) = (sub.value_description sub (sf, v)) in
+        Psig_value (sf, v)
     | Tsig_type (rec_flag, list) ->
         Psig_type (rec_flag, List.map (sub.type_declaration sub) list)
     | Tsig_typext tyext ->
         Psig_typext (sub.type_extension sub tyext)
     | Tsig_exception ext ->
         Psig_exception (sub.extension_constructor sub ext)
-    | Tsig_module md ->
-        Psig_module (sub.module_declaration sub md)
-    | Tsig_recmodule list ->
-        Psig_recmodule (List.map (sub.module_declaration sub) list)
+    | Tsig_module (sf, md) ->
+        Psig_module (sf, sub.module_declaration sub md)
+    | Tsig_recmodule (sf, list) ->
+        Psig_recmodule (sf, List.map (sub.module_declaration sub) list)
     | Tsig_modtype mtd ->
         Psig_modtype (sub.module_type_declaration sub mtd)
     | Tsig_open od ->

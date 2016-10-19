@@ -223,6 +223,8 @@ and expression_desc =
   | Texp_lazy of expression
   | Texp_object of class_structure * string list
   | Texp_pack of module_expr
+  | Texp_quote of expression
+  | Texp_escape of expression
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
 
@@ -338,13 +340,13 @@ and structure_item =
 
 and structure_item_desc =
     Tstr_eval of expression * attributes
-  | Tstr_value of rec_flag * value_binding list
+  | Tstr_value of static_flag * rec_flag * value_binding list
   | Tstr_primitive of value_description
   | Tstr_type of rec_flag * type_declaration list
   | Tstr_typext of type_extension
   | Tstr_exception of extension_constructor
-  | Tstr_module of module_binding
-  | Tstr_recmodule of module_binding list
+  | Tstr_module of static_flag * module_binding
+  | Tstr_recmodule of static_flag * module_binding list
   | Tstr_modtype of module_type_declaration
   | Tstr_open of open_description
   | Tstr_class of (class_declaration * string list) list
@@ -413,12 +415,12 @@ and signature_item =
     sig_loc: Location.t }
 
 and signature_item_desc =
-    Tsig_value of value_description
+    Tsig_value of static_flag * value_description
   | Tsig_type of rec_flag * type_declaration list
   | Tsig_typext of type_extension
   | Tsig_exception of extension_constructor
-  | Tsig_module of module_declaration
-  | Tsig_recmodule of module_declaration list
+  | Tsig_module of static_flag * module_declaration
+  | Tsig_recmodule of static_flag * module_declaration list
   | Tsig_modtype of module_type_declaration
   | Tsig_open of open_description
   | Tsig_include of include_description
@@ -657,4 +659,4 @@ val alpha_pat: (Ident.t * Ident.t) list -> pattern -> pattern
 val mknoloc: 'a -> 'a Asttypes.loc
 val mkloc: 'a -> Location.t -> 'a Asttypes.loc
 
-val pat_bound_idents: pattern -> Ident.t list
+val pat_bound_idents: pattern -> (Ident.t * string Asttypes.loc) list

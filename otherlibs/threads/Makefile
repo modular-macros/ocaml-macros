@@ -43,12 +43,12 @@ LIB_OBJS=$(LIB)/camlinternalFormatBasics.cmo pervasives.cmo		\
   $(LIB)/buffer.cmo $(LIB)/camlinternalFormat.cmo $(LIB)/printf.cmo	\
   $(LIB)/arg.cmo $(LIB)/printexc.cmo $(LIB)/gc.cmo $(LIB)/digest.cmo	\
   $(LIB)/random.cmo $(LIB)/hashtbl.cmo $(LIB)/format.cmo		\
-  $(LIB)/scanf.cmo $(LIB)/callback.cmo $(LIB)/camlinternalOO.cmo	\
-  $(LIB)/oo.cmo $(LIB)/camlinternalMod.cmo $(LIB)/genlex.cmo		\
-  $(LIB)/weak.cmo $(LIB)/ephemeron.cmo $(LIB)/filename.cmo		\
+  $(LIB)/camlinternalQuote.cmo $(LIB)/scanf.cmo $(LIB)/callback.cmo	\
+  $(LIB)/camlinternalOO.cmo $(LIB)/oo.cmo $(LIB)/camlinternalMod.cmo	\
+  $(LIB)/genlex.cmo $(LIB)/weak.cmo $(LIB)/filename.cmo			\
   $(LIB)/complex.cmo $(LIB)/arrayLabels.cmo $(LIB)/listLabels.cmo	\
-  $(LIB)/bytesLabels.cmo $(LIB)/stringLabels.cmo			\
-  $(LIB)/moreLabels.cmo $(LIB)/stdLabels.cmo
+  $(LIB)/bytesLabels.cmo $(LIB)/stringLabels.cmo $(LIB)/moreLabels.cmo	\
+  $(LIB)/stdLabels.cmo
 
 UNIXLIB=../unix
 

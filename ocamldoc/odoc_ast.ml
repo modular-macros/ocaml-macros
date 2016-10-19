@@ -60,13 +60,14 @@ module Typedtree_search =
 
     let add_to_hashes table table_values tt =
       match tt with
-      | Typedtree.Tstr_module mb ->
+      | Typedtree.Tstr_module (_, mb) ->
           Hashtbl.add table (M (Name.from_ident mb.mb_id)) tt
-      | Typedtree.Tstr_recmodule mods ->
+      | Typedtree.Tstr_recmodule (_, mods) ->
           List.iter
             (fun mb ->
               Hashtbl.add table (M (Name.from_ident mb.mb_id))
-                (Typedtree.Tstr_module mb)
+                (Typedtree.Tstr_module (Asttypes.Nonstatic (* macros: not sure *),
+                 mb))
             )
             mods
       | Typedtree.Tstr_modtype mtd ->
@@ -97,7 +98,7 @@ module Typedtree_search =
                 (CT (Name.from_ident id))
                 (Typedtree.Tstr_class_type [ci]))
             info_list
-      | Typedtree.Tstr_value (_, pat_exp_list) ->
+      | Typedtree.Tstr_value (_, _, pat_exp_list) ->
           List.iter
             (fun {vb_pat=pat; vb_expr=exp} ->
               match iter_val_pattern pat.Typedtree.pat_desc with
@@ -120,7 +121,7 @@ module Typedtree_search =
 
     let search_module table name =
       match Hashtbl.find table (M name) with
-        (Typedtree.Tstr_module mb) -> mb.mb_expr
+        (Typedtree.Tstr_module (_, mb)) -> mb.mb_expr
       | _ -> assert false
 
     let search_module_type table name =
@@ -935,7 +936,7 @@ module Analyser =
         let f = match ele with
           Element_module m ->
             (function
-                Types.Sig_module (ident,md,_) ->
+                Types.Sig_module (ident,md,_,_) ->
                   let n1 = Name.simple m.m_name
                   and n2 = Ident.name ident in
                   (
@@ -957,7 +958,7 @@ module Analyser =
               | _ -> false)
         | Element_value v ->
             (function
-                Types.Sig_value (ident,_) ->
+                Types.Sig_value (ident,_,_) ->
                   let n1 = Name.simple v.val_name
                   and n2 = Ident.name ident in
                   n1 = n2
@@ -1071,7 +1072,8 @@ module Analyser =
       | Parsetree.Pstr_attribute _
       | Parsetree.Pstr_extension _ ->
           (0, env, [])
-      | Parsetree.Pstr_value (rec_flag, pat_exp_list) ->
+      (* macros: not handled *)
+      | Parsetree.Pstr_value (_, rec_flag, pat_exp_list) ->
           (* of rec_flag * (pattern * expression) list *)
           (* For each value, look for the value name, then look in the
              typedtree for the corresponding information,
@@ -1396,7 +1398,7 @@ module Analyser =
           in
             (0, new_env, [ Element_exception new_ext ])
 
-      | Parsetree.Pstr_module {Parsetree.pmb_name=name; pmb_expr=module_expr} ->
+      | Parsetree.Pstr_module (_, {Parsetree.pmb_name=name; pmb_expr=module_expr}) ->
           (
            (* of string * module_expr *)
            try
@@ -1438,7 +1440,7 @@ module Analyser =
                raise (Failure (Odoc_messages.module_not_found_in_typedtree complete_name))
           )
 
-      | Parsetree.Pstr_recmodule mods ->
+      | Parsetree.Pstr_recmodule (_, mods) ->
           (* FIXME Here problem: no link with module types
              in module constraints *)
           let new_env =

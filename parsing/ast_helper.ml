@@ -131,6 +131,8 @@ module Exp = struct
   let newtype ?loc ?attrs a b = mk ?loc ?attrs (Pexp_newtype (a, b))
   let pack ?loc ?attrs a = mk ?loc ?attrs (Pexp_pack a)
   let open_ ?loc ?attrs a b c = mk ?loc ?attrs (Pexp_open (a, b, c))
+  let quote ?loc ?attrs a = mk ?loc ?attrs (Pexp_quote a)
+  let escape ?loc ?attrs a = mk ?loc ?attrs (Pexp_escape a)
   let extension ?loc ?attrs a = mk ?loc ?attrs (Pexp_extension a)
   let unreachable ?loc ?attrs () = mk ?loc ?attrs Pexp_unreachable
 
@@ -174,12 +176,12 @@ end
 module Sig = struct
   let mk ?(loc = !default_loc) d = {psig_desc = d; psig_loc = loc}
 
-  let value ?loc a = mk ?loc (Psig_value a)
+  let value ?loc static_flag a = mk ?loc (Psig_value (static_flag, a))
   let type_ ?loc rec_flag a = mk ?loc (Psig_type (rec_flag, a))
   let type_extension ?loc a = mk ?loc (Psig_typext a)
   let exception_ ?loc a = mk ?loc (Psig_exception a)
-  let module_ ?loc a = mk ?loc (Psig_module a)
-  let rec_module ?loc a = mk ?loc (Psig_recmodule a)
+  let module_ ?loc a b = mk ?loc (Psig_module (a, b))
+  let rec_module ?loc a b = mk ?loc (Psig_recmodule (a, b))
   let modtype ?loc a = mk ?loc (Psig_modtype a)
   let open_ ?loc a = mk ?loc (Psig_open a)
   let include_ ?loc a = mk ?loc (Psig_include a)
@@ -198,13 +200,13 @@ module Str = struct
   let mk ?(loc = !default_loc) d = {pstr_desc = d; pstr_loc = loc}
 
   let eval ?loc ?(attrs = []) a = mk ?loc (Pstr_eval (a, attrs))
-  let value ?loc a b = mk ?loc (Pstr_value (a, b))
+  let value ?loc a b c = mk ?loc (Pstr_value (a, b, c))
   let primitive ?loc a = mk ?loc (Pstr_primitive a)
   let type_ ?loc rec_flag a = mk ?loc (Pstr_type (rec_flag, a))
   let type_extension ?loc a = mk ?loc (Pstr_typext a)
   let exception_ ?loc a = mk ?loc (Pstr_exception a)
-  let module_ ?loc a = mk ?loc (Pstr_module a)
-  let rec_module ?loc a = mk ?loc (Pstr_recmodule a)
+  let module_ ?loc a b = mk ?loc (Pstr_module (a, b))
+  let rec_module ?loc a b = mk ?loc (Pstr_recmodule (a, b))
   let modtype ?loc a = mk ?loc (Pstr_modtype a)
   let open_ ?loc a = mk ?loc (Pstr_open a)
   let class_ ?loc a = mk ?loc (Pstr_class a)

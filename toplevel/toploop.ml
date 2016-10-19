@@ -57,7 +57,7 @@ let setvalue name v =
 let rec eval_path = function
   | Pident id ->
       if Ident.persistent id || Ident.global id then
-        Symtable.get_global_value id
+        Symtable.get_global_value (0 (* macros: not sure *), id)
       else begin
         let name = Translmod.toplevel_name id in
         try
@@ -126,6 +126,10 @@ let parse_mod_use_file name lb =
   let modname =
     String.capitalize_ascii (Filename.chop_extension (Filename.basename name))
   in
+  let phase =
+    if Filename.check_suffix name ".cmm"
+    then Asttypes.Static else Asttypes.Nonstatic
+  in
   let items =
     List.concat
       (List.map
@@ -133,10 +137,10 @@ let parse_mod_use_file name lb =
          (!parse_use_file lb))
   in
   [ Ptop_def
-      [ Str.module_
+      [ Str.module_ phase
           (Mb.mk
-             (Location.mknoloc modname)
-             (Mod.structure items)
+            (Location.mknoloc modname)
+            (Mod.structure items)
           )
        ]
    ]
@@ -156,7 +160,7 @@ let record_backtrace () =
   if Printexc.backtrace_status ()
   then backtrace := Some (Printexc.get_backtrace ())
 
-let load_lambda ppf lam =
+let load_lambda phase ppf lam =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
   let slam = Simplif.simplify_lambda "//toplevel//" lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
@@ -171,8 +175,12 @@ let load_lambda ppf lam =
   Meta.add_debug_info code code_size [| events |];
   let can_free = (fun_code = []) in
   let initial_symtable = Symtable.current_state() in
-  Symtable.patch_object code reloc;
-  Symtable.check_global_initialized reloc;
+  let nothing () = () in
+  (if phase = 0 then
+    Cmo_load.load_deps_runtime ppf reloc nothing nothing (fun exn -> raise exn)
+  else Runstatic.load_static_deps ppf reloc);
+  Symtable.patch_object phase code reloc;
+  Symtable.check_global_initialized phase reloc;
   Symtable.update_global_table();
   let initial_bindings = !toplevel_value_bindings in
   try
@@ -202,7 +210,7 @@ let load_lambda ppf lam =
 let pr_item =
   Printtyp.print_items
     (fun env -> function
-      | Sig_value(id, {val_kind = Val_reg; val_type}) ->
+      | Sig_value(id, _, {val_kind = Val_reg; val_type}) ->
           Some (outval_of_value env (getvalue (Translmod.toplevel_name id))
                   val_type)
       | _ -> None
@@ -253,11 +261,30 @@ let execute_phrase print_outcome ppf phr =
       let sg' = Typemod.simplify_signature sg in
       ignore (Includemod.signatures oldenv sg sg');
       Typecore.force_delayed_checks ();
-      let lam = Translmod.transl_toplevel_definition str in
+      let slam = Translmod.transl_toplevel_definition Asttypes.Static str in
+      let splices =
+        begin try
+          toplevel_env := newenv;
+          let res = load_lambda 1 ppf slam in
+          match res with
+          | Result v ->
+              v
+          | Exception exn ->
+              toplevel_env := oldenv;
+              if exn = Out_of_memory then Gc.full_major ();
+              raise exn
+        with x ->
+          toplevel_env := oldenv;
+          raise x
+        end
+      in
+      Translcore.set_transl_splices
+        (Some (ref (Obj.obj splices : Parsetree.expression array)));
+      let lam = Translmod.transl_toplevel_definition Asttypes.Nonstatic str in
       Warnings.check_fatal ();
       begin try
         toplevel_env := newenv;
-        let res = load_lambda ppf lam in
+        let res = load_lambda 0 ppf lam in
         let out_phr =
           match res with
           | Result v ->
@@ -267,7 +294,8 @@ let execute_phrase print_outcome ppf phr =
                   | [ { str_desc =
                           (Tstr_eval (exp, _)
                           |Tstr_value
-                              (Asttypes.Nonrecursive,
+                              (Asttypes.Nonstatic,
+                               Asttypes.Nonrecursive,
                                [{vb_pat = {pat_desc=Tpat_any};
                                  vb_expr = exp}
                                ]
@@ -279,7 +307,9 @@ let execute_phrase print_outcome ppf phr =
                       let ty = Printtyp.tree_of_type_scheme exp.exp_type in
                       Ophr_eval (outv, ty)
 
-                  | [] -> Ophr_signature []
+                  (* when phrase is empty or is a static binding, no printing *)
+                  | [] ->
+                      Ophr_signature []
                   | _ -> Ophr_signature (pr_item newenv sg'))
               else Ophr_signature []
           | Exception exn ->

@@ -42,3 +42,15 @@ let parse s =
     [] -> Lident ""  (* should not happen, but don't put assert false
                         so as not to crash the toplevel (see Genprintval) *)
   | hd :: tl -> List.fold_left (fun p s -> Ldot(p, s)) (Lident hd) tl
+
+let rec is_lifted = function
+  | Lident s -> String.length s <> 0 && s.[0] == '^'
+  | Ldot (id, _) -> is_lifted id
+  | Lapply (id, _) -> is_lifted id
+
+let rec lift = function
+  | Lident s as l ->
+      if String.length s <> 0 && s.[0] == '^' then l else Lident ("^" ^ s)
+  | Ldot (id, s) -> Ldot (lift id, s)
+  | Lapply (_,_) -> Misc.fatal_error "Longident.lift on functor"
+

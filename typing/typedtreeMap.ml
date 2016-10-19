@@ -17,7 +17,8 @@ open Typedtree
 
 module type MapArgument = sig
   val enter_structure : structure -> structure
-  val enter_value_description : value_description -> value_description
+  val enter_value_description : Asttypes.static_flag * value_description
+    -> Asttypes.static_flag * value_description
   val enter_type_declaration : type_declaration -> type_declaration
   val enter_type_extension : type_extension -> type_extension
   val enter_extension_constructor :
@@ -46,7 +47,8 @@ module type MapArgument = sig
   val enter_structure_item : structure_item -> structure_item
 
   val leave_structure : structure -> structure
-  val leave_value_description : value_description -> value_description
+  val leave_value_description : Asttypes.static_flag * value_description
+    -> Asttypes.static_flag * value_description
   val leave_type_declaration : type_declaration -> type_declaration
   val leave_type_extension : type_extension -> type_extension
   val leave_extension_constructor :
@@ -112,21 +114,23 @@ module MakeMap(Map : MapArgument) = struct
     let str_desc =
       match item.str_desc with
           Tstr_eval (exp, attrs) -> Tstr_eval (map_expression exp, attrs)
-        | Tstr_value (rec_flag, list) ->
-          Tstr_value (rec_flag, map_bindings list)
+        | Tstr_value (static_flag, rec_flag, list) ->
+          Tstr_value (static_flag, rec_flag, map_bindings list)
         | Tstr_primitive vd ->
-          Tstr_primitive (map_value_description vd)
+          let (_, v) = (map_value_description (Asttypes.Nonstatic, vd)) in
+          Tstr_primitive v
         | Tstr_type (rf, list) ->
           Tstr_type (rf, List.map map_type_declaration list)
         | Tstr_typext tyext ->
           Tstr_typext (map_type_extension tyext)
         | Tstr_exception ext ->
           Tstr_exception (map_extension_constructor ext)
-        | Tstr_module x ->
-          Tstr_module (map_module_binding x)
-        | Tstr_recmodule list ->
+        | Tstr_module (sf, x) ->
+          Tstr_module (sf, map_module_binding x)
+            (* macros: no handling of static modifier for now *)
+        | Tstr_recmodule (sf, list) ->
           let list = List.map map_module_binding list in
-          Tstr_recmodule list
+          Tstr_recmodule (sf, list)
         | Tstr_modtype mtd ->
           Tstr_modtype (map_module_type_declaration mtd)
         | Tstr_open od -> Tstr_open od
@@ -155,10 +159,11 @@ module MakeMap(Map : MapArgument) = struct
   and map_module_binding x =
     {x with mb_expr = map_module_expr x.mb_expr}
 
-  and map_value_description v =
-    let v = Map.enter_value_description v in
+  and map_value_description ((sf, v) : Asttypes.static_flag * Typedtree.value_description) :
+   Asttypes.static_flag * Typedtree.value_description =
+    let (sf, v) = Map.enter_value_description (sf, v) in
     let val_desc = map_core_type v.val_desc in
-    Map.leave_value_description { v with val_desc = val_desc }
+    Map.leave_value_description (sf, { v with val_desc = val_desc })
 
   and map_type_declaration decl =
     let decl = Map.enter_type_declaration decl in
@@ -385,6 +390,8 @@ module MakeMap(Map : MapArgument) = struct
           Texp_object (map_class_structure cl, string_list)
         | Texp_pack (mexpr) ->
           Texp_pack (map_module_expr mexpr)
+        | Texp_quote exp -> Texp_quote (map_expression exp)
+        | Texp_escape exp -> Texp_escape (map_expression exp)
         | Texp_unreachable ->
           Texp_unreachable
         | Texp_extension_constructor _ as e ->
@@ -427,19 +434,20 @@ module MakeMap(Map : MapArgument) = struct
     let item = Map.enter_signature_item item in
     let sig_desc =
       match item.sig_desc with
-          Tsig_value vd ->
-            Tsig_value (map_value_description vd)
+          Tsig_value (sf, vd) ->
+            let (sf, vd) = map_value_description (sf, vd) in
+            Tsig_value (sf, vd)
         | Tsig_type (rf, list) ->
             Tsig_type (rf, List.map map_type_declaration list)
         | Tsig_typext tyext ->
             Tsig_typext (map_type_extension tyext)
         | Tsig_exception ext ->
             Tsig_exception (map_extension_constructor ext)
-        | Tsig_module md ->
-            Tsig_module {md with md_type = map_module_type md.md_type}
-        | Tsig_recmodule list ->
+        | Tsig_module (sf, md) ->
+            Tsig_module (sf, {md with md_type = map_module_type md.md_type})
+        | Tsig_recmodule (sf, list) ->
             Tsig_recmodule
-                (List.map
+                (sf, List.map
                    (fun md -> {md with md_type = map_module_type md.md_type})
                    list
                 )
@@ -667,7 +675,7 @@ end
 module DefaultMapArgument = struct
 
   let enter_structure t = t
-  let enter_value_description t = t
+  let enter_value_description (sf, t) = (sf, t)
   let enter_type_declaration t = t
   let enter_type_extension t = t
   let enter_extension_constructor t = t
@@ -694,7 +702,7 @@ module DefaultMapArgument = struct
 
 
   let leave_structure t = t
-  let leave_value_description t = t
+  let leave_value_description (sf, t) = (sf, t)
   let leave_type_declaration t = t
   let leave_type_extension t = t
   let leave_extension_constructor t = t

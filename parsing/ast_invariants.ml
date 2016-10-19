@@ -137,7 +137,7 @@ let iterator =
     let loc = st.pstr_loc in
     match st.pstr_desc with
     | Pstr_type (_, []) -> empty_type loc
-    | Pstr_value (_, []) -> empty_let loc
+    | Pstr_value (_, _, []) -> empty_let loc
     | _ -> ()
   in
   let signature_item self sg =

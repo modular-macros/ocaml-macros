@@ -77,6 +77,8 @@ type error =
   | Not_an_extension_constructor
   | Literal_overflow of string
   | Unknown_literal of string * char
+  | Phase of Path.t * int * int
+  | Staging of Path.t * int * int
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -157,6 +159,8 @@ let iter_expression f e =
     | Pexp_newtype (_, e)
     | Pexp_poly (e, _)
     | Pexp_lazy e
+    | Pexp_quote e
+    | Pexp_escape e
     | Pexp_assert e
     | Pexp_setinstvar (_, e)
     | Pexp_send (e, _)
@@ -196,7 +200,7 @@ let iter_expression f e =
   and structure_item str =
     match str.pstr_desc with
     | Pstr_eval (e, _) -> expr e
-    | Pstr_value (_, pel) -> List.iter binding pel
+    | Pstr_value (_, _, pel) -> List.iter binding pel
     | Pstr_primitive _
     | Pstr_type _
     | Pstr_typext _
@@ -207,8 +211,8 @@ let iter_expression f e =
     | Pstr_attribute _
     | Pstr_extension _ -> ()
     | Pstr_include {pincl_mod = me}
-    | Pstr_module {pmb_expr = me} -> module_expr me
-    | Pstr_recmodule l -> List.iter (fun x -> module_expr x.pmb_expr) l
+    | Pstr_module (_, {pmb_expr = me}) -> module_expr me
+    | Pstr_recmodule (_, l) -> List.iter (fun x -> module_expr x.pmb_expr) l
     | Pstr_class cdl -> List.iter (fun c -> class_expr c.pci_expr) cdl
 
   and class_expr ce =
@@ -1628,11 +1632,11 @@ and is_nonexpansive_mod mexp =
         (fun item -> match item.str_desc with
           | Tstr_eval _ | Tstr_primitive _ | Tstr_type _
           | Tstr_modtype _ | Tstr_open _ | Tstr_class_type _  -> true
-          | Tstr_value (_, pat_exp_list) ->
+          | Tstr_value (_, _, pat_exp_list) ->
               List.for_all (fun vb -> is_nonexpansive vb.vb_expr) pat_exp_list
-          | Tstr_module {mb_expr=m;_}
+          | Tstr_module (_, {mb_expr=m;_})
           | Tstr_include {incl_mod=m;_} -> is_nonexpansive_mod m
-          | Tstr_recmodule id_mod_list ->
+          | Tstr_recmodule (_, id_mod_list) ->
               List.for_all (fun {mb_expr=m;_} -> is_nonexpansive_mod m)
                 id_mod_list
           | Tstr_exception {ext_kind = Text_decl _} ->
@@ -1916,6 +1920,9 @@ let unify_exp env exp expected_ty =
   let loc = proper_exp_loc exp in
   unify_exp_types loc env exp.exp_type expected_ty
 
+let ccross env exp =
+  Env.concat_cross_stage env exp.exp_env
+
 let rec type_exp ?recarg env sexp =
   (* We now delegate everything to type_expect *)
   type_expect ?recarg env sexp (newvar ())
@@ -1947,6 +1954,24 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   | Pexp_ident lid ->
       begin
         let (path, desc) = Typetexp.find_value env loc lid.txt in
+        let phase = Env.find_phase path env in
+        if phase <> Env.cur_phase env then
+          raise (Error (loc, env, Phase (path, phase, Env.cur_phase env)));
+        let stage = Env.find_stage path env in
+        let rec global = function
+          | Path.Pident id -> Ident.global id
+        | Path.Pdot (p, _, _) -> global p
+        | Path.Papply (p, p') -> global p && global p'
+        in
+        let env =
+          if stage <> Env.cur_stage env && not (global path) then
+            if Env.toplevel_splice env then
+              Env.add_cross_stage (Location.mkloc (Path.head path) lid.loc) env
+            else
+              raise (Error (loc, env, Staging (path, stage, Env.cur_stage env)))
+          else
+            env
+        in
         if !Clflags.annotations then begin
           let dloc = desc.Types.val_loc in
           let annot =
@@ -2062,7 +2087,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = body.exp_type;
         exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
+        exp_env = ccross env body }
   | Pexp_fun (l, Some default, spat, sbody) ->
       assert(is_optional l); (* default allowed only with optional argument *)
       let open Ast_helper in
@@ -2129,6 +2154,12 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let (args, ty_res) = type_application env funct sargs in
       end_def ();
       unify_var env (newvar()) funct.exp_type;
+      let env =
+        List.fold_left
+          (fun env -> Stdlib.Option.value_default (ccross env) ~default:env)
+          (ccross env funct)
+          (List.map snd args)
+      in
       rue {
         exp_desc = Texp_apply(funct, args);
         exp_loc = loc; exp_extra = [];
@@ -2158,6 +2189,14 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         type_cases env arg.exp_type ty_expected true loc val_caselist in
       let exn_cases, _ =
         type_cases env Predef.type_exn ty_expected false loc exn_caselist in
+      let env =
+        List.fold_left ccross (ccross env arg) @@ List.concat @@
+        List.map
+          (fun x -> match x.c_guard with
+            | Some g -> [g;x.c_rhs]
+            | None -> [x.c_rhs])
+          (val_cases @ exn_cases)
+      in
       re {
         exp_desc = Texp_match(arg, val_cases, exn_cases, partial);
         exp_loc = loc; exp_extra = [];
@@ -2168,6 +2207,14 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let body = type_expect env sbody ty_expected in
       let cases, _ =
         type_cases env Predef.type_exn ty_expected false loc caselist in
+      let env =
+        List.fold_left ccross (ccross env body) @@ List.concat @@
+        List.map
+          (fun x -> match x.c_guard with
+            | Some g -> [g;x.c_rhs]
+            | None -> [x.c_rhs])
+          cases
+      in
       re {
         exp_desc = Texp_try(body, cases);
         exp_loc = loc; exp_extra = [];
@@ -2182,6 +2229,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let expl =
         List.map2 (fun body ty -> type_expect env body ty) sexpl subtypes
       in
+      let env = List.fold_left ccross env expl in
       re {
         exp_desc = Texp_tuple expl;
         exp_loc = loc; exp_extra = [];
@@ -2213,6 +2261,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       with Not_found ->
         let arg = may_map (type_exp env) sarg in
         let arg_type = may_map (fun arg -> arg.exp_type) arg in
+        let env = Stdlib.Option.value_default (ccross env) ~default:env arg in
         rue {
           exp_desc = Texp_variant(l, arg);
           exp_loc = loc; exp_extra = [];
@@ -2352,6 +2401,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         Array.map2 (fun descr def -> descr, def)
           label_descriptions label_definitions
       in
+      let env =
+        List.fold_left ccross
+          (Stdlib.Option.value_default (ccross env) ~default:env opt_exp)
+          (List.map (fun (_,_,e) -> e) lbl_exp_list)
+      in
       re {
         exp_desc = Texp_record {
             fields; representation;
@@ -2370,7 +2424,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = ty_arg;
         exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
+        exp_env = ccross env record }
   | Pexp_setfield(srecord, lid, snewval) ->
       let (record, label, opath) = type_label_access env srecord lid in
       let ty_record = if opath = None then newvar () else record.exp_type in
@@ -2386,12 +2440,13 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = instance_def Predef.type_unit;
         exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
+        exp_env = ccross (ccross env record) newval }
   | Pexp_array(sargl) ->
       let ty = newgenvar() in
       let to_unify = Predef.type_array ty in
       unify_exp_types loc env to_unify ty_expected;
       let argl = List.map (fun sarg -> type_expect env sarg ty) sargl in
+      let env = List.fold_left ccross env argl in
       re {
         exp_desc = Texp_array argl;
         exp_loc = loc; exp_extra = [];
@@ -2414,6 +2469,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           let ifnot = type_expect env sifnot ty_expected in
           (* Keep sharing *)
           unify_exp env ifnot ifso.exp_type;
+          let env = ccross (ccross (ccross env cond) ifso) ifnot in
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
             exp_loc = loc; exp_extra = [];
@@ -2429,7 +2485,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = exp2.exp_type;
         exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
+        exp_env = ccross (ccross env exp1) exp2 }
   | Pexp_while(scond, sbody) ->
       let cond = type_expect env scond Predef.type_bool in
       let body = type_statement env sbody in
@@ -2438,7 +2494,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = instance_def Predef.type_unit;
         exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
+        exp_env = ccross (ccross env cond) body }
   | Pexp_for(param, slow, shigh, dir, sbody) ->
       let low = type_expect env slow Predef.type_int in
       let high = type_expect env shigh Predef.type_int in
@@ -2454,6 +2510,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             raise (Error (param.ppat_loc, env, Invalid_for_loop_index))
       in
       let body = type_statement new_env sbody in
+      let env = ccross (ccross (ccross env low) high) body in
       rue {
         exp_desc = Texp_for(id, param, low, high, dir, body);
         exp_loc = loc; exp_extra = [];
@@ -2478,7 +2535,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = arg.exp_loc;
         exp_type = ty';
         exp_attributes = arg.exp_attributes;
-        exp_env = env;
+        exp_env = ccross env arg;
         exp_extra =
           (Texp_constraint cty, loc, sexp.pexp_attributes) :: arg.exp_extra;
       }
@@ -2569,7 +2626,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = arg.exp_loc;
         exp_type = ty';
         exp_attributes = arg.exp_attributes;
-        exp_env = env;
+        exp_env = ccross env arg;
         exp_extra = (Texp_coerce (cty, cty'), loc, sexp.pexp_attributes) ::
                        arg.exp_extra;
       }
@@ -2664,6 +2721,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           | _ ->
               assert false
         in
+        let env = ccross env obj in
+        let env = Stdlib.Option.value_default (ccross env) ~default:env exp in
         rue {
           exp_desc = Texp_send(obj, meth, exp);
           exp_loc = loc; exp_extra = [];
@@ -2715,7 +2774,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
               exp_loc = loc; exp_extra = [];
               exp_type = instance_def Predef.type_unit;
               exp_attributes = sexp.pexp_attributes;
-              exp_env = env }
+              exp_env = ccross env newval }
         | Val_ivar _ ->
             raise(Error(loc, env, Instance_variable_not_mutable(true,lab.txt)))
         | _ ->
@@ -2761,6 +2820,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             end
           in
           let modifs = List.map type_override lst in
+          let env = List.fold_left ccross env
+            (List.map (fun (_,_,x) -> x) modifs)
+          in
           rue {
             exp_desc = Texp_override(path_self, modifs);
             exp_loc = loc; exp_extra = [];
@@ -2777,7 +2839,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       Ident.set_current_time ty.level;
       let context = Typetexp.narrow () in
       let modl = !type_module env smodl in
-      let (id, new_env) = Env.enter_module name.txt modl.mod_type env in
+      let (id, new_env) =
+        Env.enter_module name.txt modl.mod_type env
+      in
       Ctype.init_def(Ident.current_time());
       Typetexp.widen context;
       let body = type_expect new_env sbody ty_expected in
@@ -2798,7 +2862,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = ty;
         exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
+        exp_env = ccross env body }
   | Pexp_letexception(cd, sbody) ->
       let (cd, newenv) = Typedecl.transl_exception env cd in
       let body = type_expect newenv sbody ty_expected in
@@ -2807,7 +2871,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = body.exp_type;
         exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
+        exp_env = ccross env body }
 
   | Pexp_assert (e) ->
       let cond = type_expect env e Predef.type_bool in
@@ -2823,7 +2887,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type;
         exp_attributes = sexp.pexp_attributes;
-        exp_env = env;
+        exp_env = ccross env cond;
       }
   | Pexp_lazy e ->
       let ty = newgenvar () in
@@ -2835,8 +2899,37 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = instance env ty_expected;
         exp_attributes = sexp.pexp_attributes;
-        exp_env = env;
+        exp_env = ccross env arg;
       }
+  | Pexp_quote sbody ->
+      let ty = newgenvar() in
+      let to_unify = Predef.type_expr ty in
+      unify_exp_types loc env to_unify ty_expected;
+      let body =
+        type_expect
+        (Env.with_stage_up (Env.with_phase_down env))
+        sbody ty in
+      re {
+          exp_desc = Texp_quote body;
+          exp_loc = loc; exp_extra = [];
+          exp_type = instance env ty_expected;
+          exp_attributes = sexp.pexp_attributes;
+          exp_env = ccross env body }
+  | Pexp_escape sbody ->
+      let body =
+        type_expect
+        (let env = Env.with_phase_up env in
+          if Env.cur_stage env = 0 then Env.with_tl_splice true env
+          else Env.with_stage_down (Env.with_tl_splice false env))
+        sbody (Predef.type_expr ty_expected)
+      in
+        re {
+          exp_desc = Texp_escape body;
+          exp_loc = loc; exp_extra = [];
+          exp_type = instance env ty_expected;
+          exp_attributes = sexp.pexp_attributes;
+          exp_env = Env.discard_cross_stage env }
+
   | Pexp_object s ->
       let desc, sign, meths = !type_object env loc s in
       rue {
@@ -2967,7 +3060,6 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                      sexp.pexp_attributes) ::
                       exp.exp_extra;
       }
-
   | Pexp_extension ({ txt = ("ocaml.extension_constructor"
                              |"extension_constructor"); _ },
                     payload) ->
@@ -2991,7 +3083,6 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       end
   | Pexp_extension ext ->
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
-
   | Pexp_unreachable ->
       re { exp_desc = Texp_unreachable;
            exp_loc = loc; exp_extra = [];
@@ -3041,6 +3132,12 @@ and type_function ?in_function loc attrs env ty_expected l caselist =
   if is_optional l && not_function ty_res then
     Location.prerr_warning (List.hd cases).c_lhs.pat_loc
       Warnings.Unerasable_optional_argument;
+  let env =
+    List.fold_left ccross env @@ List.concat @@
+    List.map
+      (fun c -> match c.c_guard with Some g -> [g;c.c_rhs] | None -> [c.c_rhs])
+      cases
+  in
   re {
   exp_desc = Texp_function(l,cases, partial);
     exp_loc = loc; exp_extra = [];
@@ -3735,7 +3832,8 @@ and type_construct env loc lid sarg ty_expected attrs =
     raise(Error(loc, env, Private_type ty_res));
   (* NOTE: shouldn't we call "re" on this final expression? -- AF *)
   { texp with
-    exp_desc = Texp_construct(lid, constr, args) }
+    exp_desc = Texp_construct(lid, constr, args);
+    exp_env = List.fold_left ccross env args }
 
 (* Typing of statements (expressions whose values are discarded) *)
 
@@ -4037,7 +4135,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
             (* has one of the identifier of this pattern been used? *)
           let slot = ref [] in
           List.iter
-            (fun id ->
+            (fun (id,_) ->
               let vd = Env.find_value (Path.Pident id) new_env in
               (* note: Env.find_value does not trigger the value_used event *)
               let name = Ident.name id in
@@ -4421,6 +4519,12 @@ let report_error env ppf = function
                    integers of type %s" ty
   | Unknown_literal (n, m) ->
       fprintf ppf "Unknown modifier '%c' for literal %s%c" m n m
+  | Phase (p, phase, expect_phase) ->
+      fprintf ppf "Attempt to use value %a of phase %d in an \
+                   environment of phase %d" path p phase expect_phase
+  | Staging (p, stage, expect_stage) ->
+      fprintf ppf "Attempt to use value %a of stage %d in an \
+                   environment of stage %d" path p stage expect_stage
 
 
 let report_error env ppf err =

@@ -196,6 +196,7 @@ module Options = Main_args.Make_ocamldoc_options(struct
   let _absname = set Location.absname
   let _I s = Odoc_global.include_dirs :=
        (Misc.expand_directory Config.standard_library s) :: !Odoc_global.include_dirs
+  let _m _ = () (* macros: not handled for now *)
   let _impl s = Odoc_global.files := !Odoc_global.files @ [Odoc_global.Impl_file s]
   let _intf s = Odoc_global.files := !Odoc_global.files @ [Odoc_global.Intf_file s]
   let _intf_suffix s = Config.interface_suffix := s
@@ -413,7 +414,7 @@ let parse () =
   let options = !options @ !help_options in
   Arg.parse (Arg.align ~limit:13 options)
       anonymous
-      (M.usage^M.options_are);
+      (M.usage ^ M.options_are);
   (* we sort the hidden modules by name, to be sure that for example,
      A.B is before A, so we will match against A.B before A in
      Odoc_name.hide_modules.*)

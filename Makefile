@@ -38,6 +38,8 @@ all:
 	$(MAKE) otherlibraries $(WITH_DEBUGGER) \
 	  $(WITH_OCAMLDOC)
 
+# NNN make all && (cd metalib && make clean all) && (make install; cd metalib && make install)
+
 # Compile everything the first time
 world:
 	$(MAKE) coldstart
@@ -90,7 +92,7 @@ bootstrap:
 	$(MAKE) all
 	$(MAKE) compare
 
-LIBFILES=stdlib.cma std_exit.cmo *.cmi camlheader
+LIBFILES=stdlib.cma std_exit.cmo *.cmi *.cmm camlheader
 
 # Start up the system from the distribution compiler
 coldstart:
@@ -664,7 +666,7 @@ html_doc: ocamldoc
 partialclean::
 	cd ocamldoc && $(MAKE) clean
 
-alldepend::
+alldepen1d::
 	cd ocamldoc && $(MAKE) depend
 
 # The extra libraries
@@ -742,7 +744,7 @@ clean::
 partialclean::
 	for d in utils parsing typing bytecomp asmcomp middle_end \
 	         middle_end/base_types driver toplevel tools; \
-	  do rm -f $$d/*.cm[ioxt] $$d/*.cmti $$d/*.annot $$d/*.[so] $$d/*~; done
+	  do rm -f $$d/*.cm[iomxt] $$d/*.cmti $$d/*.annot $$d/*.[so] $$d/*~; done
 	rm -f *~
 
 depend: beforedepend

@@ -22,10 +22,10 @@ module PathMap : Map.S with type key = Path.t
 
 type summary =
     Env_empty
-  | Env_value of summary * Ident.t * value_description
+  | Env_value of summary * phase * Ident.t * value_description
   | Env_type of summary * Ident.t * type_declaration
   | Env_extension of summary * Ident.t * extension_constructor
-  | Env_module of summary * Ident.t * module_declaration
+  | Env_module of summary * phase * Ident.t * module_declaration
   | Env_modtype of summary * Ident.t * modtype_declaration
   | Env_class of summary * Ident.t * class_declaration
   | Env_cltype of summary * Ident.t * class_type_declaration
@@ -40,6 +40,44 @@ val initial_safe_string: t
 val initial_unsafe_string: t
 val diff: t -> t -> Ident.t list
 val copy_local: from:t -> t -> t
+
+(** [cur_phase env] returns the phase associated with the environment [env]. *)
+val cur_phase: t -> phase
+
+(** Returns a new environment with a new phase value. *)
+val with_phase: phase -> t -> t
+val with_phase_down: t -> t
+val with_phase_up: t -> t
+
+(** [phase_of_sf sf] returns 0 if [sf] is [Nonstatic] and [1] if [sf] is
+    [Static]. *)
+val phase_of_sf: Asttypes.static_flag -> phase
+
+(** Represents the stage of a computation, i.e. the number of surroundig quotes
+    minus the number of surrounding, non-zero-phase escapes. Should be
+    non-negative. *)
+type stage = int
+
+(** [cur_stage env] returns the stage associated with the environment [env]. *)
+val cur_stage: t -> stage
+
+(** Returns a new environment with a new stage value. *)
+val with_stage: stage -> t -> t
+val with_stage_down: t -> t
+val with_stage_up: t -> t
+
+val toplevel_splice: t -> bool
+val with_tl_splice: bool -> t -> t
+
+(** Returns the list of non-global identifiers cross-stagely quoted in the
+   environment [env]. *)
+val cross_stage_ids: t -> Ident.t Asttypes.loc list
+val add_cross_stage: Ident.t Asttypes.loc -> t -> t
+
+(** [concat_cross_stage env_base env] adds the cross-stage identifiers of env at
+    the tail of those of [env_base]. *)
+val concat_cross_stage: t -> t -> t
+val discard_cross_stage: t -> t
 
 type type_descriptions =
     constructor_description list * label_description list
@@ -60,6 +98,15 @@ val without_cmis: ('a -> 'b) -> 'a -> 'b
 (* Lookup by paths *)
 
 val find_value: Path.t -> t -> value_description
+
+(** Lookup the phase of a value by path. When the value is not found, returns
+    0. *)
+val find_phase: Path.t -> t -> phase
+
+(** Lookup the stage of a value by path. When the value is not found, returns
+    0. *)
+val find_stage: Path.t -> t -> stage
+
 val find_type: Path.t -> t -> type_declaration
 val find_type_descrs: Path.t -> t -> type_descriptions
 val find_module: Path.t -> t -> module_declaration
@@ -136,11 +183,18 @@ exception Recmodule
 
 val add_value:
     ?check:(string -> Warnings.t) -> Ident.t -> value_description -> t -> t
+val add_value_with_phase:
+    ?check:(string -> Warnings.t) -> phase -> Ident.t -> value_description -> t
+    -> t
 val add_type: check:bool -> Ident.t -> type_declaration -> t -> t
 val add_extension: check:bool -> Ident.t -> extension_constructor -> t -> t
 val add_module: ?arg:bool -> Ident.t -> module_type -> t -> t
-val add_module_declaration: ?arg:bool -> check:bool -> Ident.t ->
-  module_declaration -> t -> t
+  (* the phase of the new module is set to the current phase of the
+     environment. *)
+val add_module_with_phase: ?arg:bool -> check:bool -> phase -> Ident.t ->
+  module_type -> t -> t
+val add_module_declaration: ?arg:bool -> check:bool -> phase -> Ident.t
+  -> module_declaration -> t -> t
 val add_modtype: Ident.t -> modtype_declaration -> t -> t
 val add_class: Ident.t -> class_declaration -> t -> t
 val add_cltype: Ident.t -> class_type_declaration -> t -> t
@@ -168,8 +222,12 @@ val enter_value:
 val enter_type: string -> type_declaration -> t -> Ident.t * t
 val enter_extension: string -> extension_constructor -> t -> Ident.t * t
 val enter_module: ?arg:bool -> string -> module_type -> t -> Ident.t * t
+  (* the phase of the new module is set to the current phase of the
+     environment. *)
+val enter_module_with_phase: ?arg:bool -> phase -> string -> module_type -> t
+  -> Ident.t * t
 val enter_module_declaration:
-    ?arg:bool -> Ident.t -> module_declaration -> t -> t
+    ?arg:bool -> phase -> Ident.t -> module_declaration -> t -> t
 val enter_modtype: string -> modtype_declaration -> t -> Ident.t * t
 val enter_class: string -> class_declaration -> t -> Ident.t * t
 val enter_cltype: string -> class_type_declaration -> t -> Ident.t * t

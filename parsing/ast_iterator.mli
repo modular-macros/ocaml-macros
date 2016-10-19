@@ -43,7 +43,7 @@ type iterator = {
   include_description: iterator -> include_description -> unit;
   label_declaration: iterator -> label_declaration -> unit;
   location: iterator -> Location.t -> unit;
-  module_binding: iterator -> module_binding -> unit;
+  module_binding: iterator -> Asttypes.static_flag * module_binding -> unit;
   module_declaration: iterator -> module_declaration -> unit;
   module_expr: iterator -> module_expr -> unit;
   module_type: iterator -> module_type -> unit;
@@ -60,7 +60,8 @@ type iterator = {
   type_extension: iterator -> type_extension -> unit;
   type_kind: iterator -> type_kind -> unit;
   value_binding: iterator -> value_binding -> unit;
-  value_description: iterator -> value_description -> unit;
+  value_description: iterator ->
+    (Asttypes.static_flag * value_description) -> unit;
   with_constraint: iterator -> with_constraint -> unit;
 }
 (** A [iterator] record implements one "method" per syntactic category,

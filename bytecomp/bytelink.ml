@@ -18,6 +18,7 @@
 open Misc
 open Config
 open Cmo_format
+open Types
 
 type error =
     File_not_found of string
@@ -33,12 +34,6 @@ type error =
 
 exception Error of error
 
-type link_action =
-    Link_object of string * compilation_unit
-      (* Name of .cmo file and descriptor of the unit *)
-  | Link_archive of string * compilation_unit list
-      (* Name of .cma file and descriptors of the units to be linked. *)
-
 (* Add C objects and options from a library descriptor *)
 (* Ignore them if -noautolink or -use-runtime or -use-prim was given *)
 
@@ -53,13 +48,13 @@ let add_ccobjs origin l =
       && String.length !Clflags.use_prims = 0
     then begin
       if l.lib_custom then Clflags.custom_runtime := true;
-      lib_ccobjs := l.lib_ccobjs @ !lib_ccobjs;
+      lib_ccobjs := !lib_ccobjs @ l.lib_ccobjs;
       let replace_origin =
         Misc.replace_substring ~before:"$CAMLORIGIN" ~after:origin
       in
-      lib_ccopts := List.map replace_origin l.lib_ccopts @ !lib_ccopts;
+      lib_ccopts := !lib_ccopts @ List.map replace_origin l.lib_ccopts;
     end;
-    lib_dllibs := l.lib_dllibs @ !lib_dllibs
+    lib_dllibs := !lib_dllibs @ l.lib_dllibs
   end
 
 (* A note on ccobj ordering:
@@ -86,42 +81,85 @@ let add_ccobjs origin l =
 
 (* First pass: determine which units are needed *)
 
-module IdentSet = Lambda.IdentSet
+(* Contains the information needed to load/link a compilation unit. *)
+type unit_descr =
+    Standalone of compilation_unit * string * phase
+    (* Unit description, path to object file and phase to load the unit into. *)
+  | In_archive of compilation_unit * string * phase
+    (* Unit description, path to archive file and phase to load the unit into. *)
 
-let missing_globals = ref IdentSet.empty
+type global_status =
+  | Missing
+  | Needed of unit_descr
+    (* explicitly required, or needed by another Needed unit. *)
+  | Available of unit_descr
+    (* available in an archive if needed. *)
+  | Being_visited
+    (* temporary mark for topological sort (avoids cyclic depencies *)
+  | Visited
+    (* permanent mark for topological sort *)
 
-let is_required (rel, _pos) =
-  match rel with
-    Reloc_setglobal id ->
-      IdentSet.mem id !missing_globals
-  | _ -> false
+let rec lift_reloc = function
+  | [] -> []
+  | (Reloc_getglobal id, pos) :: rem ->
+      (Reloc_getglobal (Ident.lift_persistent id), pos) :: lift_reloc rem
+  | (Reloc_setglobal id, pos) :: rem ->
+      (Reloc_setglobal (Ident.lift_persistent id), pos) :: lift_reloc rem
+  | x :: rem -> x :: lift_reloc rem
 
-let add_required compunit =
-  let add_required_by_reloc (rel, _pos) =
-    match rel with
-      Reloc_getglobal id ->
-        missing_globals := IdentSet.add id !missing_globals
-    | _ -> ()
-  in
-  let add_required_for_effects id =
-    missing_globals := IdentSet.add id !missing_globals
-  in
-  List.iter add_required_by_reloc compunit.cu_reloc;
-  List.iter add_required_for_effects compunit.cu_required_globals
+let lift_cu_globals cu =
+  { cu with
+    cu_reloc = lift_reloc cu.cu_reloc;
+    cu_imports =
+      List.map (fun (name, hash) -> (Ident.lift_string name, hash)) cu.cu_imports;
+    cu_name = Ident.lift_string cu.cu_name;
+  }
 
-let remove_required (rel, _pos) =
-  match rel with
-    Reloc_setglobal id ->
-      missing_globals := IdentSet.remove id !missing_globals
-  | _ -> ()
+let has_dot id = String.contains (Ident.name id) '.'
 
-let scan_file obj_name tolink =
+(* Extract identifier of a compilation unit using its relocation information. *)
+let rec get_unit_id = function
+  | [] -> raise Not_found
+  | (Reloc_setglobal id, _pos) :: rem ->
+      if has_dot id then get_unit_id rem else id
+  | _ :: rem -> get_unit_id rem
+
+let status_table = ref Ident.empty
+
+let get_status id = Ident.find_same id !status_table
+
+let set_status_id status id =
+  status_table := Ident.add id status !status_table
+
+let rec required_by_reloc phase = function
+  | [] -> []
+  | (Reloc_getglobal id, _pos) :: rem ->
+      if Symtable.is_global_defined (phase,id) || has_dot id
+          || Array.mem (Ident.name id) Runtimedef.builtin_exceptions then
+        required_by_reloc phase rem
+      else id :: required_by_reloc phase rem
+  | _ :: rem -> required_by_reloc phase rem
+
+(* Returns the globals required by compilation unit, excluding those
+   already defined in the symbol table and those containing a dot (which are
+   not really global but should be defined in the unit). *)
+let rec required_globals phase compunit =
+  required_by_reloc phase compunit.cu_reloc @ compunit.cu_required_globals
+
+(* [unit_of_objfile phase filename] looks up the file name [filename] in the
+   include path and produces a [unit_descr] value for that file (or several
+   units, if [filename] points to a library file. *)
+let unit_of_objfile phase obj_name =
   let file_name =
     try
       find_in_path !load_path obj_name
     with Not_found ->
-      raise(Error(File_not_found obj_name)) in
+      raise (Error (File_not_found obj_name))
+  in
   let ic = open_in_bin file_name in
+  let lift_globals = phase = 1 &&
+    (Filename.check_suffix obj_name ".cmo"
+    || Filename.check_suffix obj_name ".cma") in
   try
     let buffer = really_input_string ic (String.length cmo_magic_number) in
     if buffer = cmo_magic_number then begin
@@ -132,9 +170,12 @@ let scan_file obj_name tolink =
       seek_in ic compunit_pos;
       let compunit = (input_value ic : compilation_unit) in
       close_in ic;
-      add_required compunit;
-      List.iter remove_required compunit.cu_reloc;
-      Link_object(file_name, compunit) :: tolink
+      let compunit =
+        if lift_globals then
+          lift_cu_globals compunit
+        else compunit
+      in
+      [(Standalone (compunit, file_name, phase))]
     end
     else if buffer = cma_magic_number then begin
       (* This is an archive file. Each unit contained in it will be linked
@@ -144,25 +185,148 @@ let scan_file obj_name tolink =
       let toc = (input_value ic : library) in
       close_in ic;
       add_ccobjs (Filename.dirname file_name) toc;
-      let required =
-        List.fold_right
-          (fun compunit reqd ->
-            if compunit.cu_force_link
-            || !Clflags.link_everything
-            || List.exists is_required compunit.cu_reloc
-            then begin
-              add_required compunit;
-              List.iter remove_required compunit.cu_reloc;
-              compunit :: reqd
-            end else
-              reqd)
-          toc.lib_units [] in
-      Link_archive(file_name, required) :: tolink
+      (* Lift all dependency names if needed *)
+      let toc =
+        if lift_globals then
+          { toc with lib_units =
+              List.map (fun u -> lift_cu_globals u)
+                toc.lib_units }
+        else toc
+      in
+      List.map
+        (fun compunit -> In_archive (compunit, file_name, phase))
+        toc.lib_units
     end
     else raise(Error(Not_an_object_file file_name))
   with
     End_of_file -> close_in ic; raise(Error(Not_an_object_file file_name))
   | x -> close_in ic; raise x
+
+(* Add entries for the explicitely provided .cmo and .cma files. [phase] is the
+ * phase the units will be loaded into (e.g. if linking a normal executable it
+ * will be 0, if linking a temporary, macro-producing code it will be 1.
+ * Returns the list of Needed dependencies. *)
+let scan_file phase obj_name =
+  let c_units = unit_of_objfile phase obj_name in
+  List.concat @@ List.map
+    (function
+    | Standalone (compunit,_,_) as u ->
+        let id = get_unit_id compunit.cu_reloc in
+        set_status_id (Needed u) id;
+        [id]
+    | In_archive (compunit,_,_) as u ->
+        let id = get_unit_id compunit.cu_reloc in
+        if compunit.cu_force_link || !Clflags.link_everything then begin
+          set_status_id (Needed u) id;
+          [id]
+        end else begin
+          set_status_id (Available u) id;
+          []
+        end
+      )
+    c_units
+
+(* Attempts to find an object file (.cmo or .cmm) after an identifier. If the
+   identifier is lifted, remove the lifting symbol before proceeding to lookup.
+   *)
+let find_objfile phase id =
+  let modname = Ident.unlift_string (Ident.name id) in
+  let extension =
+    if phase = 1 then
+      if Ident.lifted id then ".cmo" else ".cmm"
+    else if phase = 0 then
+      ".cmo"
+    else assert false
+  in
+  let filename = modname ^ extension in
+  match
+    find_in_path_uncap !load_path filename
+  with
+  | exception Not_found ->
+      raise Not_found
+  | filename ->
+      let ic = open_in_bin filename in
+        try
+          let buffer =
+            really_input_string ic (String.length cmo_magic_number)
+          in
+          if buffer = cmo_magic_number then begin
+            let compunit_pos = input_binary_int ic in
+            (* Go to descriptor *)
+            seek_in ic compunit_pos;
+            let compunit = (input_value ic : compilation_unit) in
+            close_in ic;
+            (* Lift dependency names if needed *)
+            let compunit =
+              if phase = 1 && Ident.lifted id then
+                lift_cu_globals compunit
+              else compunit
+            in
+            (compunit, filename)
+          end
+          else raise(Error(Not_an_object_file filename))
+        with
+        | End_of_file ->
+            close_in ic; raise(Error(Not_an_object_file filename))
+        | x -> close_in ic; raise x
+
+(* Mark globals required by a reloc as Needed (or Missing if not found) *)
+let mark_needed_reloc phase reloc =
+  let mark id =
+    match get_status id with
+    | Needed _ -> id
+    | Available x -> set_status_id (Needed x) id; id
+    | _ -> assert false
+    | exception Not_found ->
+      try
+        let (compunit, filename) = find_objfile phase id in
+        set_status_id (Needed (Standalone (compunit, filename, phase))) id;
+        id
+      with Not_found -> set_status_id Missing id; id
+  in
+  List.map mark (required_globals phase reloc)
+
+(* Returns the topologically ordered list of units to load (first unit to be
+   loaded first), searching for missing dependencies in the include path. *)
+let sort_and_discover phase tolink =
+  let lookup id =
+    try get_status id
+    with Not_found ->
+      try
+        let (compunit, filename) = find_objfile phase id in
+        Needed (Standalone (compunit, filename, phase))
+      with Not_found -> Missing
+  in
+  let rec complete acc = function
+  | [] -> acc
+  | id :: rem -> begin
+    match lookup id with
+    | Missing -> complete acc rem (* no error thrown here but later, on linking *)
+    | Visited -> complete acc rem (* already included in earlier deps *)
+    | Being_visited ->
+        assert false (* cyclical dependency *)
+    | x -> begin
+      let descr = match x with
+      | Needed y -> y
+      | Available y -> y
+      | _ -> assert false
+      in
+      let compunit = match descr with
+      | Standalone (u,_,_) -> u
+      | In_archive (u,_,_) -> u
+      in
+      set_status_id Being_visited id;
+      let acc' =
+        List.fold_left (fun ordered id ->
+          complete ordered [id]
+        ) acc (required_globals phase compunit.cu_reloc)
+      in
+      set_status_id Visited id;
+      complete (descr :: acc') rem
+    end
+  end
+  in
+  List.rev (complete [] tolink)
 
 (* Second pass: link in the required units *)
 
@@ -184,8 +348,8 @@ let check_consistency ppf file_name cu =
             then Consistbl.set crc_interfaces name crc file_name
             else Consistbl.check crc_interfaces name crc file_name)
       cu.cu_imports
-  with Consistbl.Inconsistency(name, user, auth) ->
-    raise(Error(Inconsistent_import(name, user, auth)))
+  with Consistbl.Inconsistency(uname, user, auth) ->
+    raise(Error(Inconsistent_import(uname, user, auth)))
   end;
   begin try
     let source = List.assoc cu.cu_name !implementations_defined in
@@ -211,11 +375,11 @@ let debug_info = ref ([] : (int * Instruct.debug_event list * string list) list)
 
 (* Link in a compilation unit *)
 
-let link_compunit ppf output_fun currpos_fun inchan file_name compunit =
+let link_compunit ppf phase output_fun currpos_fun inchan file_name compunit =
   check_consistency ppf file_name compunit;
   seek_in inchan compunit.cu_pos;
   let code_block = LongString.input_bytes inchan compunit.cu_codesize in
-  Symtable.ls_patch_object code_block compunit.cu_reloc;
+  Symtable.ls_patch_object phase code_block compunit.cu_reloc;
   if !Clflags.debug && compunit.cu_debug > 0 then begin
     seek_in inchan compunit.cu_debug;
     let debug_event_list : Instruct.debug_event list = input_value inchan in
@@ -233,10 +397,10 @@ let link_compunit ppf output_fun currpos_fun inchan file_name compunit =
 
 (* Link in a .cmo file *)
 
-let link_object ppf output_fun currpos_fun file_name compunit =
+let link_object ppf phase output_fun currpos_fun file_name compunit =
   let inchan = open_in_bin file_name in
   try
-    link_compunit ppf output_fun currpos_fun inchan file_name compunit;
+    link_compunit ppf phase output_fun currpos_fun inchan file_name compunit;
     close_in inchan
   with
     Symtable.Error msg ->
@@ -246,27 +410,29 @@ let link_object ppf output_fun currpos_fun file_name compunit =
 
 (* Link in a .cma file *)
 
-let link_archive ppf output_fun currpos_fun file_name units_required =
+(*
+let link_archive ppf phase output_fun currpos_fun file_name units_required =
   let inchan = open_in_bin file_name in
   try
     List.iter
       (fun cu ->
          let name = file_name ^ "(" ^ cu.cu_name ^ ")" in
          try
-           link_compunit ppf output_fun currpos_fun inchan name cu
+           link_compunit ppf phase output_fun currpos_fun inchan name cu
          with Symtable.Error msg ->
            raise(Error(Symbol_error(name, msg))))
       units_required;
     close_in inchan
   with x -> close_in inchan; raise x
+*)
 
 (* Link in a .cmo or .cma file *)
 
 let link_file ppf output_fun currpos_fun = function
-    Link_object(file_name, unit) ->
-      link_object ppf output_fun currpos_fun file_name unit
-  | Link_archive(file_name, units) ->
-      link_archive ppf output_fun currpos_fun file_name units
+    Standalone (unit, file_name, phase) ->
+      link_object ppf phase output_fun currpos_fun file_name unit
+  | In_archive (unit, file_name, phase) ->
+      link_object ppf phase output_fun currpos_fun file_name unit
 
 (* Output the debugging information *)
 (* Format is:
@@ -305,7 +471,7 @@ let link_bytecode ppf tolink exec_name standalone =
   (* Avoid the case where the specified exec output file is the same as
      one of the objects to be linked *)
   List.iter (function
-    | Link_object(file_name, _) when file_name = exec_name ->
+    | Standalone (_, file_name, _) when file_name = exec_name ->
       raise (Error (Wrong_object_name exec_name));
     | _ -> ()) tolink;
   Misc.remove_file exec_name; (* avoid permission problems, cf PR#1911 *)
@@ -324,16 +490,16 @@ let link_bytecode ppf tolink exec_name standalone =
         close_in inchan
       with Not_found | Sys_error _ -> ()
     end;
+    ignore (Symtable.init ());
     Bytesections.init_record outchan;
     (* The path to the bytecode interpreter (in use_runtime mode) *)
     if String.length !Clflags.use_runtime > 0 then begin
-      output_string outchan (make_absolute !Clflags.use_runtime);
+      output_string outchan ("#!" ^ (make_absolute !Clflags.use_runtime));
       output_char outchan '\n';
       Bytesections.record outchan "RNTM"
     end;
     (* The bytecode *)
     let start_code = pos_out outchan in
-    Symtable.init();
     clear_crc_interfaces ();
     let sharedobjs = List.map Dll.extract_dll_name !Clflags.dllibs in
     let check_dlls = standalone && Config.target = Config.host in
@@ -466,7 +632,7 @@ let link_bytecode_as_c ppf tolink outfile =
 \n           char *section_table, asize_t section_table_size,\
 \n           char **argv);\n";
     output_string outchan "static int caml_code[] = {\n";
-    Symtable.init();
+    ignore (Symtable.init ());
     clear_crc_interfaces ();
     let currpos = ref 0 in
     let output_fun code =
@@ -541,17 +707,26 @@ let fix_exec_name name =
 
 (* Main entry point (build a custom runtime if needed) *)
 
-let link ppf objfiles output_name =
+let link ppf phase objfiles output_name =
   let objfiles =
     if !Clflags.nopervasives then objfiles
     else if !Clflags.output_c_object then "stdlib.cma" :: objfiles
-    else "stdlib.cma" :: (objfiles @ ["std_exit.cmo"]) in
-  let tolink = List.fold_right scan_file objfiles [] in
+    else ("stdlib.cma" :: objfiles) @ ["std_exit.cmo"]
+  in
+  let tolink = List.concat @@ List.map (scan_file phase) objfiles in
+  let tolink = sort_and_discover phase tolink in
+  (* Check if required modules were not provided *)
   let missing_modules =
-    IdentSet.filter (fun id -> not (Ident.is_predef_exn id)) !missing_globals
+    Ident.fold_all
+      (fun id status acc -> match status with
+      | Missing | Needed _ | Available _ -> id :: acc
+      | Visited -> acc
+      | _ -> assert false
+      )
+      !status_table []
   in
   begin
-    match IdentSet.elements missing_modules with
+    match missing_modules with
     | [] -> ()
     | id :: _ -> raise (Error (Required_module_unavailable (Ident.name id)))
   end;
@@ -637,6 +812,109 @@ let link ppf objfiles output_name =
       raise x
   end
 
+let load_compunit ppf phase ic filename compunit =
+  check_consistency ppf filename compunit;
+  seek_in ic compunit.cu_pos;
+  let code_size = compunit.cu_codesize + 8 in
+  let code = Meta.static_alloc code_size in
+  unsafe_really_input ic code 0 compunit.cu_codesize;
+  Bytes.unsafe_set code compunit.cu_codesize (Char.chr Opcodes.opRETURN);
+  String.unsafe_blit "\000\000\000\001\000\000\000" 0
+                     code (compunit.cu_codesize + 1) 7;
+  let initial_symtable = Symtable.current_state () in
+  Symtable.patch_object phase code compunit.cu_reloc;
+  Symtable.update_global_table ();
+  let events =
+    if compunit.cu_debug = 0 then [| |]
+    else begin
+      seek_in ic compunit.cu_debug;
+      [| input_value ic |]
+    end in
+  Meta.add_debug_info code code_size events;
+  begin try
+    ignore ((Meta.reify_bytecode code code_size) ());
+  with exn ->
+    Symtable.restore_state initial_symtable;
+    raise exn
+  end
+
+let load_object ppf phase filename compunit =
+  let inchan = open_in_bin filename in
+  try
+    load_compunit ppf phase inchan filename compunit;
+    close_in inchan
+  with
+  | Symtable.Error msg ->
+      close_in inchan; raise (Error (Symbol_error (filename, msg)))
+  | x ->
+      close_in inchan; raise x
+
+(*
+let load_archive ppf phase filename units_required =
+  let inchan = open_in_bin filename in
+  try
+    List.iter
+      (fun cu ->
+         let name = filename ^ "(" ^ cu.cu_name ^ ")" in
+         try
+           load_compunit ppf phase inchan name cu
+         with Symtable.Error msg ->
+           raise(Error(Symbol_error(name, msg))))
+      units_required;
+    close_in inchan
+  with x -> close_in inchan; raise x
+*)
+
+let load_file ppf = function
+  | Standalone (unit, filename, phase) ->
+      load_object ppf phase filename unit
+  | In_archive (unit, filename, phase) ->
+      load_object ppf phase filename unit
+
+let load_bytecode ppf tolink =
+  List.iter (load_file ppf) tolink
+
+let load ppf phase obj_names =
+  let obj_names =
+    if !Clflags.nopervasives || !Clflags.no_std_include then
+      obj_names
+    else "stdlib.cma" :: obj_names
+  in
+  let tolink = List.concat @@ List.map (scan_file phase) obj_names in
+  let tolink = sort_and_discover phase tolink in
+  (*
+  (* Initialize the DLL machinery *)
+  let sharedobjs = List.map Dll.extract_dll_name !Clflags.dllibs in
+  Dll.init_compile !Clflags.no_std_include;
+  Dll.add_path !load_path;
+  begin try Dll.open_dlls Dll.For_checking sharedobjs
+  with Failure reason -> raise(Error(Cannot_open_dll reason))
+  end;
+  *)
+  load_bytecode ppf tolink
+
+let load_deps ppf phase obj_names reloc =
+  let obj_names =
+    if !Clflags.nopervasives || !Clflags.no_std_include then
+      obj_names
+    else "stdlib.cma" :: obj_names
+  in
+  let tolink =
+    (List.concat @@ List.map (scan_file phase) obj_names) @
+    mark_needed_reloc phase reloc
+  in
+  let tolink = sort_and_discover phase tolink in
+  (*
+  (* Initialize the DLL machinery *)
+  let sharedobjs = List.map Dll.extract_dll_name !Clflags.dllibs in
+  Dll.init_compile !Clflags.no_std_include;
+  Dll.add_path !load_path;
+  begin try Dll.open_dlls Dll.For_checking sharedobjs
+  with Failure reason -> raise(Error(Cannot_open_dll reason))
+  end;
+  *)
+  load_bytecode ppf tolink
+
 (* Error report *)
 
 open Format
@@ -685,7 +963,7 @@ let reset () =
   lib_ccobjs := [];
   lib_ccopts := [];
   lib_dllibs := [];
-  missing_globals := IdentSet.empty;
+  status_table := Ident.empty;
   Consistbl.clear crc_interfaces;
   implementations_defined := [];
   debug_info := [];

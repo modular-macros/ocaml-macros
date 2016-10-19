@@ -299,6 +299,8 @@ and rw_exp iflag sexp =
   | Pexp_newtype (_, sexp) -> rewrite_exp iflag sexp
   | Pexp_open (_ovf, _, e) -> rewrite_exp iflag e
   | Pexp_pack (smod) -> rewrite_mod iflag smod
+  | Pexp_quote expr -> rewrite_exp iflag expr
+  | Pexp_escape expr -> rewrite_exp iflag expr
   | Pexp_extension _ -> ()
   | Pexp_unreachable -> ()
 
@@ -389,9 +391,11 @@ and rewrite_mod iflag smod =
 and rewrite_str_item iflag item =
   match item.pstr_desc with
     Pstr_eval (exp, _attrs) -> rewrite_exp iflag exp
-  | Pstr_value(_, exps)
+  | Pstr_value(_, _, exps)
+      (* macros: no support of static components *)
      -> List.iter (fun x -> rewrite_exp iflag x.pvb_expr) exps
-  | Pstr_module x -> rewrite_mod iflag x.pmb_expr
+  | Pstr_module (_, x) -> rewrite_mod iflag x.pmb_expr
+        (* macros: see previous case *)
         (* todo: Pstr_recmodule?? *)
   | Pstr_class classes -> List.iter (rewrite_class_declaration iflag) classes
   | _ -> ()

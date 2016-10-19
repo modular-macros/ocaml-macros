@@ -1,0 +1,22 @@
+
+#   val x : int = 42
+#     Characters 14-15:
+  let y = succ x (* Error: phase mismatch *)
+               ^
+Error: Attempt to use value x of phase 1 in an environment of phase 0
+#     Characters 13-26:
+  static () = Printf.printf "%d\n" x (* Error: this module is at phase 0 *)
+              ^^^^^^^^^^^^^
+Error: Attempt to use value Printf.printf of phase 0 in an environment of phase 1
+#     #     Characters 29-33:
+  static x = << string_of_int "42" >>
+                              ^^^^
+Error: This expression has type string but an expression was expected of type
+         int
+#     Characters 32-33:
+  let () = Printf.printf "%d\n" $x
+                                 ^
+Error: This expression has type int but an expression was expected of type
+         int expr
+# 
+42

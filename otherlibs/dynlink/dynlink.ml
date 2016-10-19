@@ -145,7 +145,7 @@ let init () =
     if !Sys.interactive then (* PR#6802 *)
       invalid_arg "The dynlink.cma library cannot be used \
                    inside the OCaml toplevel";
-    default_crcs := Symtable.init_toplevel();
+    default_crcs := Symtable.init_static ();
     default_available_units ();
     inited := true;
   end
@@ -210,6 +210,7 @@ external register_code_fragment: bytes -> int -> string -> unit
                                = "caml_register_code_fragment"
 
 let load_compunit ic file_name file_digest compunit =
+  Printf.eprintf "load_compunit\n%!";
   check_consistency file_name compunit;
   check_unsafe_module compunit;
   seek_in ic compunit.cu_pos;
@@ -226,8 +227,8 @@ let load_compunit ic file_name file_digest compunit =
   Bytes.unsafe_set code (compunit.cu_codesize + 7) '\000';
   let initial_symtable = Symtable.current_state() in
   begin try
-    Symtable.patch_object code compunit.cu_reloc;
-    Symtable.check_global_initialized compunit.cu_reloc;
+    Symtable.patch_object 0 code compunit.cu_reloc;
+    Symtable.check_global_initialized 0 compunit.cu_reloc;
     Symtable.update_global_table()
   with Symtable.Error error ->
     let new_error =
@@ -250,12 +251,14 @@ let load_compunit ic file_name file_digest compunit =
       [| input_value ic |]
     end in
   Meta.add_debug_info code code_size events;
+  Printf.eprintf "before reify\n%!";
   begin try
     ignore((Meta.reify_bytecode code code_size) ())
   with exn ->
     Symtable.restore_state initial_symtable;
     raise exn
-  end
+  end;
+  Printf.eprintf "after reify\n%!"
 
 let loadfile file_name =
   init();

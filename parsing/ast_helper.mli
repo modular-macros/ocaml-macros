@@ -162,6 +162,9 @@ module Exp:
     val pack: ?loc:loc -> ?attrs:attrs -> module_expr -> expression
     val open_: ?loc:loc -> ?attrs:attrs -> override_flag -> lid -> expression
                -> expression
+    val quote : ?loc:loc -> ?attrs:attrs -> expression -> expression
+    val escape : ?loc:loc -> ?attrs:attrs -> expression -> expression
+
     val extension: ?loc:loc -> ?attrs:attrs -> extension -> expression
     val unreachable: ?loc:loc -> ?attrs:attrs -> unit -> expression
 
@@ -250,12 +253,13 @@ module Sig:
   sig
     val mk: ?loc:loc -> signature_item_desc -> signature_item
 
-    val value: ?loc:loc -> value_description -> signature_item
+    val value: ?loc:loc -> static_flag -> value_description -> signature_item
     val type_: ?loc:loc -> rec_flag -> type_declaration list -> signature_item
     val type_extension: ?loc:loc -> type_extension -> signature_item
     val exception_: ?loc:loc -> extension_constructor -> signature_item
-    val module_: ?loc:loc -> module_declaration -> signature_item
-    val rec_module: ?loc:loc -> module_declaration list -> signature_item
+    val module_: ?loc:loc -> static_flag -> module_declaration -> signature_item
+    val rec_module: ?loc:loc -> static_flag -> module_declaration list
+      -> signature_item
     val modtype: ?loc:loc -> module_type_declaration -> signature_item
     val open_: ?loc:loc -> open_description -> signature_item
     val include_: ?loc:loc -> include_description -> signature_item
@@ -272,13 +276,15 @@ module Str:
     val mk: ?loc:loc -> structure_item_desc -> structure_item
 
     val eval: ?loc:loc -> ?attrs:attributes -> expression -> structure_item
-    val value: ?loc:loc -> rec_flag -> value_binding list -> structure_item
+    val value:
+      ?loc:loc -> static_flag -> rec_flag -> value_binding list -> structure_item
     val primitive: ?loc:loc -> value_description -> structure_item
     val type_: ?loc:loc -> rec_flag -> type_declaration list -> structure_item
     val type_extension: ?loc:loc -> type_extension -> structure_item
     val exception_: ?loc:loc -> extension_constructor -> structure_item
-    val module_: ?loc:loc -> module_binding -> structure_item
-    val rec_module: ?loc:loc -> module_binding list -> structure_item
+    val module_: ?loc:loc -> static_flag -> module_binding -> structure_item
+    val rec_module: ?loc:loc -> static_flag -> module_binding list
+      -> structure_item
     val modtype: ?loc:loc -> module_type_declaration -> structure_item
     val open_: ?loc:loc -> open_description -> structure_item
     val class_: ?loc:loc -> class_declaration list -> structure_item

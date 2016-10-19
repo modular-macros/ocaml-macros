@@ -99,3 +99,14 @@ let is_constructor_typath p =
   match constructor_typath p with
   | Regular _ -> false
   | _ -> true
+
+let rec map_head f = function
+  | Pident id -> Pident (f id)
+  | Pdot (tl, s, pos) -> Pdot (map_head f tl, s, pos)
+  | Papply (a,b) -> Papply (a,b)
+
+let rec lifted = function
+  | Pident id -> Ident.lifted id
+  | Pdot (tl,_,_) -> lifted tl
+  | Papply _ -> false
+

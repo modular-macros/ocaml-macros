@@ -32,6 +32,7 @@ STDLIB_MODULES=\
   camlinternalLazy \
   camlinternalMod \
   camlinternalOO \
+  camlinternalQuote \
   char \
   complex \
   digest \
@@ -68,4 +69,5 @@ STDLIB_MODULES=\
   stringLabels \
   sys \
   uchar \
-  weak
+  weak \
+  expr

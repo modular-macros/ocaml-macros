@@ -24,6 +24,8 @@ type constant =
   | Const_int64 of int64
   | Const_nativeint of nativeint
 
+type static_flag = Nonstatic | Static
+
 type rec_flag = Nonrecursive | Recursive
 
 type direction_flag = Upto | Downto

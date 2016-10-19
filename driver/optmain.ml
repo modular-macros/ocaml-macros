@@ -60,6 +60,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _g = set debug
   let _i () = print_types := true; compile_only := true
   let _I dir = include_dirs := dir :: !include_dirs
+  let _m s = static_deps := !static_deps @ [s]
   let _impl = impl
   let _inline spec =
     Float_arg_helper.parse spec
@@ -277,8 +278,9 @@ let main () =
                  "The extension of the output file must be %s or %s"
                  Config.ext_obj Config.ext_dll
               )
-        else
+        else begin
           default_output !output_name
+        end
       in
       Compmisc.init_path true;
       Asmlink.link ppf (get_objfiles ~with_ocamlparam:true) target;

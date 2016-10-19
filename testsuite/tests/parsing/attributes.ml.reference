@@ -3,7 +3,7 @@
     Pstr_attribute "foo"
     []
   structure_item (attributes.ml[3,10+0]..[4,49+9])
-    Pstr_value Nonrec
+    Pstr_value Nonstatic Nonrec
     [
       <def>
           attribute "foo"
@@ -59,7 +59,7 @@
     Pstr_attribute "foo"
     []
   structure_item (attributes.ml[13,117+0]..[22,224+7])
-    Pstr_module
+    Pstr_module Nonstatic
     "M" (attributes.ml[13,117+7]..[13,117+8])
       attribute "foo"
         []

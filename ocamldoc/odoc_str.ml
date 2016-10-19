@@ -235,7 +235,7 @@ let string_of_type t =
            let string_of_parameters = function
              | M.Cstr_tuple l ->
                  String.concat " * " (
-                   List.map (fun t -> "("^Odoc_print.string_of_type_expr t^")") l
+                   List.map (fun t -> "(" ^ Odoc_print.string_of_type_expr t^")") l
                  )
              | M.Cstr_record l ->
                  string_of_record l
@@ -290,13 +290,13 @@ let string_of_type_extension te =
                       " of " ^
                         (String.concat " * "
                            (List.map
-                              (fun t -> "("^Odoc_print.string_of_type_expr t^")") l))
+                              (fun t -> "(" ^ Odoc_print.string_of_type_expr t^")") l))
                   | T.Cstr_tuple [], Some r -> " : " ^ Odoc_print.string_of_type_expr r
                   | T.Cstr_tuple l, Some r ->
                       " : " ^
                         (String.concat " * "
                            (List.map
-                              (fun t -> "("^Odoc_print.string_of_type_expr t^")") l))
+                              (fun t -> "(" ^ Odoc_print.string_of_type_expr t^")") l))
                       ^ " -> " ^ Odoc_print.string_of_type_expr r
                   | T.Cstr_record l, None ->
                       " of " ^  string_of_record l

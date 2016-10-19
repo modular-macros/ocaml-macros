@@ -345,12 +345,14 @@ and expression_desc =
         (* let open M in E
            let! open M in E
         *)
+  | Pexp_quote of expression
+  | Pexp_escape of expression
   | Pexp_extension of extension
         (* [%id] *)
   | Pexp_unreachable
         (* . *)
 
-and case =   (* (P -> E) or (P when E0 -> E) *)
+and case = (* (P -> E) or (P when E0 -> E) *)
     {
      pc_lhs: pattern;
      pc_guard: expression option;
@@ -673,7 +675,7 @@ and signature_item =
     }
 
 and signature_item_desc =
-  | Psig_value of value_description
+  | Psig_value of static_flag * value_description
         (*
           val x: T
           external x: T = "s1" ... "sn"
@@ -684,9 +686,9 @@ and signature_item_desc =
         (* type t1 += ... *)
   | Psig_exception of extension_constructor
         (* exception C of T *)
-  | Psig_module of module_declaration
+  | Psig_module of static_flag * module_declaration
         (* module X : MT *)
-  | Psig_recmodule of module_declaration list
+  | Psig_recmodule of static_flag * module_declaration list
         (* module rec X1 : MT1 and ... and Xn : MTn *)
   | Psig_modtype of module_type_declaration
         (* module type S = MT
@@ -798,9 +800,11 @@ and structure_item =
 and structure_item_desc =
   | Pstr_eval of expression * attributes
         (* E *)
-  | Pstr_value of rec_flag * value_binding list
-        (* let P1 = E1 and ... and Pn = EN       (flag = Nonrecursive)
-           let rec P1 = E1 and ... and Pn = EN   (flag = Recursive)
+  | Pstr_value of static_flag * rec_flag * value_binding list
+        (* let P1 = E1 and ... and Pn = EN        (Nonstatic, Nonrecursive)
+           let rec P1 = E1 and ... and Pn = EN    (Nonstatic, Recursive)
+           static P1 = E1 and ... and Pn = EN     (Static, Nonrecursive)
+           static rec P1 = E1 and ... and Pn = EN (Static, Recursive)
          *)
   | Pstr_primitive of value_description
         (*  val x: T
@@ -812,9 +816,10 @@ and structure_item_desc =
   | Pstr_exception of extension_constructor
         (* exception C of T
            exception C = M.X *)
-  | Pstr_module of module_binding
+  | Pstr_module of static_flag * module_binding
         (* module X = ME *)
-  | Pstr_recmodule of module_binding list
+        (* static module X = ME *)
+  | Pstr_recmodule of static_flag * module_binding list
         (* module rec X1 = ME1 and ... and Xn = MEn *)
   | Pstr_modtype of module_type_declaration
         (* module type S = MT *)

@@ -19,6 +19,7 @@ open Misc
 open Format
 open Typedtree
 open Compenv
+open Asttypes
 
 (* Compile a .mli file *)
 
@@ -81,10 +82,27 @@ let implementation ppf sourcefile outputprefix =
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"))
     end else begin
+      (* Run static code *)
+      let stat_lam =
+        print_if ppf Clflags.dump_rawlambda Printlambda.lambda @@
+        Translmod.transl_implementation modulename Static (typedtree, coercion)
+      in
+      let sstat_lam =
+        print_if ppf Clflags.dump_lambda Printlambda.lambda @@
+        Simplif.simplify_lambda stat_lam in
+      let w_stat_lam =
+        if Sys.backend_type = Sys.Native then
+          Translmod.wrap_marshal sstat_lam
+        else sstat_lam
+      in
+      let splices = Runstatic.run_static ppf w_stat_lam in
+      if !Clflags.dump_parsetree then
+        Array.iter (Printast.expression 0 ppf) splices;
+      Translcore.set_transl_splices (Some (ref splices));
       let bytecode, required_globals =
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))
-            (Translmod.transl_implementation modulename)
+            (Translmod.transl_implementation modulename Nonstatic)
         ++ Timings.(accumulate_time (Generate sourcefile))
             (fun { Lambda.code = lambda; required_globals } ->
               print_if ppf Clflags.dump_rawlambda Printlambda.lambda lambda
@@ -96,7 +114,7 @@ let implementation ppf sourcefile outputprefix =
       in
       let objfile = outputprefix ^ ".cmo" in
       let oc = open_out_bin objfile in
-      try
+      begin try
         bytecode
         ++ Timings.(accumulate_time (Generate sourcefile))
             (Emitcode.to_file oc modulename objfile ~required_globals);
@@ -107,6 +125,22 @@ let implementation ppf sourcefile outputprefix =
         close_out oc;
         remove_file objfile;
         raise x
+      end;
+      (* Save static code (if different from unit) *)
+      if sstat_lam <> Lambda.lambda_unit then begin
+        let stat_bytecode =
+          Bytegen.compile_implementation modulename sstat_lam in
+        let static_objfile = outputprefix ^ ".cmm" in
+        let s_oc = open_out_bin static_objfile in
+        try
+          stat_bytecode
+          ++ (Emitcode.to_file s_oc modulename static_objfile);
+          close_out s_oc
+        with x ->
+          close_out s_oc;
+          remove_file static_objfile;
+          raise x
+      end
     end
   with x ->
     Stypes.dump (Some (outputprefix ^ ".annot"));

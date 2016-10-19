@@ -43,3 +43,10 @@ type typath =
 
 val constructor_typath: t -> typath
 val is_constructor_typath: t -> bool
+
+(** [map_head f p] is [p] with [f] applied to its head. If [p] is of the form
+    [Papply (_,_)], it is not modified. *)
+val map_head: (Ident.t -> Ident.t) -> t -> t
+
+val lifted: t -> bool
+

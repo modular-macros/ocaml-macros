@@ -262,6 +262,8 @@ let rec add_expr bv exp =
   | Pexp_pack m -> add_module bv m
   | Pexp_open (_ovf, m, e) ->
       let bv = open_module bv m.txt in add_expr bv e
+  | Pexp_quote e -> add_expr bv e
+  | Pexp_escape e -> add_expr bv e
   | Pexp_extension (({ txt = ("ocaml.extension_constructor"|
                               "extension_constructor"); _ },
                      PStr [item]) as e) ->
@@ -336,7 +338,7 @@ and add_signature_binding bv sg =
 
 and add_sig_item (bv, m) item =
   match item.psig_desc with
-    Psig_value vd ->
+    Psig_value (_, vd) ->
       add_type bv vd.pval_type; (bv, m)
   | Psig_type (_, dcls) ->
       List.iter (add_type_declaration bv) dcls; (bv, m)
@@ -344,11 +346,11 @@ and add_sig_item (bv, m) item =
       add_type_extension bv te; (bv, m)
   | Psig_exception pext ->
       add_extension_constructor bv pext; (bv, m)
-  | Psig_module pmd ->
+  | Psig_module (_, pmd) ->
       let m' = add_modtype_binding bv pmd.pmd_type in
       let add = StringMap.add pmd.pmd_name.txt m' in
       (add bv, add m)
-  | Psig_recmodule decls ->
+  | Psig_recmodule (_, decls) ->
       let add =
         List.fold_right (fun pmd -> StringMap.add pmd.pmd_name.txt bound)
                         decls
@@ -423,7 +425,8 @@ and add_struct_item (bv, m) item : _ StringMap.t * _ StringMap.t =
   match item.pstr_desc with
     Pstr_eval (e, _attrs) ->
       add_expr bv e; (bv, m)
-  | Pstr_value(rf, pel) ->
+  | Pstr_value(_, rf, pel) ->
+      (* macros: static flag not handled for now *)
       let bv = add_bindings rf bv pel in (bv, m)
   | Pstr_primitive vd ->
       add_type bv vd.pval_type; (bv, m)
@@ -434,11 +437,11 @@ and add_struct_item (bv, m) item : _ StringMap.t * _ StringMap.t =
       (bv, m)
   | Pstr_exception pext ->
       add_extension_constructor bv pext; (bv, m)
-  | Pstr_module x ->
+  | Pstr_module (_sf, x) -> (* macros: ignore static modifier for now *)
       let b = add_module_binding bv x.pmb_expr in
       let add = StringMap.add x.pmb_name.txt b in
       (add bv, add m)
-  | Pstr_recmodule bindings ->
+  | Pstr_recmodule (_, bindings) ->
       let add =
         List.fold_right (fun x -> StringMap.add x.pmb_name.txt bound) bindings
       in

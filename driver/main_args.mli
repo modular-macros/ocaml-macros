@@ -19,6 +19,7 @@
 module type Common_options = sig
   val _absname : unit -> unit
   val _I : string -> unit
+  val _m : string -> unit
   val _labels : unit -> unit
   val _alias_deps : unit -> unit
   val _no_alias_deps : unit -> unit

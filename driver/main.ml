@@ -47,6 +47,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _g = set debug
   let _i () = print_types := true; compile_only := true
   let _I s = include_dirs := s :: !include_dirs
+  let _m s = static_deps := !static_deps @ [s]
   let _impl = impl
   let _intf = intf
   let _intf_suffix s = Config.interface_suffix := s
@@ -175,7 +176,7 @@ let main () =
           default_output !output_name
       in
       Compmisc.init_path false;
-      Bytelink.link ppf (get_objfiles ~with_ocamlparam:true) target;
+      Bytelink.link ppf 0 (get_objfiles ~with_ocamlparam:true) target;
       Warnings.check_fatal ();
     end;
   with x ->

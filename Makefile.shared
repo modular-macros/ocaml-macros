@@ -28,6 +28,9 @@ COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-41-42-44-45-48 \
 	  -warn-error A \
           -bin-annot -safe-string -strict-formats $(INCLUDES)
 LINKFLAGS=
+# For debugging
+# COMPFLAGS=-warn-error A -g $(INCLUDES) # NNN
+# LINKFLAGS=-g #NNN
 
 YACCFLAGS=-v --strict
 CAMLLEX=$(CAMLRUN) boot/ocamllex
@@ -76,7 +79,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
 COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/typeopt.cmo bytecomp/switch.cmo bytecomp/matching.cmo \
   bytecomp/translobj.cmo bytecomp/translattribute.cmo \
-  bytecomp/translcore.cmo \
+  bytecomp/translquote.cmo bytecomp/translcore.cmo \
   bytecomp/translclass.cmo bytecomp/translmod.cmo \
   bytecomp/simplif.cmo bytecomp/runtimedef.cmo \
   driver/pparse.cmo driver/main_args.cmo \
@@ -89,7 +92,8 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/bytesections.cmo bytecomp/dll.cmo bytecomp/symtable.cmo \
   bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
   driver/compdynlink.cmo driver/compplugin.cmo \
-  driver/errors.cmo driver/compile.cmo
+  driver/errors.cmo bytecomp/cmo_load.cmo bytecomp/runstatic.cmo \
+  driver/compile.cmo
 
 INTEL_ASM=\
   asmcomp/x86_proc.cmo \
@@ -136,6 +140,11 @@ ASMCOMP=\
   asmcomp/branch_relaxation.cmo \
   asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
+  bytecomp/bytesections.cmo bytecomp/dll.cmo \
+  bytecomp/meta.cmo bytecomp/symtable.cmo bytecomp/opcodes.cmo \
+  bytecomp/cmo_load.cmo \
+  bytecomp/instruct.cmo bytecomp/bytegen.cmo bytecomp/emitcode.cmo \
+  bytecomp/bytelink.cmo bytecomp/runstatic.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
 
 MIDDLE_END=\
@@ -199,7 +208,8 @@ MIDDLE_END=\
   middle_end/middle_end.cmo
 
 TOPLEVEL=toplevel/genprintval.cmo toplevel/toploop.cmo \
-  toplevel/trace.cmo toplevel/topdirs.cmo toplevel/topmain.cmo
+  toplevel/trace.cmo toplevel/topdirs.cmo \
+  toplevel/topmain.cmo
 
 OPTTOPLEVEL=toplevel/genprintval.cmo toplevel/opttoploop.cmo \
   toplevel/opttopdirs.cmo toplevel/opttopmain.cmo

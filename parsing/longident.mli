@@ -23,3 +23,11 @@ type t =
 val flatten: t -> string list
 val last: t -> string
 val parse: string -> t
+
+(** Returns [true] iff the left-most identifier begins with a caret (`^`). *)
+val is_lifted: t -> bool
+
+(** [lift id] adds a lifting symbol (`^`) at the beginning of [id] iff it is not
+    already present. *)
+val lift: t -> t
+

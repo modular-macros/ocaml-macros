@@ -20,6 +20,7 @@ open Config
 open Format
 open Typedtree
 open Compenv
+open Asttypes
 
 (* Compile a .mli file *)
 
@@ -83,6 +84,22 @@ let implementation ~backend ppf sourcefile outputprefix =
           Printtyped.implementation_with_coercion
     in
     if not !Clflags.print_types then begin
+      (* Run static code *)
+      let stat_lam =
+        Translmod.transl_implementation modulename Static (typedtree, coercion)
+      in
+      let sstat_lam =
+        print_if ppf Clflags.dump_lambda Printlambda.lambda @@
+        Simplif.simplify_lambda stat_lam in
+      let w_stat_lam =
+        if Sys.backend_type = Sys.Native then
+          Translmod.wrap_marshal sstat_lam
+        else sstat_lam
+      in
+      let splices = Runstatic.run_static ppf w_stat_lam in
+      if !Clflags.dump_parsetree then
+        Array.iter (Printast.expression 0 ppf) splices;
+      Translcore.set_transl_splices (Some (ref splices));
       if Config.flambda then begin
         if !Clflags.classic_inlining then begin
           Clflags.default_simplify_rounds := 1;
@@ -116,7 +133,7 @@ let implementation ~backend ppf sourcefile outputprefix =
         Clflags.use_inlining_arguments_set Clflags.classic_arguments;
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))
-            (Translmod.transl_store_implementation modulename)
+            (Translmod.transl_store_implementation Nonstatic modulename)
         ++ print_if ppf Clflags.dump_rawlambda Printlambda.program
         ++ Timings.(time (Generate sourcefile))
             (fun program ->
@@ -127,6 +144,21 @@ let implementation ~backend ppf sourcefile outputprefix =
               ++ Asmgen.compile_implementation_clambda ~source_provenance
                 outputprefix ppf;
               Compilenv.save_unit_info cmxfile)
+      end;
+      (* Save static code *)
+      if sstat_lam <> Lambda.lambda_unit then begin
+        let stat_bytecode =
+          Bytegen.compile_implementation modulename sstat_lam in
+        let static_objfile = outputprefix ^ ".cmm" in
+        let s_oc = open_out_bin static_objfile in
+        try
+          stat_bytecode
+          ++ (Emitcode.to_file s_oc modulename static_objfile);
+          close_out s_oc
+        with x ->
+          close_out s_oc;
+          remove_file static_objfile;
+          raise x
       end
     end;
     Warnings.check_fatal ();

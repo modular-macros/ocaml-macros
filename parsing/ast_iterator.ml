@@ -46,7 +46,7 @@ type iterator = {
   include_description: iterator -> include_description -> unit;
   label_declaration: iterator -> label_declaration -> unit;
   location: iterator -> Location.t -> unit;
-  module_binding: iterator -> module_binding -> unit;
+  module_binding: iterator -> Asttypes.static_flag * module_binding -> unit;
   module_declaration: iterator -> module_declaration -> unit;
   module_expr: iterator -> module_expr -> unit;
   module_type: iterator -> module_type -> unit;
@@ -63,7 +63,8 @@ type iterator = {
   type_extension: iterator -> type_extension -> unit;
   type_kind: iterator -> type_kind -> unit;
   value_binding: iterator -> value_binding -> unit;
-  value_description: iterator -> value_description -> unit;
+  value_description: iterator ->
+    (Asttypes.static_flag * value_description) -> unit;
   with_constraint: iterator -> with_constraint -> unit;
 }
 (** A [iterator] record implements one "method" per syntactic category,
@@ -233,12 +234,12 @@ module MT = struct
   let iter_signature_item sub {psig_desc = desc; psig_loc = loc} =
     sub.location sub loc;
     match desc with
-    | Psig_value vd -> sub.value_description sub vd
+    | Psig_value (sf, vd) -> sub.value_description sub (sf, vd)
     | Psig_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Psig_typext te -> sub.type_extension sub te
     | Psig_exception ed -> sub.extension_constructor sub ed
-    | Psig_module x -> sub.module_declaration sub x
-    | Psig_recmodule l ->
+    | Psig_module (_sf, x) -> sub.module_declaration sub x
+    | Psig_recmodule (_sf, l) ->
         List.iter (sub.module_declaration sub) l
     | Psig_modtype x -> sub.module_type_declaration sub x
     | Psig_open x -> sub.open_description sub x
@@ -277,13 +278,14 @@ module M = struct
     match desc with
     | Pstr_eval (x, attrs) ->
         sub.expr sub x; sub.attributes sub attrs
-    | Pstr_value (_r, vbs) -> List.iter (sub.value_binding sub) vbs
-    | Pstr_primitive vd -> sub.value_description sub vd
+    | Pstr_value (_, _r, vbs) -> List.iter (sub.value_binding sub) vbs
+    | Pstr_primitive vd -> sub.value_description sub (Asttypes.Nonstatic, vd)
     | Pstr_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Pstr_typext te -> sub.type_extension sub te
     | Pstr_exception ed -> sub.extension_constructor sub ed
-    | Pstr_module x -> sub.module_binding sub x
-    | Pstr_recmodule l -> List.iter (sub.module_binding sub) l
+    | Pstr_module (sf, x) -> sub.module_binding sub (sf, x)
+    | Pstr_recmodule (sf, l) -> List.iter
+        (fun expr -> sub.module_binding sub (sf, expr)) l
     | Pstr_modtype x -> sub.module_type_declaration sub x
     | Pstr_open x -> sub.open_description sub x
     | Pstr_class l -> List.iter (sub.class_declaration sub) l
@@ -360,6 +362,8 @@ module E = struct
         sub.expr sub e
     | Pexp_assert e -> sub.expr sub e
     | Pexp_lazy e -> sub.expr sub e
+    | Pexp_quote e -> sub.expr sub e
+    | Pexp_escape e -> sub.expr sub e
     | Pexp_poly (e, t) ->
         sub.expr sub e; iter_opt (sub.typ sub) t
     | Pexp_object cls -> sub.class_structure sub cls
@@ -490,8 +494,8 @@ let default_iterator =
     type_extension = T.iter_type_extension;
     extension_constructor = T.iter_extension_constructor;
     value_description =
-      (fun this {pval_name; pval_type; pval_prim = _; pval_loc;
-                 pval_attributes} ->
+      (fun this (_sf, {pval_name; pval_type; pval_prim = _; pval_loc;
+                      pval_attributes}) ->
         iter_loc this pval_name;
         this.typ this pval_type;
         this.attributes this pval_attributes;
@@ -518,7 +522,7 @@ let default_iterator =
       );
 
     module_binding =
-      (fun this {pmb_name; pmb_expr; pmb_attributes; pmb_loc} ->
+      (fun this (_sf, {pmb_name; pmb_expr; pmb_attributes; pmb_loc}) ->
          iter_loc this pmb_name; this.module_expr this pmb_expr;
          this.attributes this pmb_attributes;
          this.location this pmb_loc

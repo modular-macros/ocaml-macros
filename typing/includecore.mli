@@ -37,7 +37,8 @@ type type_mismatch =
   | Immediate
 
 val value_descriptions:
-    Env.t -> value_description -> value_description -> module_coercion
+    Env.t -> Asttypes.static_flag -> value_description ->
+      Asttypes.static_flag -> value_description -> module_coercion
 val type_declarations:
     ?equality:bool ->
       Env.t -> string ->

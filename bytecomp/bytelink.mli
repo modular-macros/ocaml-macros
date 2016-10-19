@@ -13,15 +13,23 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Link .cmo files and produce a bytecode executable. *)
+(* Link .cmo, .cma and .cmm files and produce a bytecode executable. Missing
+   dependencies are searched for in the include path.  *)
 
-val link : Format.formatter -> string list -> string -> unit
+val link : Format.formatter -> Types.phase -> string list -> string -> unit
 val reset : unit -> unit
 
 val check_consistency:
   Format.formatter -> string -> Cmo_format.compilation_unit -> unit
 
 val extract_crc_interfaces: unit -> (string * Digest.t option) list
+
+(* Dynamically load code from .cmo, .cma and .cmm files into memory. Missing
+   dependencies are searched for in the include path. *)
+val load : Format.formatter -> Types.phase -> string list -> unit
+val load_deps :
+  Format.formatter -> Types.phase -> string list
+  -> (Cmo_format.reloc_info * int) list -> unit
 
 type error =
     File_not_found of string

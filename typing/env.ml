@@ -69,6 +69,10 @@ exception Error of error
 
 let error err = raise (Error err)
 
+let phase_of_sf = function
+  | Nonstatic -> 0
+  | Static -> 1
+
 module EnvLazy : sig
   type ('a,'b) t
 
@@ -110,10 +114,10 @@ module PathMap = Map.Make(Path)
 
 type summary =
     Env_empty
-  | Env_value of summary * Ident.t * value_description
+  | Env_value of summary * phase * Ident.t * value_description
   | Env_type of summary * Ident.t * type_declaration
   | Env_extension of summary * Ident.t * extension_constructor
-  | Env_module of summary * Ident.t * module_declaration
+  | Env_module of summary * phase * Ident.t * module_declaration
   | Env_modtype of summary * Ident.t * modtype_declaration
   | Env_class of summary * Ident.t * class_declaration
   | Env_cltype of summary * Ident.t * class_type_declaration
@@ -170,8 +174,12 @@ type type_descriptions =
 let in_signature_flag = 0x01
 let implicit_coercion_flag = 0x02
 
+type stage = int
+
 type t = {
   values: (Path.t * value_description) EnvTbl.t;
+  phases: (Path.t * phase) EnvTbl.t;
+  stages: (Path.t * stage) EnvTbl.t;
   constrs: constructor_description EnvTbl.t;
   labels: label_description EnvTbl.t;
   types: (Path.t * (type_declaration * type_descriptions)) EnvTbl.t;
@@ -185,6 +193,10 @@ type t = {
   local_constraints: type_declaration PathMap.t;
   gadt_instances: (int * TypeSet.t ref) list;
   flags: int;
+  cur_env_phase: phase;
+  cur_env_stage: stage;
+  cur_env_toplevel_splice: bool;
+  cur_env_cross_stage: Ident.t loc list;
 }
 
 and module_components =
@@ -201,6 +213,8 @@ and module_components_repr =
 
 and structure_components = {
   mutable comp_values: (string, (value_description * int)) Tbl.t;
+  mutable comp_phases: (string, (phase * int)) Tbl.t;
+  mutable comp_stages: (string, (stage * int)) Tbl.t;
   mutable comp_constrs: (string, (constructor_description * int) list) Tbl.t;
   mutable comp_labels: (string, (label_description * int) list) Tbl.t;
   mutable comp_types:
@@ -226,6 +240,38 @@ let copy_local ~from env =
     local_constraints = from.local_constraints;
     gadt_instances = from.gadt_instances;
     flags = from.flags }
+
+let cur_phase env = env.cur_env_phase
+and with_phase phase env = {env with cur_env_phase = phase}
+
+(* Increase or decrease phase of environment *)
+let with_phase_up env =
+  with_phase (cur_phase env + 1) env
+
+let with_phase_down env =
+  with_phase (cur_phase env - 1) env
+
+let cur_stage env = env.cur_env_stage
+and with_stage stage env = {env with cur_env_stage = stage}
+
+(* Increase or decrease stage of environment *)
+let with_stage_up env =
+  with_stage (cur_stage env + 1) env
+
+let with_stage_down env =
+  with_stage (cur_stage env - 1) env
+
+let toplevel_splice env = env.cur_env_toplevel_splice
+let with_tl_splice tl env = { env with cur_env_toplevel_splice = tl }
+
+let cross_stage_ids env = env.cur_env_cross_stage
+let add_cross_stage id env =
+  { env with cur_env_cross_stage = id :: env.cur_env_cross_stage }
+let concat_cross_stage base_env env =
+  { base_env with cur_env_cross_stage =
+      base_env.cur_env_cross_stage @ env.cur_env_cross_stage }
+let discard_cross_stage env =
+  { env with cur_env_cross_stage = [] }
 
 let same_constr = ref (fun _ _ _ -> assert false)
 
@@ -262,9 +308,13 @@ let empty = {
   modules = EnvTbl.empty; modtypes = EnvTbl.empty;
   components = EnvTbl.empty; classes = EnvTbl.empty;
   cltypes = EnvTbl.empty;
+  phases = EnvTbl.empty; stages = EnvTbl.empty;
   summary = Env_empty; local_constraints = PathMap.empty; gadt_instances = [];
   flags = 0;
   functor_args = Ident.empty;
+  cur_env_phase = 0; cur_env_stage = 0;
+  cur_env_toplevel_splice = false;
+  cur_env_cross_stage = [];
  }
 
 let in_signature b env =
@@ -408,7 +458,8 @@ module Persistent_signature = struct
       cmi : Cmi_format.cmi_infos }
 
   let load = ref (fun ~unit_name ->
-    match find_in_path_uncap !load_path (unit_name ^ ".cmi") with
+    let unlifted_name = Ident.unlift_string unit_name in
+    match find_in_path_uncap !load_path (unlifted_name ^ ".cmi") with
     | filename -> Some { filename; cmi = read_cmi filename }
     | exception Not_found -> None)
 end
@@ -423,22 +474,21 @@ let acknowledge_pers_struct check modname
     List.fold_left (fun acc -> function Deprecated s -> Some s | _ -> acc) None
       flags
   in
+  (* Check module name (ignoring lifting symbol) *)
+  if name <> Ident.unlift_string modname then
+    error (Illegal_renaming(modname, name, filename));
   let comps =
-      !components_of_module' ~deprecated ~loc:Location.none
-        empty Subst.identity
-                             (Pident(Ident.create_persistent name))
+      !components_of_module' ~deprecated ~loc:Location.none empty
+        Subst.identity (Pident(Ident.create_persistent modname))
                              (Mty_signature sign)
   in
-  let ps = { ps_name = name;
+  let ps = { ps_name = modname;
              ps_sig = lazy (Subst.signature Subst.identity sign);
              ps_comps = comps;
              ps_crcs = crcs;
              ps_filename = filename;
              ps_flags = flags;
            } in
-  if ps.ps_name <> modname then
-    error (Illegal_renaming(modname, ps.ps_name, filename));
-
   List.iter
     (function
         | Rectypes ->
@@ -608,6 +658,10 @@ let find proj1 proj2 path env =
 
 let find_value =
   find (fun env -> env.values) (fun sc -> sc.comp_values)
+and find_stage path env =
+  try
+    find (fun env -> env.stages) (fun sc -> sc.comp_stages) path env
+  with Not_found -> 0
 and find_type_full =
   find (fun env -> env.types) (fun sc -> sc.comp_types)
 and find_modtype =
@@ -914,6 +968,21 @@ and lookup_module ~load ?loc lid env : Path.t =
           raise Not_found
       end
 
+and find_phase path env =
+  try
+    find (fun env -> env.phases) (fun sc -> sc.comp_phases) path env
+  with Not_found ->
+    begin match path with
+    | Pident id ->
+        if Ident.persistent id && not (Ident.name id = !current_unit) then try
+          (* note: the module may not exist, but we assume the error will be
+             caught later. *)
+          if Ident.lifted id then 1 else 0
+        with Not_found -> 0
+        else 0
+    | _ -> 0
+    end
+
 let lookup proj1 proj2 ?loc lid env =
   match lid with
     Lident s ->
@@ -968,7 +1037,7 @@ let cstr_shadow cstr1 cstr2 =
 let lbl_shadow _lbl1 _lbl2 = false
 
 let lookup_value =
-  lookup (fun env -> env.values) (fun sc -> sc.comp_values)
+    lookup (fun env -> env.values) (fun sc -> sc.comp_values)
 and lookup_all_constructors =
   lookup_all_simple (fun env -> env.constrs) (fun sc -> sc.comp_constrs)
     cstr_shadow
@@ -987,11 +1056,13 @@ and lookup_cltype =
 let update_value s f env =
   try
     let ((p, vd), slot) = Ident.find_name s env.values in
+    let phase = find_phase p env in
+    (* Phase will remain unchanged *)
     match p with
     | Pident id ->
         let vd2 = f vd in
         {env with values = Ident.add id ((p, vd2), slot) env.values;
-                  summary = Env_value(env.summary, id, vd2)}
+                  summary = Env_value(env.summary, phase, id, vd2)}
     | _ ->
         env
   with Not_found ->
@@ -1311,7 +1382,7 @@ let scrape_alias env mty = scrape_alias env mty
 
 let rec prefix_idents root pos sub = function
     [] -> ([], sub)
-  | Sig_value(id, decl) :: rem ->
+  | Sig_value(id, _, decl) :: rem ->
       let p = Pdot(root, Ident.name id, pos) in
       let nextpos = match decl.val_kind with Val_prim _ -> pos | _ -> pos+1 in
       let (pl, final_sub) = prefix_idents root nextpos sub rem in
@@ -1327,7 +1398,7 @@ let rec prefix_idents root pos sub = function
       let (pl, final_sub) =
         prefix_idents root (pos+1) (Subst.add_type id p sub) rem in
       (p::pl, final_sub)
-  | Sig_module(id, _, _) :: rem ->
+  | Sig_module(id, _, _, _) :: rem ->
       let p = Pdot(root, Ident.name id, pos) in
       let (pl, final_sub) =
         prefix_idents root (pos+1) (Subst.add_module id p sub) rem in
@@ -1354,14 +1425,14 @@ let subst_signature sub sg =
   List.map
     (fun item ->
       match item with
-      | Sig_value(id, decl) ->
-          Sig_value (id, Subst.value_description sub decl)
+      | Sig_value(id, sf, decl) ->
+          Sig_value (id, sf, Subst.value_description sub decl)
       | Sig_type(id, decl, x) ->
           Sig_type(id, Subst.type_declaration sub decl, x)
       | Sig_typext(id, ext, es) ->
           Sig_typext (id, Subst.extension_constructor sub ext, es)
-      | Sig_module(id, mty, x) ->
-          Sig_module(id, Subst.module_declaration sub mty,x)
+      | Sig_module(id, mty, sf, x) ->
+          Sig_module(id, Subst.module_declaration sub mty, sf, x)
       | Sig_modtype(id, decl) ->
           Sig_modtype(id, Subst.modtype_declaration sub decl)
       | Sig_class(id, decl, x) ->
@@ -1414,10 +1485,16 @@ let rec components_of_module ~deprecated ~loc env sub path mty =
   }
 
 and components_of_module_maker (env, sub, path, mty) =
+  let phase =
+    if Path.lifted path then env.cur_env_phase + 1
+    else env.cur_env_phase
+  in
   (match scrape_alias env mty with
     Mty_signature sg ->
       let c =
         { comp_values = Tbl.empty;
+          comp_phases = Tbl.empty;
+          comp_stages = Tbl.empty;
           comp_constrs = Tbl.empty;
           comp_labels = Tbl.empty; comp_types = Tbl.empty;
           comp_modules = Tbl.empty; comp_modtypes = Tbl.empty;
@@ -1428,10 +1505,13 @@ and components_of_module_maker (env, sub, path, mty) =
       let pos = ref 0 in
       List.iter2 (fun item path ->
         match item with
-          Sig_value(id, decl) ->
+          Sig_value(id, sf, decl) ->
             let decl' = Subst.value_description sub decl in
             c.comp_values <-
               Tbl.add (Ident.name id) (decl', !pos) c.comp_values;
+            let phase = if sf = Static then phase + 1 else phase in
+            if phase <> 0 then
+              c.comp_phases <- Tbl.add (Ident.name id) (phase, !pos) c.comp_phases;
             begin match decl.val_kind with
               Val_prim _ -> () | _ -> incr pos
             end
@@ -1462,7 +1542,7 @@ and components_of_module_maker (env, sub, path, mty) =
             c.comp_constrs <-
               add_to_tbl (Ident.name id) (descr, !pos) c.comp_constrs;
             incr pos
-        | Sig_module(id, md, _) ->
+        | Sig_module(id, md, sf, _) ->
             let mty = md.md_type in
             let mty' = EnvLazy.create (sub, mty) in
             c.comp_modules <-
@@ -1475,7 +1555,10 @@ and components_of_module_maker (env, sub, path, mty) =
             in
             c.comp_components <-
               Tbl.add (Ident.name id) (comps, !pos) c.comp_components;
-            env := store_module ~check:false None id (Pident id) md !env !env;
+            let phase = phase_of_sf sf in
+            if phase <> 0 then
+              c.comp_phases <- Tbl.add (Ident.name id) (phase, !pos) c.comp_phases;
+            env := store_module ~check:false None phase id (Pident id) md !env !env;
             incr pos
         | Sig_modtype(id, decl) ->
             let decl' = Subst.modtype_declaration sub decl in
@@ -1506,6 +1589,8 @@ and components_of_module_maker (env, sub, path, mty) =
   | Mty_alias _ ->
         Structure_comps {
           comp_values = Tbl.empty;
+          comp_phases = Tbl.empty;
+          comp_stages = Tbl.empty;
           comp_constrs = Tbl.empty;
           comp_labels = Tbl.empty;
           comp_types = Tbl.empty;
@@ -1546,7 +1631,33 @@ and store_value ?check slot id path decl env renv =
   { env with
     values = EnvTbl.add slot (fun x -> `Value x) id (path, decl)
         env.values renv.values;
-    summary = Env_value(env.summary, id, decl) }
+    phases = (
+      if env.cur_env_phase = 0 then env.phases
+      else
+        EnvTbl.add None (fun x -> x) id (path, env.cur_env_phase)
+        env.phases renv.phases
+    );
+    stages = (
+      if env.cur_env_stage = 0 then env.stages
+      else
+        EnvTbl.add None (fun x -> x) id (path, env.cur_env_stage)
+        env.stages renv.stages
+    );
+    summary = Env_value(env.summary, env.cur_env_phase, id, decl) }
+
+and store_phase id path phase env renv =
+  { env with
+    phases =
+      EnvTbl.add None (fun x -> x) id (path, phase) env.phases renv.phases;
+  }
+
+(*
+and store_stage id path stage env renv =
+  { env with
+    stages =
+      EnvTbl.add None (fun x -> x) id (path, stage) env.stages renv.stages;
+  }
+*)
 
 and store_type ~check slot id path info env renv =
   let loc = info.type_loc in
@@ -1635,22 +1746,26 @@ and store_extension ~check slot id path ext env renv =
                 env.constrs renv.constrs;
     summary = Env_extension(env.summary, id, ext) }
 
-and store_module ~check slot id path md env renv =
+and store_module ~check slot phase id path md env renv =
   let loc = md.md_loc in
   if check then
     check_usage loc id (fun s -> Warnings.Unused_module s)
       module_declarations;
-
   let deprecated = Builtin_attributes.deprecated_of_attrs md.md_attributes in
   { env with
     modules = EnvTbl.add slot (fun x -> `Module x) id (path, md)
         env.modules renv.modules;
+    phases = (
+      if phase = 0 then env.phases
+      else
+        EnvTbl.add None (fun x -> x) id (path, phase) env.phases
+          renv.phases);
     components =
       EnvTbl.add slot (fun x -> `Component x) id
         (path, components_of_module ~deprecated ~loc:md.md_loc
            env Subst.identity path md.md_type)
         env.components renv.components;
-    summary = Env_module(env.summary, id, md) }
+    summary = Env_module(env.summary, phase, id, md) }
 
 and store_modtype slot id path info env renv =
   { env with
@@ -1702,19 +1817,32 @@ let add_functor_arg id env =
 let add_value ?check id desc env =
   store_value None ?check id (Pident id) desc env env
 
+let add_phase id phase env =
+  store_phase id (Pident id) phase env env
+
+let add_value_with_phase ?check phase id desc env =
+  let env = add_value ?check id desc env in
+  if phase <> 0 then add_phase id phase env
+  else env
+
+(*
+let add_stage id stage env =
+  store_stage id (Pident id) stage env env
+*)
+
 let add_type ~check id info env =
   store_type ~check None id (Pident id) info env env
 
 and add_extension ~check id ext env =
   store_extension ~check None id (Pident id) ext env env
 
-and add_module_declaration ?(arg=false) ~check id md env =
+and add_module_declaration ?(arg=false) ~check phase id md env =
   let path =
     (*match md.md_type with
       Mty_alias path -> normalize_path env path
     | _ ->*) Pident id
   in
-  let env = store_module ~check None id path md env env in
+  let env = store_module ~check None phase id path md env env in
   if arg then add_functor_arg id env else env
 
 and add_modtype id info env =
@@ -1726,8 +1854,11 @@ and add_class id ty env =
 and add_cltype id ty env =
   store_cltype None id (Pident id) ty env env
 
+let add_module_with_phase ?arg phase id mty env =
+  add_module_declaration ?arg phase id (md mty) env
+
 let add_module ?arg id mty env =
-  add_module_declaration ~check:false ?arg id (md mty) env
+  add_module_with_phase ~check ?arg env.cur_env_phase id mty env
 
 let add_local_type path info env =
   { env with
@@ -1750,26 +1881,35 @@ let enter store_fun name data env =
 let enter_value ?check = enter (store_value ?check)
 and enter_type = enter (store_type ~check:true)
 and enter_extension = enter (store_extension ~check:true)
-and enter_module_declaration ?arg id md env =
-  add_module_declaration ?arg ~check:true id md env
+and enter_module_declaration ?arg phase id md env =
+  add_module_declaration ?arg ~check:true phase id md env
   (* let (id, env) = enter store_module name md env in
   (id, add_functor_arg ?arg id env) *)
 and enter_modtype = enter store_modtype
 and enter_class = enter store_class
 and enter_cltype = enter store_cltype
 
-let enter_module ?arg s mty env =
+let enter_module_with_phase ?arg phase s mty env =
   let id = Ident.create s in
-  (id, enter_module_declaration ?arg id (md mty) env)
+  (id, enter_module_declaration ?arg phase id (md mty) env)
+
+let enter_module ?arg s mty env =
+  enter_module_with_phase ?arg env.cur_env_phase s mty env
 
 (* Insertion of all components of a signature *)
 
 let add_item comp env =
   match comp with
-    Sig_value(id, decl)     -> add_value id decl env
+    Sig_value(id, sf, decl)     ->
+      let env = add_value id decl env in begin
+        match sf with
+        | Nonstatic -> env
+        | Static -> add_phase id 1 env
+      end
   | Sig_type(id, decl, _)   -> add_type ~check:false id decl env
   | Sig_typext(id, ext, _)  -> add_extension ~check:false id ext env
-  | Sig_module(id, md, _)   -> add_module_declaration ~check:false id md env
+  | Sig_module(id, md, sf, _)   ->
+      add_module_declaration ~check:false (phase_of_sf sf) id md env
   | Sig_modtype(id, decl)   -> add_modtype id decl env
   | Sig_class(id, decl, _)  -> add_class id decl env
   | Sig_class_type(id, decl, _) -> add_cltype id decl env
@@ -1792,14 +1932,19 @@ let open_signature slot root sg env0 =
     List.fold_left2
       (fun env item p ->
         match item with
-          Sig_value(id, decl) ->
-            store_value slot (Ident.hide id) p decl env env0
+          Sig_value(id, sf, decl) ->
+            let env = store_value slot (Ident.hide id) p decl env env0 in begin
+              match sf with
+              | Nonstatic -> env
+              | Static -> store_phase (Ident.hide id) p 1 env env0
+            end
         | Sig_type(id, decl, _) ->
             store_type ~check:false slot (Ident.hide id) p decl env env0
         | Sig_typext(id, ext, _) ->
             store_extension ~check:false slot (Ident.hide id) p ext env env0
-        | Sig_module(id, mty, _) ->
-            store_module ~check:false slot (Ident.hide id) p mty env env0
+        | Sig_module(id, mty, sf, _) ->
+            store_module ~check:false slot (phase_of_sf sf) (Ident.hide id)
+              p mty env env0
         | Sig_modtype(id, decl) ->
             store_modtype slot (Ident.hide id) p decl env env0
         | Sig_class(id, decl, _) ->

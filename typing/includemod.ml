@@ -22,7 +22,8 @@ open Types
 
 type symptom =
     Missing_field of Ident.t * Location.t * string (* kind *)
-  | Value_descriptions of Ident.t * value_description * value_description
+  | Value_descriptions of Ident.t * Asttypes.static_flag * value_description *
+    Asttypes.static_flag * value_description
   | Type_declarations of Ident.t * type_declaration
         * type_declaration * Includecore.type_mismatch list
   | Extension_constructors of
@@ -53,14 +54,14 @@ exception Error of error list
 
 (* Inclusion between value descriptions *)
 
-let value_descriptions env cxt subst id vd1 vd2 =
+let value_descriptions env cxt subst id sf1 vd1 sf2 vd2 =
   Cmt_format.record_value_dependency vd1 vd2;
   Env.mark_value_used env (Ident.name id) vd1;
   let vd2 = Subst.value_description subst vd2 in
   try
-    Includecore.value_descriptions env vd1 vd2
+    Includecore.value_descriptions env sf1 vd1 sf2 vd2
   with Includecore.Dont_match ->
-    raise(Error[cxt, env, Value_descriptions(id, vd1, vd2)])
+    raise(Error[cxt, env, Value_descriptions(id, sf1, vd1, sf2, vd2)])
 
 (* Inclusion between type declarations *)
 
@@ -143,22 +144,22 @@ let kind_of_field_desc = function
   | Field_classtype _ -> "class type"
 
 let item_ident_name = function
-    Sig_value(id, d) -> (id, d.val_loc, Field_value(Ident.name id))
+    Sig_value(id, _, d) -> (id, d.val_loc, Field_value(Ident.name id))
   | Sig_type(id, d, _) -> (id, d.type_loc, Field_type(Ident.name id))
   | Sig_typext(id, d, _) -> (id, d.ext_loc, Field_typext(Ident.name id))
-  | Sig_module(id, d, _) -> (id, d.md_loc, Field_module(Ident.name id))
+  | Sig_module(id, d, _, _) -> (id, d.md_loc, Field_module(Ident.name id))
   | Sig_modtype(id, d) -> (id, d.mtd_loc, Field_modtype(Ident.name id))
   | Sig_class(id, d, _) -> (id, d.cty_loc, Field_class(Ident.name id))
   | Sig_class_type(id, d, _) -> (id, d.clty_loc, Field_classtype(Ident.name id))
 
 let is_runtime_component = function
-  | Sig_value(_,{val_kind = Val_prim _})
+  | Sig_value(_,_,{val_kind = Val_prim _})
   | Sig_type(_,_,_)
   | Sig_modtype(_,_)
   | Sig_class_type(_,_,_) -> false
-  | Sig_value(_,_)
+  | Sig_value(_,_,_)
   | Sig_typext(_,_,_)
-  | Sig_module(_,_,_)
+  | Sig_module(_,_,_,_)
   | Sig_class(_, _,_) -> true
 
 (* Print a coercion *)
@@ -280,8 +281,9 @@ and try_modtypes env cxt subst mty1 mty2 =
       let arg2' = Subst.modtype subst arg2 in
       let cc_arg = modtypes env (Arg param1::cxt) Subst.identity arg2' arg1 in
       let cc_res =
-        modtypes (Env.add_module param1 arg2' env) (Body param1::cxt)
-          (Subst.add_module param2 (Pident param1) subst) res1 res2 in
+        modtypes (Env.add_module param1 arg2' env)
+          (Body param1::cxt) (Subst.add_module param2 (Pident param1) subst)
+          res1 res2 in
       begin match (cc_arg, cc_res) with
           (Tcoerce_none, Tcoerce_none) -> Tcoerce_none
         | _ -> Tcoerce_functor(cc_arg, cc_res)
@@ -311,7 +313,7 @@ and signatures env cxt subst sig1 sig2 =
   let (id_pos_list,_) =
     List.fold_left
       (fun (l,pos) -> function
-          Sig_module (id, _, _) ->
+          Sig_module (id, _, _, _) ->
             ((id,pos,Tcoerce_none)::l , pos+1)
         | item -> (l, if is_runtime_component item then pos+1 else pos))
       ([], 0) sig1 in
@@ -395,8 +397,8 @@ and signature_components old_env env cxt subst paired =
   let comps_rec rem = signature_components old_env env cxt subst rem in
   match paired with
     [] -> []
-  | (Sig_value(id1, valdecl1), Sig_value(_id2, valdecl2), pos) :: rem ->
-      let cc = value_descriptions env cxt subst id1 valdecl1 valdecl2 in
+  | (Sig_value(id1, sf1, valdecl1), Sig_value(_id2, sf2, valdecl2), pos) :: rem ->
+      let cc = value_descriptions env cxt subst id1 sf1 valdecl1 sf2 valdecl2 in
       begin match valdecl2.val_kind with
         Val_prim _ -> comps_rec rem
       | _ -> (pos, cc) :: comps_rec rem
@@ -408,7 +410,7 @@ and signature_components old_env env cxt subst paired =
     :: rem ->
       extension_constructors env cxt subst id1 ext1 ext2;
       (pos, Tcoerce_none) :: comps_rec rem
-  | (Sig_module(id1, mty1, _), Sig_module(_id2, mty2, _), pos) :: rem ->
+  | (Sig_module(id1, mty1, _, _), Sig_module(_id2, mty2, _, _), pos) :: rem ->
       let p1 = Pident id1 in
       Env.mark_module_used env (Ident.name id1) mty1.md_loc;
       let cc =
@@ -520,10 +522,15 @@ let include_err ppf = function
   | Missing_field (id, loc, kind) ->
       fprintf ppf "The %s `%a' is required but not provided" kind ident id;
       show_loc "Expected declaration" ppf loc
-  | Value_descriptions(id, d1, d2) ->
+  | Value_descriptions(id, sf1, d1, sf2, d2) ->
+      let fmt_static ppf = function
+      | Asttypes.Static -> fprintf ppf "static "
+      | Asttypes.Nonstatic -> ()
+      in
       fprintf ppf
-        "@[<hv 2>Values do not match:@ %a@;<1 -2>is not included in@ %a@]"
-        (value_description id) d1 (value_description id) d2;
+        "@[<hv 2>Values do not match:@ %a%a@;<1 -2>is not included in@ %a%a@]"
+        fmt_static sf1 (value_description id) d1
+        fmt_static sf2 (value_description id) d2;
       show_locs ppf (d1.val_loc, d2.val_loc);
   | Type_declarations(id, d1, d2, errs) ->
       fprintf ppf "@[<v>@[<hv>%s:@;<1 2>%a@ %s@;<1 2>%a@]%a%a@]"

@@ -47,6 +47,8 @@ let fixity_of_string  = function
 
 let view_fixity_of_exp = function
   | {pexp_desc = Pexp_ident {txt=Lident l;_};_} -> fixity_of_string l
+  | {pexp_desc = Pexp_ident {txt=Ldot (Lident "Pervasives",l);_};_} ->  (*NNN*)
+      fixity_of_string l                                                (*NNN*)
   | _ -> `Normal  ;;
 
 let is_infix  = function  | `Infix _ -> true | _  -> false
@@ -214,6 +216,9 @@ let direction_flag f = function
 let private_flag f = function
   | Public -> ()
   | Private -> pp f "private@ "
+let static_flag f = function
+  | Nonstatic -> ()
+  | Static -> pp f "static "
 
 let constant_string f s = pp f "%S" s
 let tyvar f str = pp f "'%s" str
@@ -517,7 +522,7 @@ and expression ctxt f x =
            (*no identation here, a new line*) *)
         (*   rec_flag rf *)
         pp f "@[<2>%a in@;<1 -2>%a@]"
-          (bindings reset_ctxt) (rf,l)
+          (bindings reset_ctxt) (Nonstatic, rf,l)
           (expression ctxt) e
     | Pexp_apply (e, l) ->
         begin if not (sugar_expr ctxt f x) then
@@ -620,6 +625,10 @@ and expression ctxt f x =
           (expression ctxt) e
     | Pexp_variant (l,Some eo) ->
         pp f "@[<2>`%s@;%a@]" l (simple_expr ctxt) eo
+    | Pexp_quote e ->
+        pp f "@[<2><<@ %a@ >>@]" (expression ctxt)  e
+    | Pexp_escape e ->
+        pp f "@[<2>$%a@]" (simple_expr ctxt)  e
     | Pexp_extension e -> extension ctxt f e
     | Pexp_unreachable -> pp f "."
     | _ -> expression1 ctxt f x
@@ -876,7 +885,7 @@ and class_expr ctxt f x =
           (class_expr ctxt) e
     | Pcl_let (rf, l, ce) ->
         pp f "%a@ in@ %a"
-          (bindings ctxt) (rf,l)
+          (bindings ctxt) (Nonstatic, rf,l)
           (class_expr ctxt) ce
     | Pcl_apply (ce, l) ->
         pp f "((%a)@ %a)" (* Cf: #7200 *)
@@ -947,8 +956,10 @@ and signature_item ctxt f x : unit =
   match x.psig_desc with
   | Psig_type (rf, l) ->
       type_def_list ctxt f (rf, l)
-  | Psig_value vd ->
-      let intro = if vd.pval_prim = [] then "val" else "external" in
+  | Psig_value (sf, vd) ->
+      let intro =
+        (match sf with Nonstatic -> "" | Static -> "static ") ^
+        if vd.pval_prim = [] then "val" else "external" in
       pp f "@[<2>%s@ %a@ :@ %a@]%a" intro
         protect_ident vd.pval_name.txt
         (value_description ctxt) vd
@@ -973,12 +984,13 @@ and signature_item ctxt f x : unit =
               (class_description "class") x
               (list ~sep:"@," (class_description "and")) xs
       end
-  | Psig_module ({pmd_type={pmty_desc=Pmty_alias alias};_} as pmd) ->
-      pp f "@[<hov>module@ %s@ =@ %a@]%a" pmd.pmd_name.txt
+  | Psig_module (sf, ({pmd_type={pmty_desc=Pmty_alias alias};_} as pmd)) ->
+      pp f "@[<hov>%a module@ %s@ =@ %a@]%a" static_flag sf pmd.pmd_name.txt
         longident_loc alias
         (item_attributes ctxt) pmd.pmd_attributes
-  | Psig_module pmd ->
-      pp f "@[<hov>module@ %s@ :@ %a@]%a"
+  | Psig_module (sf, pmd) ->
+      pp f "@[<hov>%a module@ %s@ :@ %a@]%a"
+        static_flag sf
         pmd.pmd_name.txt
         (module_type ctxt) pmd.pmd_type
         (item_attributes ctxt) pmd.pmd_attributes
@@ -1002,7 +1014,7 @@ and signature_item ctxt f x : unit =
         ) md
         (item_attributes ctxt) attrs
   | Psig_class_type (l) -> class_type_declaration_list ctxt f l
-  | Psig_recmodule decls ->
+  | Psig_recmodule (sf, decls) ->
       let rec  string_x_module_type_list f ?(first=true) l =
         match l with
         | [] -> () ;
@@ -1012,7 +1024,9 @@ and signature_item ctxt f x : unit =
                 (module_type ctxt) pmd.pmd_type
                 (item_attributes ctxt) pmd.pmd_attributes
             else
-              pp f "@[<hov2>module@ rec@ %s:@ %a@]%a" pmd.pmd_name.txt
+              pp f "@[<hov2>%a module@ rec@ %s:@ %a@]%a"
+                static_flag sf
+                pmd.pmd_name.txt
                 (module_type ctxt) pmd.pmd_type
                 (item_attributes ctxt) pmd.pmd_attributes;
             string_x_module_type_list f ~first:false tl
@@ -1101,9 +1115,9 @@ and binding ctxt f {pvb_pat=p; pvb_expr=x; _} =
         pp f "%a@;=@;%a" (pattern ctxt) p (expression ctxt) x
 
 (* [in] is not printed *)
-and bindings ctxt f (rf,l) =
+and bindings ctxt f (sf, rf,l) =
   let binding kwd rf f x =
-    pp f "@[<2>%s %a%a@]@ %a" kwd rec_flag rf
+    pp f "@[<2>%s %a%a%a@]@ %a" kwd static_flag sf rec_flag rf
       (binding ctxt) x (item_attributes ctxt) x.pvb_attributes
   in
   match l with
@@ -1122,12 +1136,12 @@ and structure_item ctxt f x =
         (item_attributes ctxt) attrs
   | Pstr_type (_, []) -> assert false
   | Pstr_type (rf, l)  -> type_def_list ctxt f (rf, l)
-  | Pstr_value (rf, l) ->
+  | Pstr_value (sf, rf, l) ->
       (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
-      pp f "@[<2>%a@]" (bindings ctxt) (rf,l)
+      pp f "@[<2>%a@]" (bindings ctxt) (sf, rf,l)
   | Pstr_typext te -> type_extension ctxt f te
   | Pstr_exception ed -> exception_declaration ctxt f ed
-  | Pstr_module x ->
+  | Pstr_module (sf, x) ->
       let rec module_helper me =
         match me.pmod_desc with
         | Pmod_functor(s,mt,me') when me.pmod_attributes = [] ->
@@ -1136,7 +1150,8 @@ and structure_item ctxt f x =
             module_helper me'
         | _ -> me
       in
-      pp f "@[<hov2>module %s%a@]%a"
+      pp f "@[<hov2>%amodule %s%a@]%a"
+        static_flag sf
         x.pmb_name.txt
         (fun f me ->
            let me = module_helper me in
@@ -1213,7 +1228,7 @@ and structure_item ctxt f x =
       pp f "@[<hov2>include@ %a@]%a"
         (module_expr ctxt) incl.pincl_mod
         (item_attributes ctxt) incl.pincl_attributes
-  | Pstr_recmodule decls -> (* 3.07 *)
+  | Pstr_recmodule (sf, decls) -> (* 3.07 *)
       let aux f = function
         | ({pmb_expr={pmod_desc=Pmod_constraint (expr, typ)}} as pmb) ->
             pp f "@[<hov2>@ and@ %s:%a@ =@ %a@]%a" pmb.pmb_name.txt
@@ -1224,7 +1239,8 @@ and structure_item ctxt f x =
       in
       begin match decls with
       | ({pmb_expr={pmod_desc=Pmod_constraint (expr, typ)}} as pmb) :: l2 ->
-          pp f "@[<hv>@[<hov2>module@ rec@ %s:%a@ =@ %a@]%a@ %a@]"
+          pp f "@[<hv>@[<hov2>%a module@ rec@ %s:%a@ =@ %a@]%a@ %a@]"
+            static_flag sf
             pmb.pmb_name.txt
             (module_type ctxt) typ
             (module_expr ctxt) expr

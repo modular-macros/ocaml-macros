@@ -122,6 +122,8 @@ type error =
   | Not_an_extension_constructor
   | Literal_overflow of string
   | Unknown_literal of string * char
+  | Phase of Path.t * int * int
+  | Staging of Path.t * int * int
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
