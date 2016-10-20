@@ -1092,5 +1092,7 @@ module Exp = struct
 
 end
 
+(*
 external ast_to_expr : Exp.t -> 'a expr = "%identity"
+*)
 
