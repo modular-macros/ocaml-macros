@@ -92,7 +92,7 @@ bootstrap:
 	$(MAKE) all
 	$(MAKE) compare
 
-LIBFILES=stdlib.cma std_exit.cmo *.cmi *.cmm camlheader
+LIBFILES=stdlib.cma std_exit.cmo *.cmi camlheader
 
 # Start up the system from the distribution compiler
 coldstart:
