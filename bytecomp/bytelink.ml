@@ -813,6 +813,7 @@ let link ppf phase objfiles output_name =
   end
 
 let load_compunit ppf phase ic filename compunit =
+  Printf.eprintf "load_compunit %s\n%!" filename;
   check_consistency ppf filename compunit;
   seek_in ic compunit.cu_pos;
   let code_size = compunit.cu_codesize + 8 in
@@ -832,17 +833,23 @@ let load_compunit ppf phase ic filename compunit =
     end in
   Meta.add_debug_info code code_size events;
   begin try
+    Printf.eprintf "before reify\n%!";
     ignore ((Meta.reify_bytecode code code_size) ());
+    Printf.eprintf "after reify\n%!";
+    Printf.eprintf "end of load_compunit\n%!"
   with exn ->
     Symtable.restore_state initial_symtable;
     raise exn
   end
 
 let load_object ppf phase filename compunit =
+  Printf.eprintf "load_object %s\n%!" filename;
   let inchan = open_in_bin filename in
+  Printf.eprintf "load_object: after open_in_bin\n%!";
   try
     load_compunit ppf phase inchan filename compunit;
-    close_in inchan
+    close_in inchan;
+    Printf.eprintf "end of load_object\n%!"
   with
   | Symtable.Error msg ->
       close_in inchan; raise (Error (Symbol_error (filename, msg)))

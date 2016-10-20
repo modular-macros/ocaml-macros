@@ -259,10 +259,14 @@ let data_global_map () =
 
 let update_global_table () =
   let ng = !global_table.num_cnt in
+  Printf.eprintf "update_global_table with ng = %d\n%!" ng;
   if ng > Array.length(Meta.global_data()) then Meta.realloc_global_data ng;
   let glob = Meta.global_data() in
+  Printf.eprintf "update_global_table: length glob = %d\n%!"
+    (Array.length glob);
   List.iter
     (fun (slot, cst) ->
+      Printf.eprintf "update_global_table: fun %d\n%!" slot;
       glob.(slot) <- transl_const cst)
     !literal_table;
   literal_table := []
