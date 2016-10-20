@@ -143,7 +143,7 @@ let rec required_by_reloc phase = function
 (* Returns the globals required by compilation unit, excluding those
    already defined in the symbol table and those containing a dot (which are
    not really global but should be defined in the unit). *)
-let rec required_globals phase compunit =
+let required_globals phase compunit =
   required_by_reloc phase compunit.cu_reloc @ compunit.cu_required_globals
 
 (* [unit_of_objfile phase filename] looks up the file name [filename] in the
@@ -284,7 +284,7 @@ let mark_needed_reloc phase reloc =
         id
       with Not_found -> set_status_id Missing id; id
   in
-  List.map mark (required_globals phase reloc)
+  List.map mark (required_by_reloc phase reloc)
 
 (* Returns the topologically ordered list of units to load (first unit to be
    loaded first), searching for missing dependencies in the include path. *)
@@ -319,7 +319,7 @@ let sort_and_discover phase tolink =
       let acc' =
         List.fold_left (fun ordered id ->
           complete ordered [id]
-        ) acc (required_globals phase compunit.cu_reloc)
+        ) acc (required_globals phase compunit)
       in
       set_status_id Visited id;
       complete (descr :: acc') rem

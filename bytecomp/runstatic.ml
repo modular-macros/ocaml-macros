@@ -32,7 +32,8 @@ let run_static ppf lam =
       let modulename = String.capitalize_ascii @@
         Filename.chop_extension @@ Filename.basename objfilename in
       let bytecode = Bytegen.compile_implementation modulename lam in
-      Emitcode.to_file oc modulename objfilename bytecode;
+      Emitcode.to_file oc modulename objfilename
+        ~required_globals:Ident.Set.empty bytecode;
       close_out oc;
       let execfilename = temp_file "camlstatic" "" in
       Bytelink.link ppf 1 (!Clflags.static_deps @ [objfilename]) execfilename;

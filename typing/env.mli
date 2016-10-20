@@ -191,8 +191,8 @@ val add_extension: check:bool -> Ident.t -> extension_constructor -> t -> t
 val add_module: ?arg:bool -> Ident.t -> module_type -> t -> t
   (* the phase of the new module is set to the current phase of the
      environment. *)
-val add_module_with_phase: ?arg:bool -> check:bool -> phase -> Ident.t ->
-  module_type -> t -> t
+val add_module_with_phase: ?arg:bool -> phase -> Ident.t -> module_type
+  -> t -> t
 val add_module_declaration: ?arg:bool -> check:bool -> phase -> Ident.t
   -> module_declaration -> t -> t
 val add_modtype: Ident.t -> modtype_declaration -> t -> t

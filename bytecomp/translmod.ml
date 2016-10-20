@@ -39,7 +39,7 @@ let item_splices = ref ([] : lambda list)
 let transl_toplevel_splice exp =
   List.fold_left
     (fun lam id -> Translquote.wrap_local exp.exp_loc id.txt
-      (Location.mkloc (Ident.name id.txt) id.loc) lam)
+      (Location.mkloc (Ident.name id.txt) (id : Ident.t loc).loc) lam)
     (Translcore.transl_exp exp)
     (Env.cross_stage_ids exp.exp_env)
 
@@ -100,12 +100,13 @@ let rec insert_splice_array module_id splice_ids = function
       let splice_body =
         Lprim (Pmakearray (Paddrarray, Mutable),
           List.map
-          (fun id ->
-            Translquote.transl_close_expression Location.none (Lvar id))
-          splice_ids)
+            (fun id ->
+              Translquote.transl_close_expression Location.none (Lvar id))
+            splice_ids,
+          Location.none)
       in
       Lsequence (
-        Lprim (Psetglobal module_id, [block]),
+        Lprim (Psetglobal module_id, [block], Location.none),
         splice_body)
 
 (* Wrap a piece of lambda code so that, if the original code returned a value,
@@ -127,8 +128,8 @@ let wrap_marshal lam =
   let channel_id = Ident.create "channel" in
   let marshal_to_channel =
     Lprim (Pfield 0, (* ^Marshal.to_channel *)
-      [Lprim (Pgetglobal (Ident.create_persistent "^Marshal"), [])]
-    )
+      [Lprim (Pgetglobal (Ident.create_persistent "^Marshal"), [], Location.none)],
+      Location.none)
   in
   let get_filename =
     (* ^Sys.argv.[1] *)
@@ -138,17 +139,18 @@ let wrap_marshal lam =
           ~name:"caml_array_get" ~arity:2 ~alloc:true (* ? *)),
       [Lprim
         (Pfield 0, (* ^Sys.argv *)
-          [Lprim (Pgetglobal (Ident.create_persistent "^Sys"), [])]);
+          [Lprim (Pgetglobal (Ident.create_persistent "^Sys"), [], Location.none)],
+        Location.none);
         (* 1 *)
         Lconst (Const_base (Const_int 1))
-      ]
-    )
+      ],
+      Location.none)
   in
   let open_channel =
     apply
       (Lprim (Pfield 43, (* ^Pervasives.open_out_bin *)
-        [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])]
-      ))
+        [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [], Location.none)],
+        Location.none))
       [get_filename]
   in
   let write_lam =
@@ -159,8 +161,8 @@ let wrap_marshal lam =
           [Lvar channel_id; Lvar lam_id; Lconst (Const_pointer 0)],
         apply
           (Lprim (Pfield 58, (* ^Pervasives.close_out *)
-            [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [])]
-          ))
+            [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [], Location.none)],
+            Location.none))
           [Lvar channel_id]
       )
     )
@@ -844,11 +846,17 @@ let transl_implementation module_name target_phase (str, cc) =
     let module_id = Ident.create_persistent module_name in
     Translcore.set_transl_splices None;
     splice_ids := [];
-    let (mod_body, _size) =
-      transl_structure loc [] cc (Some (Path.Pident module_id))
+    let (mod_body, size) =
+      transl_structure Location.none [] cc (Some (Path.Pident module_id))
         Static transl_item_splices str.str_final_env str.str_items
     in
-    insert_splice_array module_id !splice_ids mod_body
+    let code =
+      insert_splice_array module_id !splice_ids mod_body
+    in
+    { module_ident = module_id;
+      main_module_block_size = size;
+      required_globals = required_globals ~flambda:false code;
+      code = code }
   else
     let implementation =
       transl_implementation_flambda module_name (str, cc)
@@ -1034,10 +1042,6 @@ let transl_store_structure target_phase glob map prims str =
               Lsequence(subst_lambda subst lam,
                         transl_store rootpath (add_idents false ids subst) rem)
             else
-              let placeholders =
-                List.map (fun _ -> Ident.create_persistent "0")
-                  (let_bound_idents pat_expr_list)
-              in
               transl_store rootpath subst rem
         | Tstr_primitive descr ->
             begin if target_phase = Nonstatic then
@@ -1174,7 +1178,7 @@ let transl_store_structure target_phase glob map prims str =
                 (List.map (fun _ -> ident_zero) ids) subst) rem
             else
               let lam =
-                Lletrec(class_bindings, Location.none store_idents ids)
+                Lletrec(class_bindings, store_idents Location.none ids)
               in
               Lsequence(subst_lambda subst lam,
                         transl_store rootpath (add_idents false ids subst) rem)
@@ -1489,10 +1493,11 @@ let rec insert_splice_array_toplevel splice_ids = function
       let splice_body =
         Lprim (Pmakearray (Paddrarray, Mutable),
           List.map
-          (fun id ->
-            Translquote.transl_close_expression Location.none
-            (Lvar id))
-          (List.rev splice_ids))
+            (fun id ->
+              Translquote.transl_close_expression Location.none
+              (Lvar id))
+            (List.rev splice_ids),
+          Location.none)
       in
       Lsequence (
         other,
@@ -1538,7 +1543,7 @@ let transl_package component_names target_name coercion =
     Lprim(Pmakeblock(0, Immutable, None),
           List.map get_component component_names, Location.none) in
   Lprim(Psetglobal target_name,
-        [apply_coercion Location.none Nonstatic Strict coercion components]
+        [apply_coercion Location.none Nonstatic Strict coercion components],
         Location.none)
   (*
   let components =

@@ -1855,10 +1855,10 @@ and add_cltype id ty env =
   store_cltype None id (Pident id) ty env env
 
 let add_module_with_phase ?arg phase id mty env =
-  add_module_declaration ?arg phase id (md mty) env
+  add_module_declaration ?arg ~check:false phase id (md mty) env
 
 let add_module ?arg id mty env =
-  add_module_with_phase ~check ?arg env.cur_env_phase id mty env
+  add_module_with_phase ?arg env.cur_env_phase id mty env
 
 let add_local_type path info env =
   { env with
