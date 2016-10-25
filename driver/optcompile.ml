@@ -85,12 +85,12 @@ let implementation ~backend ppf sourcefile outputprefix =
     in
     if not !Clflags.print_types then begin
       (* Run static code *)
-      let stat_lam =
+      let stat_prog =
         Translmod.transl_implementation modulename Static (typedtree, coercion)
       in
       let sstat_lam =
         print_if ppf Clflags.dump_lambda Printlambda.lambda @@
-        Simplif.simplify_lambda stat_lam in
+        Simplif.simplify_lambda sourcefile stat_prog.Lambda.code in
       let w_stat_lam =
         if Sys.backend_type = Sys.Native then
           Translmod.wrap_marshal sstat_lam
@@ -153,7 +153,8 @@ let implementation ~backend ppf sourcefile outputprefix =
         let s_oc = open_out_bin static_objfile in
         try
           stat_bytecode
-          ++ (Emitcode.to_file s_oc modulename static_objfile);
+          ++ (Emitcode.to_file s_oc modulename static_objfile
+              ~required_globals:Ident.Set.empty);
           close_out s_oc
         with x ->
           close_out s_oc;
