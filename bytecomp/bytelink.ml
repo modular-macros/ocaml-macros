@@ -124,12 +124,17 @@ let rec get_unit_id = function
       if has_dot id then get_unit_id rem else id
   | _ :: rem -> get_unit_id rem
 
-let status_table = ref Ident.empty
+module IdentMap = Hashtbl.Make(struct
+  type t = Ident.t
+  let equal x y = Ident.compare x y = 0
+  let hash = Hashtbl.hash
+end)
+let status_table = IdentMap.create 17
 
-let get_status id = Ident.find_same id !status_table
+let get_status id = IdentMap.find status_table id
 
 let set_status_id status id =
-  status_table := Ident.add id status !status_table
+  IdentMap.replace status_table id status
 
 let rec required_by_reloc phase = function
   | [] -> []
@@ -717,13 +722,13 @@ let link ppf phase objfiles output_name =
   let tolink = sort_and_discover phase tolink in
   (* Check if required modules were not provided *)
   let missing_modules =
-    Ident.fold_all
+    IdentMap.fold
       (fun id status acc -> match status with
-      | Missing | Needed _ | Available _ -> id :: acc
-      | Visited -> acc
-      | _ -> assert false
+      | Missing | Needed _ -> id :: acc
+      | Visited | Available _ -> acc
+      | Being_visited -> Printf.eprintf "%s\n%!" (Ident.name id); assert false
       )
-      !status_table []
+      status_table []
   in
   begin
     match missing_modules with
@@ -970,7 +975,7 @@ let reset () =
   lib_ccobjs := [];
   lib_ccopts := [];
   lib_dllibs := [];
-  status_table := Ident.empty;
+  IdentMap.clear status_table;
   Consistbl.clear crc_interfaces;
   implementations_defined := [];
   debug_info := [];
