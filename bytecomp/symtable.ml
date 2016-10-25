@@ -144,57 +144,51 @@ let output_primitive_table outchan =
 
 (* Initialization for batch linking *)
 
-let initialized = ref false
-
 let init () =
-  if !initialized then ()
-  else begin
-    (* Enter the predefined exceptions *)
-    Array.iteri
-      (fun i name ->
-        let id =
-          try List.assoc name Predef.builtin_values
-          with Not_found -> fatal_error "Symtable.init" in
-        let c = slot_for_setglobal (0, id) in
-        let cst = Const_block(Obj.object_tag,
-                              [Const_base(Const_string (name, None));
-                               Const_base(Const_int (-i-1))
-                              ])
-        in
-        literal_table := (c, cst) :: !literal_table;
-        (* Add the lifted version of this literal as a pointer to the unlifted
-           version (the only one actually existing in the runtime *)
-        let lifted_id = Ident.lift_persistent id in
-        global_table := { !global_table with
-          num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
-      Runtimedef.builtin_exceptions;
-    (* Initialize the known C primitives *)
-    if String.length !Clflags.use_prims > 0 then begin
-        let ic = open_in !Clflags.use_prims in
-        try
-          while true do
-            set_prim_table (input_line ic)
-          done
-        with End_of_file -> close_in ic
-           | x -> close_in ic; raise x
-    end else if String.length !Clflags.use_runtime > 0 then begin
-      let primfile = Filename.temp_file "camlprims" "" in
+  (* Enter the predefined exceptions *)
+  Array.iteri
+    (fun i name ->
+      let id =
+        try List.assoc name Predef.builtin_values
+        with Not_found -> fatal_error "Symtable.init" in
+      let c = slot_for_setglobal (0, id) in
+      let cst = Const_block(Obj.object_tag,
+                            [Const_base(Const_string (name, None));
+                             Const_base(Const_int (-i-1))
+                            ])
+      in
+      literal_table := (c, cst) :: !literal_table;
+      (* Add the lifted version of this literal as a pointer to the unlifted
+         version (the only one actually existing in the runtime *)
+      let lifted_id = Ident.lift_persistent id in
+      global_table := { !global_table with
+        num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
+    Runtimedef.builtin_exceptions;
+  (* Initialize the known C primitives *)
+  if String.length !Clflags.use_prims > 0 then begin
+      let ic = open_in !Clflags.use_prims in
       try
-        if Sys.command(Printf.sprintf "%s -p > %s"
-                                      !Clflags.use_runtime primfile) <> 0
-        then raise(Error(Wrong_vm !Clflags.use_runtime));
-        let ic = open_in primfile in
-        try
-          while true do
-            set_prim_table (input_line ic)
-          done
-        with End_of_file -> close_in ic; remove_file primfile
-           | x -> close_in ic; raise x
-      with x -> remove_file primfile; raise x
-    end else begin
-      Array.iter set_prim_table Runtimedef.builtin_primitives
-    end;
-    initialized := true
+        while true do
+          set_prim_table (input_line ic)
+        done
+      with End_of_file -> close_in ic
+         | x -> close_in ic; raise x
+  end else if String.length !Clflags.use_runtime > 0 then begin
+    let primfile = Filename.temp_file "camlprims" "" in
+    try
+      if Sys.command(Printf.sprintf "%s -p > %s"
+                                    !Clflags.use_runtime primfile) <> 0
+      then raise(Error(Wrong_vm !Clflags.use_runtime));
+      let ic = open_in primfile in
+      try
+        while true do
+          set_prim_table (input_line ic)
+        done
+      with End_of_file -> close_in ic; remove_file primfile
+         | x -> close_in ic; raise x
+    with x -> remove_file primfile; raise x
+  end else begin
+    Array.iter set_prim_table Runtimedef.builtin_primitives
   end
 
 (* Relocate a block of object bytecode *)
@@ -388,65 +382,61 @@ let assign_global_value id v =
 (* Initialize the linker for running static code *)
 
 let init_static () =
-  if !initialized then []
-  else begin
-    if Sys.backend_type = Sys.Bytecode then
-      (begin try
-        let sect = read_sections () in
-        (* Locations of globals *)
-        global_table := saved_to_runtime
-          (Obj.magic (sect.read_struct "SYMB") : Ident.t numtable);
-        (* Primitives *)
-        let prims = sect.read_string "PRIM" in
-        c_prim_table := empty_numtable;
-        let pos = ref 0 in
-        while !pos < String.length prims do
-          let i = String.index_from prims !pos '\000' in
-          set_prim_table (String.sub prims !pos (i - !pos));
-          pos := i + 1
-        done;
-        (* DLL initialization *)
-        let dllpath = try sect.read_string "DLPT" with Not_found -> "" in
-        Dll.init_toplevel dllpath;
-        let crc =
-          try
-            (Obj.magic (sect.read_struct "CRCS") : (string * Digest.t option) list)
-          with Not_found -> []
-        in
-        sect.close_reader();
-        (* Add built-in exceptions *)
-        Array.iteri
-          (fun i name ->
-            let id =
-              try List.assoc name Predef.builtin_values
-              with Not_found -> fatal_error "Symtable.init" in
-            if not (is_global_defined (0,id)) then begin
-              let c = slot_for_setglobal (0, id) in
-              let cst = Const_block(Obj.object_tag,
-                              [Const_base(Const_string (name, None));
-                               Const_base(Const_int (-i-1))
-                              ])
-              in
-              literal_table := (c, cst) :: !literal_table
-            end;
-            (* Add lifted version *)
-            let c = get_global_position (0, id) in
-            let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
-            global_table := { !global_table with
-              num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
-          Runtimedef.builtin_exceptions;
-        Bytesections.reset ();
-        initialized := true;
-        crc
-      with Bytesections.Bad_magic_number | Not_found | Failure _ ->
-        fatal_error "Toplevel bytecode executable is corrupted"
-      end : (string * Digest.t option) list)
-    else if Sys.backend_type = Sys.Native then begin
-      init ();
-      []
-    end
-    else assert false
+  if Sys.backend_type = Sys.Bytecode then
+    (begin try
+      let sect = read_sections () in
+      (* Locations of globals *)
+      global_table := saved_to_runtime
+        (Obj.magic (sect.read_struct "SYMB") : Ident.t numtable);
+      (* Primitives *)
+      let prims = sect.read_string "PRIM" in
+      c_prim_table := empty_numtable;
+      let pos = ref 0 in
+      while !pos < String.length prims do
+        let i = String.index_from prims !pos '\000' in
+        set_prim_table (String.sub prims !pos (i - !pos));
+        pos := i + 1
+      done;
+      (* DLL initialization *)
+      let dllpath = try sect.read_string "DLPT" with Not_found -> "" in
+      Dll.init_toplevel dllpath;
+      let crc =
+        try
+          (Obj.magic (sect.read_struct "CRCS") : (string * Digest.t option) list)
+        with Not_found -> []
+      in
+      sect.close_reader();
+      (* Add built-in exceptions *)
+      Array.iteri
+        (fun i name ->
+          let id =
+            try List.assoc name Predef.builtin_values
+            with Not_found -> fatal_error "Symtable.init" in
+          if not (is_global_defined (0,id)) then begin
+            let c = slot_for_setglobal (0, id) in
+            let cst = Const_block(Obj.object_tag,
+                            [Const_base(Const_string (name, None));
+                             Const_base(Const_int (-i-1))
+                            ])
+            in
+            literal_table := (c, cst) :: !literal_table
+          end;
+          (* Add lifted version *)
+          let c = get_global_position (0, id) in
+          let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
+          global_table := { !global_table with
+            num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
+        Runtimedef.builtin_exceptions;
+      Bytesections.reset ();
+      crc
+    with Bytesections.Bad_magic_number | Not_found | Failure _ ->
+      fatal_error "Toplevel bytecode executable is corrupted"
+    end : (string * Digest.t option) list)
+  else if Sys.backend_type = Sys.Native then begin
+    init ();
+    []
   end
+  else assert false
 
 (* Check that all globals referenced in the given patch list
    have been initialized already *)
