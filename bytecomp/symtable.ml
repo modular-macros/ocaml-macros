@@ -420,15 +420,17 @@ let init_static () =
             let id =
               try List.assoc name Predef.builtin_values
               with Not_found -> fatal_error "Symtable.init" in
-            if not (is_global_defined (0,id)) then
+            if not (is_global_defined (0,id)) then begin
               let c = slot_for_setglobal (0, id) in
               let cst = Const_block(Obj.object_tag,
                               [Const_base(Const_string (name, None));
                                Const_base(Const_int (-i-1))
                               ])
               in
-              literal_table := (c, cst) :: !literal_table;
+              literal_table := (c, cst) :: !literal_table
+            end;
             (* Add lifted version *)
+            let c = get_global_position (0, id) in
             let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
             global_table := { !global_table with
               num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
