@@ -15,7 +15,7 @@
 let run_static ppf lam =
   let splices =
     if Sys.backend_type = Sys.Bytecode then begin
-      Symtable.init ();
+      ignore (Symtable.init_static ());
       let (init_code, fun_code) = Bytegen.compile_phrase lam in
       let (code, code_size, reloc, _) =
         Emitcode.to_memory init_code fun_code
