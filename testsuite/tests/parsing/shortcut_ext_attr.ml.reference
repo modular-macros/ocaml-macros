@@ -1,11 +1,6 @@
 [
-<<<<<<< HEAD
   structure_item (shortcut_ext_attr.ml[3,19+0]..[24,570+31])
-    Pstr_value Nonrec
-=======
-  structure_item (shortcut_ext_attr.ml[3,19+0]..[23,554+31])
     Pstr_value Nonstatic Nonrec
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
     [
       <def>
         pattern (shortcut_ext_attr.ml[3,19+4]..[3,19+6])
@@ -510,17 +505,10 @@
                 Ptyp_package "M" (shortcut_ext_attr.ml[55,1153+20]..[55,1153+21])
                 []
     ]
-<<<<<<< HEAD
   structure_item (shortcut_ext_attr.ml[58,1202+0]..[61,1258+22])
-    Pstr_module
+    Pstr_module Nonstatic
     "M" (shortcut_ext_attr.ml[58,1202+7]..[58,1202+8])
       module_expr (shortcut_ext_attr.ml[59,1213+2]..[61,1258+22])
-=======
-  structure_item (shortcut_ext_attr.ml[57,1186+0]..[60,1242+22])
-    Pstr_module Nonstatic
-    "M" (shortcut_ext_attr.ml[57,1186+7]..[57,1186+8])
-      module_expr (shortcut_ext_attr.ml[58,1197+2]..[60,1242+22])
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
         attribute "foo"
           []
         Pmod_functor "M" (shortcut_ext_attr.ml[59,1213+17]..[59,1213+18])
@@ -563,13 +551,8 @@
   structure_item (shortcut_ext_attr.ml[70,1427+0]..[71,1447+15]) ghost
     Pstr_extension "foo"
     [
-<<<<<<< HEAD
       structure_item (shortcut_ext_attr.ml[70,1427+0]..[71,1447+15])
-        Pstr_value Nonrec
-=======
-      structure_item (shortcut_ext_attr.ml[69,1411+0]..[70,1431+15])
         Pstr_value Nonstatic Nonrec
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
         [
           <def>
               attribute "foo"
@@ -716,15 +699,9 @@
   structure_item (shortcut_ext_attr.ml[82,1631+0]..[82,1631+22]) ghost
     Pstr_extension "foo"
     [
-<<<<<<< HEAD
       structure_item (shortcut_ext_attr.ml[82,1631+0]..[82,1631+22])
-        Pstr_module
-        "M" (shortcut_ext_attr.ml[82,1631+17]..[82,1631+18])
-=======
-      structure_item (shortcut_ext_attr.ml[81,1615+0]..[81,1615+22])
         Pstr_module Nonstatic
-        "M" (shortcut_ext_attr.ml[81,1615+17]..[81,1615+18])
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
+        "M" (shortcut_ext_attr.ml[82,1631+17]..[82,1631+18])
           attribute "foo"
             []
           module_expr (shortcut_ext_attr.ml[82,1631+21]..[82,1631+22])
@@ -733,13 +710,8 @@
   structure_item (shortcut_ext_attr.ml[83,1654+0]..[84,1685+19]) ghost
     Pstr_extension "foo"
     [
-<<<<<<< HEAD
       structure_item (shortcut_ext_attr.ml[83,1654+0]..[84,1685+19])
-        Pstr_recmodule
-=======
-      structure_item (shortcut_ext_attr.ml[82,1638+0]..[83,1669+19])
         Pstr_recmodule Nonstatic
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
         [
           "M" (shortcut_ext_attr.ml[83,1654+21]..[83,1654+22])
             attribute "foo"
@@ -796,15 +768,9 @@
           signature_item (shortcut_ext_attr.ml[92,1814+2]..[92,1814+21]) ghost
             Psig_extension "foo"
             [
-<<<<<<< HEAD
               signature_item (shortcut_ext_attr.ml[92,1814+2]..[92,1814+21])
-                Psig_value
-                value_description "x" (shortcut_ext_attr.ml[92,1814+16]..[92,1814+17]) (shortcut_ext_attr.ml[92,1814+2]..[92,1814+21])
-=======
-              signature_item (shortcut_ext_attr.ml[91,1798+2]..[91,1798+21])
                 Psig_value Nonstatic
-                value_description "x" (shortcut_ext_attr.ml[91,1798+16]..[91,1798+17]) (shortcut_ext_attr.ml[91,1798+2]..[91,1798+21])
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
+                value_description "x" (shortcut_ext_attr.ml[92,1814+16]..[92,1814+17]) (shortcut_ext_attr.ml[92,1814+2]..[92,1814+21])
                   attribute "foo"
                     []
                   core_type (shortcut_ext_attr.ml[92,1814+20]..[92,1814+21])
@@ -815,15 +781,9 @@
           signature_item (shortcut_ext_attr.ml[93,1836+2]..[93,1836+31]) ghost
             Psig_extension "foo"
             [
-<<<<<<< HEAD
               signature_item (shortcut_ext_attr.ml[93,1836+2]..[93,1836+31])
-                Psig_value
-                value_description "x" (shortcut_ext_attr.ml[93,1836+21]..[93,1836+22]) (shortcut_ext_attr.ml[93,1836+2]..[93,1836+31])
-=======
-              signature_item (shortcut_ext_attr.ml[92,1820+2]..[92,1820+31])
                 Psig_value Nonstatic
-                value_description "x" (shortcut_ext_attr.ml[92,1820+21]..[92,1820+22]) (shortcut_ext_attr.ml[92,1820+2]..[92,1820+31])
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
+                value_description "x" (shortcut_ext_attr.ml[93,1836+21]..[93,1836+22]) (shortcut_ext_attr.ml[93,1836+2]..[93,1836+31])
                   attribute "foo"
                     []
                   core_type (shortcut_ext_attr.ml[93,1836+25]..[93,1836+26])
@@ -910,13 +870,8 @@
           signature_item (shortcut_ext_attr.ml[101,1965+2]..[101,1965+24]) ghost
             Psig_extension "foo"
             [
-<<<<<<< HEAD
               signature_item (shortcut_ext_attr.ml[101,1965+2]..[101,1965+24])
-                Psig_module "M" (shortcut_ext_attr.ml[101,1965+19]..[101,1965+20])
-=======
-              signature_item (shortcut_ext_attr.ml[100,1949+2]..[100,1949+24])
-                Psig_module Nonstatic "M" (shortcut_ext_attr.ml[100,1949+19]..[100,1949+20])
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
+                Psig_module Nonstatic "M" (shortcut_ext_attr.ml[101,1965+19]..[101,1965+20])
                   attribute "foo"
                     []
                 module_type (shortcut_ext_attr.ml[101,1965+23]..[101,1965+24])
@@ -925,13 +880,8 @@
           signature_item (shortcut_ext_attr.ml[102,1990+2]..[103,2019+17]) ghost
             Psig_extension "foo"
             [
-<<<<<<< HEAD
               signature_item (shortcut_ext_attr.ml[102,1990+2]..[103,2019+17])
-                Psig_recmodule
-=======
-              signature_item (shortcut_ext_attr.ml[101,1974+2]..[102,2003+17])
                 Psig_recmodule Nonstatic
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
                 [
                   "M" (shortcut_ext_attr.ml[102,1990+23]..[102,1990+24])
                     attribute "foo"
@@ -948,13 +898,8 @@
           signature_item (shortcut_ext_attr.ml[104,2037+2]..[104,2037+24]) ghost
             Psig_extension "foo"
             [
-<<<<<<< HEAD
               signature_item (shortcut_ext_attr.ml[104,2037+2]..[104,2037+24])
-                Psig_module "M" (shortcut_ext_attr.ml[104,2037+19]..[104,2037+20])
-=======
-              signature_item (shortcut_ext_attr.ml[103,2021+2]..[103,2021+24])
-                Psig_module Nonstatic "M" (shortcut_ext_attr.ml[103,2021+19]..[103,2021+20])
->>>>>>> b5edc60... This commit is the result of squashing together a bunch of commits from the old,
+                Psig_module Nonstatic "M" (shortcut_ext_attr.ml[104,2037+19]..[104,2037+20])
                   attribute "foo"
                     []
                 module_type (shortcut_ext_attr.ml[104,2037+23]..[104,2037+24])
