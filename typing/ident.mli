@@ -89,11 +89,11 @@ val unlift_string: string -> string
     is a lifting symbol. *)
 val lifted: t -> bool
 
-(** [lift_persistent id] returns a persistend, lifted version of [id] if [id] is
-    not already lifted, otherwise returns [id]. *)
-val lift_persistent: t -> t
+(** [lift id] adds a lifting symbol (if not already present) to the name of the
+    id and conserves its other characteristics (flag and stamp). *)
+val lift: t -> t
 
-(** [unlift_persistent id] returns a persistend, unlifted version of [id] if
-    [id] is not already unlifted, otherwise returns [id]. *)
-val unlift_persistent: t -> t
+(** [unlift id] removes the lifting symbol (if any) from the name of the
+    id and conserves its other characteristics (flag and stamp). *)
+val unlift: t -> t
 

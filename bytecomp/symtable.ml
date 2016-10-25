@@ -160,7 +160,7 @@ let init () =
       literal_table := (c, cst) :: !literal_table;
       (* Add the lifted version of this literal as a pointer to the unlifted
          version (the only one actually existing in the runtime *)
-      let lifted_id = Ident.lift_persistent id in
+      let lifted_id = Ident.lift id in
       global_table := { !global_table with
         num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
     Runtimedef.builtin_exceptions;
@@ -364,7 +364,7 @@ let init_toplevel () =
         let id =
           try List.assoc name Predef.builtin_values
           with Not_found -> fatal_error "Symtable.init" in
-        let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
+        let lifted_id = Ident.lift id in
         let pos = get_global_position (0, id) in
         global_table := { !global_table with
           num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
@@ -423,7 +423,7 @@ let init_static () =
           end;
           (* Add lifted version *)
           let c = get_global_position (0, id) in
-          let lifted_id = Ident.create_persistent ("^" ^ Ident.name id) in
+          let lifted_id = Ident.lift id in
           global_table := { !global_table with
             num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
         Runtimedef.builtin_exceptions;

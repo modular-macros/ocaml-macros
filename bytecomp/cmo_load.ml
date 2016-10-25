@@ -48,9 +48,9 @@ let load_compunit ic filename ppf compunit before_ld after_ld on_failure
   let reloc_mapper =
     if lift_globals then (function
        | (Reloc_setglobal id, n) ->
-           (Reloc_setglobal (Ident.lift_persistent id), n)
+           (Reloc_setglobal (Ident.lift id), n)
        | (Reloc_getglobal id, n) ->
-           (Reloc_getglobal (Ident.lift_persistent id), n)
+           (Reloc_getglobal (Ident.lift id), n)
        | other -> other
       )
     else (fun x -> x)

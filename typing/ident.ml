@@ -261,11 +261,12 @@ let unlift_string str =
 
 let lifted id = lifted_string id.name
 
-let lift_persistent id =
+let lift id =
   if lifted id then id
-  else create_persistent @@ lift_string @@ name id
+  else { id with name = lift_string id.name }
 
-let unlift_persistent id =
-  if lifted id then create_persistent @@ unlift_string @@ name id
+let unlift id =
+  if lifted id then
+    { id with name = unlift_string id.name }
   else id
 

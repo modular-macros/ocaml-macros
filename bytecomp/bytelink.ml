@@ -102,9 +102,9 @@ type global_status =
 let rec lift_reloc = function
   | [] -> []
   | (Reloc_getglobal id, pos) :: rem ->
-      (Reloc_getglobal (Ident.lift_persistent id), pos) :: lift_reloc rem
+      (Reloc_getglobal (Ident.lift id), pos) :: lift_reloc rem
   | (Reloc_setglobal id, pos) :: rem ->
-      (Reloc_setglobal (Ident.lift_persistent id), pos) :: lift_reloc rem
+      (Reloc_setglobal (Ident.lift id), pos) :: lift_reloc rem
   | x :: rem -> x :: lift_reloc rem
 
 let lift_cu_globals cu =
@@ -140,7 +140,7 @@ let rec required_by_reloc phase = function
   | [] -> []
   | (Reloc_getglobal id, _pos) :: rem ->
       if Symtable.is_global_defined (phase,id) || has_dot id
-          || Array.mem (Ident.name id) Runtimedef.builtin_exceptions then
+          || Ident.is_predef_exn id then
         required_by_reloc phase rem
       else id :: required_by_reloc phase rem
   | _ :: rem -> required_by_reloc phase rem
@@ -149,7 +149,11 @@ let rec required_by_reloc phase = function
    already defined in the symbol table and those containing a dot (which are
    not really global but should be defined in the unit). *)
 let required_globals phase compunit =
-  required_by_reloc phase compunit.cu_reloc @ compunit.cu_required_globals
+  required_by_reloc phase compunit.cu_reloc @
+    List.filter
+      (fun id ->
+        not (Symtable.is_global_defined (phase,id) || Ident.is_predef_exn id))
+      compunit.cu_required_globals
 
 (* [unit_of_objfile phase filename] looks up the file name [filename] in the
    include path and produces a [unit_descr] value for that file (or several
