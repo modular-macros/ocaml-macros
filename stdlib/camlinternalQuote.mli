@@ -37,6 +37,8 @@ module Constant : sig
 
   val floating : float -> t
 
+  val char : char -> t
+
   val string : string -> t
 
 end

@@ -764,6 +764,10 @@ module Constant = struct
     let open CamlinternalAST in
     Pconst_float (string_of_float f, None)
 
+  let char c =
+    let open CamlinternalAST in
+    Pconst_char c
+
   let string s =
     let open CamlinternalAST in
     Pconst_string (s, None)
