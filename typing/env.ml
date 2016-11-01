@@ -1006,7 +1006,7 @@ let lookup proj1 proj2 global ?loc lid env =
       let xl = List.filter global xl in
       match xl with
       | [] -> raise Not_found
-      | x :: _ -> fst x
+      | (x, slot) :: _ -> slot (); x
     end
   | Ldot(l, s) ->
       let (p, desc) = lookup_module_descr ?loc l env in
