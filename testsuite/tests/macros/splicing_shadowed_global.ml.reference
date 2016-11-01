@@ -1,5 +1,13 @@
 
-# val f : unit -> int list expr = <fun>
+# val x : int list expr =
+  << List.map Pervasives.pred (:: (1, (:: (2, (:: (3, [])))))) >>
+# val y : int option expr = << Some 42 >>
 #       module Pervasives : sig val pred : int -> int end
+#         type fake_option = Blah | Some of int
 #   val l : int list = [0; 1; 2]
+#         Characters 28-32:
+    | Blah -> false
+      ^^^^
+Error: This variant pattern is expected to have type int option
+       The constructor Blah does not belong to type option
 # 
