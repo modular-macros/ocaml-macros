@@ -2212,6 +2212,7 @@ let rec concat_longident lid1 =
   function
     Lident s | Lglobal s -> Ldot (lid1, s)
       (* Here the information "global" is lost, but it should be OK *)
+  | Lfrommacro (lid2, s) -> Lfrommacro (concat_longident lid1 lid2, s)
   | Ldot (lid2, s) -> Ldot (concat_longident lid1 lid2, s)
   | Lapply (lid2, lid) -> Lapply (concat_longident lid1 lid2, lid)
 

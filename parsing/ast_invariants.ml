@@ -29,6 +29,7 @@ let complex_id loc = err loc "Functor application not allowed here."
 let simple_longident id =
   let rec is_simple = function
     | Longident.Lident _ | Longident.Lglobal _ -> true
+    | Longident.Lfrommacro (id, _)
     | Longident.Ldot (id, _) -> is_simple id
     | Longident.Lapply _ -> false
   in

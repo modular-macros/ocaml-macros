@@ -68,6 +68,7 @@ let rec instrument_result env name ppf clos_typ =
         | Lglobal s -> Lglobal(s ^ "*")
         | Lident s -> Lident(s ^ "*")
         | Ldot(lid, s) -> Ldot(lid, s ^ "*")
+        | Lfrommacro _ -> assert false
         | Lapply _ -> fatal_error "Trace.instrument_result" in
       let trace_res = instrument_result env starred_name ppf t2 in
       (fun clos_val ->

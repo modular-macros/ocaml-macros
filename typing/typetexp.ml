@@ -91,6 +91,7 @@ let rec narrow_unbound_lid_error : 'a. _ -> _ -> _ -> _ -> 'a =
           raise (Error (loc, env, Cannot_scrape_alias(mlid, p)))
       | _ -> ()
       end
+  | Longident.Lfrommacro _ -> assert false
   | Longident.Lapply (flid, mlid) ->
       check_module flid;
       let fmd = Env.find_module (Env.lookup_module ~load:true flid env) env in
@@ -402,6 +403,7 @@ let rec transl_type env policy styp =
             match lid.txt with
               Longident.Lident s
             | Longident.Lglobal s    -> Longident.Lident ("#" ^ s)
+            | Longident.Lfrommacro _ -> assert false
             | Longident.Ldot(r, s)   -> Longident.Ldot (r, "#" ^ s)
             | Longident.Lapply(_, _) -> fatal_error "Typetexp.transl_type"
           in
@@ -779,6 +781,7 @@ let spellcheck ppf fold env lid =
     | Longident.Lapply _ -> ()
     | Longident.Lident s | Longident.Lglobal s ->
        Misc.did_you_mean ppf (fun () -> choices ~path:None s)
+    | Longident.Lfrommacro _ -> ()
     | Longident.Ldot (r, s) ->
        Misc.did_you_mean ppf (fun () -> choices ~path:(Some r) s)
 

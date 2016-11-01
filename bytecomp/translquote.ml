@@ -327,9 +327,10 @@ let quote_variant_constructor env loc constr =
   let lid =
     match lid_of_type_path env constr.cstr_res with
     | None -> fatal_error "No global path for variant constructor"
-    | Some (Longident.Lident _)
+    | Some (Longident.Lident _) -> Longident.Lident constr.cstr_name
     | Some (Longident.Lglobal _) -> Longident.Lglobal constr.cstr_name
     | Some (Longident.Ldot(lid, _)) -> Longident.Ldot(lid, constr.cstr_name)
+    | Some (Longident.Lfrommacro _) -> assert false
     | Some (Longident.Lapply _) -> assert false
   in
   let lid = mkloc lid loc in
@@ -339,9 +340,10 @@ let quote_record_label env loc lbl =
   let lid =
     match lid_of_type_path env lbl.lbl_res with
     | None -> fatal_error "No global path for record label"
-    | Some (Longident.Lident _)
+    | Some (Longident.Lident _) -> Longident.Lident lbl.lbl_name
     | Some (Longident.Lglobal _) -> Longident.Lglobal lbl.lbl_name
     | Some (Longident.Ldot(lid, _)) -> Longident.Ldot(lid, lbl.lbl_name)
+    | Some (Longident.Lfrommacro _) -> assert false
     | Some (Longident.Lapply _) -> assert false
   in
   let lid = mkloc lid loc in

@@ -20,8 +20,15 @@ type t =
   | Ldot of t * string
   | Lapply of t * t
   | Lglobal of string
-      (* macros: [Lglobal] represents an identifier that can only be
-         interpreted as global, whatever is in scope *)
+      (* [Lglobal] represents an identifier that can only be interpreted as
+         global, whatever is in scope. It is used to avoid that global
+         identifiers be shadowed by local ones after macro expansion.
+         This variant should only be created by macros, and never by the
+         parser. *)
+  | Lfrommacro of t * int
+      (* Used to refer to an element of a path closure after macro expansion.
+         This variant should only be created by macros, and never by the
+         parser. *)
 
 val flatten: t -> string list
 val last: t -> string

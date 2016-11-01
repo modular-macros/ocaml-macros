@@ -48,9 +48,13 @@ let rec lookup_free p m =
 (* Returns the node corresponding to the structure at path p *)
 let rec lookup_map lid m =
   match lid with
-    Lident s | Lglobal s -> StringMap.find s m
+    Lident s -> StringMap.find s m
   | Ldot (l, s) -> StringMap.find s (get_map (lookup_map l m))
   | Lapply _    -> raise Not_found
+  | Lglobal _ | Lfrommacro _ ->
+      (* should not happen as these variants only appear after macro expansion
+       *)
+      assert false
 
 (* Collect free module identifiers in the a.s.t. *)
 
@@ -60,7 +64,7 @@ let add_names s =
   free_structure_names := StringSet.union s !free_structure_names
 
 let rec add_path bv ?(p=[]) = function
-  | Lident s | Lglobal s ->
+  | Lident s ->
       let free =
         try lookup_free (s::p) bv with Not_found -> StringSet.singleton s
       in
@@ -69,6 +73,10 @@ let rec add_path bv ?(p=[]) = function
       add_names free
   | Ldot(l, s) -> add_path bv ~p:(s::p) l
   | Lapply(l1, l2) -> add_path bv l1; add_path bv l2
+  | Lglobal _ | Lfrommacro _ ->
+      (* should not happen as these variants only appear after macro expansion
+       *)
+      assert false
 
 let open_module bv lid =
   match lookup_map lid bv with

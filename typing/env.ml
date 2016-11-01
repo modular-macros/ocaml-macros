@@ -908,6 +908,7 @@ let rec lookup_module_descr_aux ?loc lid env =
       | Structure_comps _ ->
           raise Not_found
       end
+  | Lfrommacro _ -> assert false
 
 and lookup_module_descr ?loc lid env =
   let (p, comps) as res = lookup_module_descr_aux ?loc lid env in
@@ -980,6 +981,7 @@ and lookup_module ~load ?loc lid env : Path.t =
       | Structure_comps _ ->
           raise Not_found
       end
+  | Lfrommacro _ -> assert false
 
 and find_phase path env =
   try
@@ -1019,6 +1021,8 @@ let lookup proj1 proj2 global ?loc lid env =
       end
   | Lapply _ ->
       raise Not_found
+  | Lfrommacro _ ->
+      assert false
 
 let lookup_all_simple proj1 proj2 shadow global ?loc lid env =
   match lid with
@@ -1057,6 +1061,7 @@ let lookup_all_simple proj1 proj2 shadow global ?loc lid env =
       end
   | Lapply _ ->
       raise Not_found
+  | Lfrommacro _ -> assert false
 
 let has_local_constraints env = not (PathMap.is_empty env.local_constraints)
 

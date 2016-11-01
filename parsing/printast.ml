@@ -38,6 +38,7 @@ let rec fmt_longident_aux f x =
   match x with
   | Longident.Lident (s) -> fprintf f "%s" s;
   | Longident.Lglobal s -> fprintf f "%s(*global*)" s;
+  | Longident.Lfrommacro (y, i) -> fprintf f "%a.(%d)" fmt_longident_aux y i;
   | Longident.Ldot (y, s) -> fprintf f "%a.%s" fmt_longident_aux y s;
   | Longident.Lapply (y, z) ->
       fprintf f "%a(%a)" fmt_longident_aux y fmt_longident_aux z;

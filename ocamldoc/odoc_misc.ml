@@ -75,6 +75,8 @@ let list_concat sep =
 let rec string_of_longident li =
   match li with
   | Longident.Lident s | Longident.Lglobal s -> s
+  | Longident.Lfrommacro(li, i) ->
+      string_of_longident li ^ ".(" ^ string_of_int i ^ ")"
   | Longident.Ldot(li, s) -> string_of_longident li ^ "." ^ s
   | Longident.Lapply(l1, l2) ->
       string_of_longident l1 ^ "(" ^ string_of_longident l2 ^ ")"

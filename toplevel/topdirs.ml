@@ -505,6 +505,7 @@ let show_prim to_sig ppf lid =
       | Longident.Lapply _ ->
           fprintf ppf "Invalid path %a@." Printtyp.longident lid;
           raise Exit
+      | Longident.Lfrommacro _ -> assert false
     in
     let id = Ident.create_persistent s in
     let sg = to_sig env loc id lid in

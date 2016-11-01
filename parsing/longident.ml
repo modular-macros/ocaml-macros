@@ -18,20 +18,25 @@ type t =
   | Ldot of t * string
   | Lapply of t * t
   | Lglobal of string
+  | Lfrommacro of t * int
+
+let field_to_string i = "(" ^ string_of_int i ^ ")"
 
 let rec flat accu = function
-    Lident s -> s :: accu
+    Lident s
+  | Lglobal s -> s :: accu
+  | Lfrommacro(lid, i) -> flat (field_to_string i :: accu) lid
   | Ldot(lid, s) -> flat (s :: accu) lid
   | Lapply(_, _) -> Misc.fatal_error "Longident.flat"
-  | Lglobal s -> s :: accu
 
 let flatten lid = flat [] lid
 
 let last = function
-    Lident s -> s
+    Lident s
+  | Lglobal s -> s
+  | Lfrommacro(_, i) -> field_to_string i
   | Ldot(_, s) -> s
   | Lapply(_, _) -> Misc.fatal_error "Longident.last"
-  | Lglobal s -> s
 
 let rec split_at_dots s pos =
   try
@@ -47,15 +52,17 @@ let parse s =
   | hd :: tl -> List.fold_left (fun p s -> Ldot(p, s)) (Lident hd) tl
 
 let rec is_lifted = function
-  | Lident s | Lglobal s -> String.length s <> 0 && s.[0] == '^'
+  | Lident s
+  | Lglobal s -> String.length s <> 0 && s.[0] == '^'
+  | Lfrommacro (id, _)
   | Ldot (id, _) -> is_lifted id
   | Lapply (id, _) -> is_lifted id
 
 let rec lift = function
   | Lident s as l ->
       if String.length s <> 0 && s.[0] == '^' then l else Lident ("^" ^ s)
-  | Ldot (id, s) -> Ldot (lift id, s)
-  | Lapply (_,_) -> Misc.fatal_error "Longident.lift on functor"
   | Lglobal s as l ->
       if String.length s <> 0 && s.[0] == '^' then l else Lglobal ("^" ^ s)
-
+  | Lfrommacro (id, s) -> Lfrommacro (lift id, s)
+  | Ldot (id, s) -> Ldot (lift id, s)
+  | Lapply (_,_) -> Misc.fatal_error "Longident.lift on functor"
