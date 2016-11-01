@@ -28,6 +28,7 @@ open Outcometree
 (* Print a long identifier *)
 
 let rec longident ppf = function
+  | Lglobal s -> fprintf ppf "%s(*global*)" s
   | Lident s -> pp_print_string ppf s
   | Ldot(p, s) -> fprintf ppf "%a.%s" longident p s
   | Lapply(p1, p2) -> fprintf ppf "%a(%a)" longident p1 longident p2

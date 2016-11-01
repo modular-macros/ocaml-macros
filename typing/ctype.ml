@@ -2210,7 +2210,8 @@ let package_subtype = ref (fun _ _ _ _ _ _ _ -> assert false)
 let rec concat_longident lid1 =
   let open Longident in
   function
-    Lident s -> Ldot (lid1, s)
+    Lident s | Lglobal s -> Ldot (lid1, s)
+      (* Here the information "global" is lost, but it should be OK *)
   | Ldot (lid2, s) -> Ldot (concat_longident lid1 lid2, s)
   | Lapply (lid2, lid) -> Lapply (concat_longident lid1 lid2, lid)
 

@@ -17,11 +17,13 @@ type t =
     Lident of string
   | Ldot of t * string
   | Lapply of t * t
+  | Lglobal of string
 
 let rec flat accu = function
     Lident s -> s :: accu
   | Ldot(lid, s) -> flat (s :: accu) lid
   | Lapply(_, _) -> Misc.fatal_error "Longident.flat"
+  | Lglobal s -> s :: accu
 
 let flatten lid = flat [] lid
 
@@ -29,6 +31,7 @@ let last = function
     Lident s -> s
   | Ldot(_, s) -> s
   | Lapply(_, _) -> Misc.fatal_error "Longident.last"
+  | Lglobal s -> s
 
 let rec split_at_dots s pos =
   try
@@ -44,7 +47,7 @@ let parse s =
   | hd :: tl -> List.fold_left (fun p s -> Ldot(p, s)) (Lident hd) tl
 
 let rec is_lifted = function
-  | Lident s -> String.length s <> 0 && s.[0] == '^'
+  | Lident s | Lglobal s -> String.length s <> 0 && s.[0] == '^'
   | Ldot (id, _) -> is_lifted id
   | Lapply (id, _) -> is_lifted id
 
@@ -53,4 +56,6 @@ let rec lift = function
       if String.length s <> 0 && s.[0] == '^' then l else Lident ("^" ^ s)
   | Ldot (id, s) -> Ldot (lift id, s)
   | Lapply (_,_) -> Misc.fatal_error "Longident.lift on functor"
+  | Lglobal s as l ->
+      if String.length s <> 0 && s.[0] == '^' then l else Lglobal ("^" ^ s)
 

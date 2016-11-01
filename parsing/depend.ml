@@ -48,7 +48,7 @@ let rec lookup_free p m =
 (* Returns the node corresponding to the structure at path p *)
 let rec lookup_map lid m =
   match lid with
-    Lident s    -> StringMap.find s m
+    Lident s | Lglobal s -> StringMap.find s m
   | Ldot (l, s) -> StringMap.find s (get_map (lookup_map l m))
   | Lapply _    -> raise Not_found
 
@@ -60,7 +60,7 @@ let add_names s =
   free_structure_names := StringSet.union s !free_structure_names
 
 let rec add_path bv ?(p=[]) = function
-  | Lident s ->
+  | Lident s | Lglobal s ->
       let free =
         try lookup_free (s::p) bv with Not_found -> StringSet.singleton s
       in

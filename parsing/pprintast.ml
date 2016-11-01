@@ -176,6 +176,7 @@ let paren: 'a . ?first:space_formatter -> ?last:space_formatter ->
 
 let rec longident f = function
   | Lident s -> protect_ident f s
+  | Lglobal s -> protect_ident f s
   | Ldot(y,s) -> protect_longident f longident y s
   | Lapply (y,s) ->
       pp f "%a(%a)" longident y longident s

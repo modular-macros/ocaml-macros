@@ -19,6 +19,9 @@ type t =
     Lident of string
   | Ldot of t * string
   | Lapply of t * t
+  | Lglobal of string
+      (* macros: [Lglobal] represents an identifier that can only be
+         interpreted as global, whatever is in scope *)
 
 val flatten: t -> string list
 val last: t -> string

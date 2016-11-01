@@ -80,7 +80,7 @@ let rec narrow_unbound_lid_error : 'a. _ -> _ -> _ -> _ -> 'a =
         raise (Error (loc, env, Illegal_reference_to_recursive_module))
   in
   begin match lid with
-  | Longident.Lident _ -> ()
+  | Longident.Lident _ | Longident.Lglobal _ -> ()
   | Longident.Ldot (mlid, _) ->
       check_module mlid;
       let md = Env.find_module (Env.lookup_module ~load:true mlid env) env in
@@ -400,7 +400,8 @@ let rec transl_type env policy styp =
         with Not_found -> try
           let lid2 =
             match lid.txt with
-              Longident.Lident s     -> Longident.Lident ("#" ^ s)
+              Longident.Lident s
+            | Longident.Lglobal s    -> Longident.Lident ("#" ^ s)
             | Longident.Ldot(r, s)   -> Longident.Ldot (r, "#" ^ s)
             | Longident.Lapply(_, _) -> fatal_error "Typetexp.transl_type"
           in
@@ -776,7 +777,7 @@ let spellcheck ppf fold env lid =
     Misc.spellcheck env name in
   match lid with
     | Longident.Lapply _ -> ()
-    | Longident.Lident s ->
+    | Longident.Lident s | Longident.Lglobal s ->
        Misc.did_you_mean ppf (fun () -> choices ~path:None s)
     | Longident.Ldot (r, s) ->
        Misc.did_you_mean ppf (fun () -> choices ~path:(Some r) s)

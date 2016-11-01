@@ -884,6 +884,10 @@ let rec lookup_module_descr_aux ?loc lid env =
         let ps = find_pers_struct s in
         (Pident(Ident.create_persistent s), ps.ps_comps)
       end
+  | Lglobal s ->
+      if s = !current_unit then raise Not_found;
+      let ps = find_pers_struct s in
+      (Pident (Ident.create_persistent s), ps.ps_comps)
   | Ldot(l, s) ->
       let (p, descr) = lookup_module_descr ?loc l env in
       begin match get_components descr with
@@ -942,6 +946,15 @@ and lookup_module ~load ?loc lid env : Path.t =
         end;
         p
       end
+  | Lglobal s ->
+      if s = !current_unit then raise Not_found;
+      let p = Pident(Ident.create_persistent s) in
+      if !Clflags.transparent_modules && not load then check_pers_struct s
+      else begin
+        let ps = find_pers_struct s in
+        report_deprecated ?loc p ps.ps_comps.deprecated
+      end;
+      p
   | Ldot(l, s) ->
       let (p, descr) = lookup_module_descr ?loc l env in
       begin match get_components descr with
@@ -983,10 +996,18 @@ and find_phase path env =
     | _ -> 0
     end
 
-let lookup proj1 proj2 ?loc lid env =
+let lookup proj1 proj2 global ?loc lid env =
   match lid with
     Lident s ->
       EnvTbl.find_name s (proj1 env)
+  | Lglobal s ->
+    begin
+      let xl = EnvTbl.find_all s (proj1 env) in
+      let xl = List.filter global xl in
+      match xl with
+      | [] -> raise Not_found
+      | x :: _ -> fst x
+    end
   | Ldot(l, s) ->
       let (p, desc) = lookup_module_descr ?loc l env in
       begin match get_components desc with
@@ -999,7 +1020,7 @@ let lookup proj1 proj2 ?loc lid env =
   | Lapply _ ->
       raise Not_found
 
-let lookup_all_simple proj1 proj2 shadow ?loc lid env =
+let lookup_all_simple proj1 proj2 shadow global ?loc lid env =
   match lid with
     Lident s ->
       let xl = EnvTbl.find_all s (proj1 env) in
@@ -1011,6 +1032,16 @@ let lookup_all_simple proj1 proj2 shadow ?loc lid env =
               (do_shadow (List.filter (fun (y, _) -> not (shadow x y)) xs))
       in
         do_shadow xl
+  | Lglobal s ->
+      let xl = EnvTbl.find_all s (proj1 env) in
+      let rec do_shadow =
+        function
+        | [] -> []
+        | ((x, f) :: xs) ->
+            (x, f) ::
+              (do_shadow (List.filter (fun (y, _) -> not (shadow x y)) xs))
+      in
+      List.filter global (do_shadow xl)
   | Ldot(l, s) ->
       let (_p, desc) = lookup_module_descr ?loc l env in
       begin match get_components desc with
@@ -1038,20 +1069,23 @@ let lbl_shadow _lbl1 _lbl2 = false
 
 let lookup_value =
     lookup (fun env -> env.values) (fun sc -> sc.comp_values)
+      (fun ((p, _vd), _slot) ->
+        let h = Path.head p in
+        Ident.persistent h || Ident.global h)
 and lookup_all_constructors =
   lookup_all_simple (fun env -> env.constrs) (fun sc -> sc.comp_constrs)
-    cstr_shadow
+    cstr_shadow (fun _ -> true)
 and lookup_all_labels =
   lookup_all_simple (fun env -> env.labels) (fun sc -> sc.comp_labels)
-    lbl_shadow
+    lbl_shadow (fun _ -> true)
 and lookup_type =
-  lookup (fun env -> env.types) (fun sc -> sc.comp_types)
+  lookup (fun env -> env.types) (fun sc -> sc.comp_types) (fun _ -> true)
 and lookup_modtype =
-  lookup (fun env -> env.modtypes) (fun sc -> sc.comp_modtypes)
+  lookup (fun env -> env.modtypes) (fun sc -> sc.comp_modtypes) (fun _ -> true)
 and lookup_class =
-  lookup (fun env -> env.classes) (fun sc -> sc.comp_classes)
+  lookup (fun env -> env.classes) (fun sc -> sc.comp_classes) (fun _ -> true)
 and lookup_cltype =
-  lookup (fun env -> env.cltypes) (fun sc -> sc.comp_cltypes)
+  lookup (fun env -> env.cltypes) (fun sc -> sc.comp_cltypes) (fun _ -> true)
 
 let update_value s f env =
   try

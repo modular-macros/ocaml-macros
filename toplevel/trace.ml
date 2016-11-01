@@ -65,6 +65,7 @@ let rec instrument_result env name ppf clos_typ =
   | Tarrow(l, t1, t2, _) ->
       let starred_name =
         match name with
+        | Lglobal s -> Lglobal(s ^ "*")
         | Lident s -> Lident(s ^ "*")
         | Ldot(lid, s) -> Ldot(lid, s ^ "*")
         | Lapply _ -> fatal_error "Trace.instrument_result" in

@@ -298,13 +298,13 @@ let quote_arg_label loc (lbl : Asttypes.arg_label) =
 let lid_of_path p =
   let rec loop = function
     | Path.Pident id ->
-        if Ident.global id then Longident.Lident (Ident.name id)
+        if Ident.global id then Longident.Lglobal (Ident.name id)
         else begin
           match
             List.find (fun (_, bid) -> Ident.equal id bid)
                       Predef.builtin_idents
           with
-          | name, _ -> Longident.Lident name
+          | name, _ -> Longident.Lglobal name
           | exception Not_found -> raise Exit
         end
     | Path.Pdot(p, s, _) ->
@@ -327,7 +327,8 @@ let quote_variant_constructor env loc constr =
   let lid =
     match lid_of_type_path env constr.cstr_res with
     | None -> fatal_error "No global path for variant constructor"
-    | Some (Longident.Lident _) -> Longident.Lident constr.cstr_name
+    | Some (Longident.Lident _)
+    | Some (Longident.Lglobal _) -> Longident.Lglobal constr.cstr_name
     | Some (Longident.Ldot(lid, _)) -> Longident.Ldot(lid, constr.cstr_name)
     | Some (Longident.Lapply _) -> assert false
   in
@@ -338,7 +339,8 @@ let quote_record_label env loc lbl =
   let lid =
     match lid_of_type_path env lbl.lbl_res with
     | None -> fatal_error "No global path for record label"
-    | Some (Longident.Lident _) -> Longident.Lident lbl.lbl_name
+    | Some (Longident.Lident _)
+    | Some (Longident.Lglobal _) -> Longident.Lglobal lbl.lbl_name
     | Some (Longident.Ldot(lid, _)) -> Longident.Ldot(lid, lbl.lbl_name)
     | Some (Longident.Lapply _) -> assert false
   in
