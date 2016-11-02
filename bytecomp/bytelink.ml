@@ -285,6 +285,7 @@ let mark_needed_reloc phase reloc =
     match get_status id with
     | Needed _ -> id
     | Available x -> set_status_id (Needed x) id; id
+    | Missing -> id
     | _ -> assert false
     | exception Not_found ->
       try
