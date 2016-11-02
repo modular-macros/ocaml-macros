@@ -804,8 +804,10 @@ and structure_item_desc =
         (* let P1 = E1 and ... and Pn = EN        (Nonstatic, Nonrecursive)
            let rec P1 = E1 and ... and Pn = EN    (Nonstatic, Recursive)
            static P1 = E1 and ... and Pn = EN     (Static, Nonrecursive)
-           static rec P1 = E1 and ... and Pn = EN (Static, Recursive)
-         *)
+           static rec P1 = E1 and ... and Pn = EN (Static, Recursive) *)
+  | Pstr_macro of rec_flag * value_binding list
+        (* macro P1 = E1 and ... and Pn = EN     (Nonrecursive)
+           macro rec P1 = E1 and ... and Pn = EN (Recursive) *)
   | Pstr_primitive of value_description
         (*  val x: T
             external x: T = "s1" ... "sn" *)

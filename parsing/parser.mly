@@ -568,6 +568,7 @@ let package_type_of_module_type pmty =
 %token <string> HASHOP
 %token SIG
 %token STATIC
+%token MACRO
 %token STAR
 %token <string * string option> STRING
 %token STRUCT
@@ -617,6 +618,7 @@ The precedences must be listed from low to high.
 %nonassoc SEMI                          /* below EQUAL ({lbl=...; lbl=...}) */
 %nonassoc LET                           /* above SEMI ( ...; let ... in ...) */
 %nonassoc STATIC
+%nonassoc MACRO
 %nonassoc below_WITH
 %nonassoc FUNCTION WITH                 /* below BAR  (match ... with ...) */
 %nonassoc AND             /* above WITH (module rec A: SIG with ... and ...) */
@@ -1701,6 +1703,19 @@ static_binding:
       mklbs ext $3 (mklb true $4 (attr@$5)) }
 ;
 and_static_bindings:
+  AND attributes let_binding_body post_item_attributes
+    { mklb false $3 ($2@$4) }
+;
+macro_bindings:
+    macro_binding                     { $1 }
+  | macro_bindings and_macro_bindings { addlb $1 $2 }
+;
+macro_binding:
+  MACRO ext_attributes rec_flag let_binding_body post_item_attributes
+    { let (ext, attr) = $2 in
+      mklbs ext $3 (mklb true $4 (attr@$5)) }
+;
+and_macro_bindings:
   AND attributes let_binding_body post_item_attributes
     { mklb false $3 ($2@$4) }
 ;
