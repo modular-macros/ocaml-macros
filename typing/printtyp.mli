@@ -45,8 +45,10 @@ val reset_names: unit -> unit
 val type_scheme_max: ?b_reset_names: bool ->
         formatter -> type_expr -> unit
 (* End Maxence *)
-val tree_of_value_description: Ident.t -> value_description -> out_sig_item
-val value_description: Ident.t -> formatter -> value_description -> unit
+val tree_of_value_description: Asttypes.static_flag -> Ident.t ->
+    value_description -> out_sig_item
+val value_description: Asttypes.static_flag -> Ident.t ->
+    formatter -> value_description -> unit
 val tree_of_type_declaration:
     Ident.t -> type_declaration -> rec_status -> out_sig_item
 val type_declaration: Ident.t -> formatter -> type_declaration -> unit
@@ -55,7 +57,8 @@ val tree_of_extension_constructor:
 val extension_constructor:
     Ident.t -> formatter -> extension_constructor -> unit
 val tree_of_module:
-    Ident.t -> ?ellipsis:bool -> module_type -> rec_status -> out_sig_item
+    Asttypes.static_flag -> Ident.t -> ?ellipsis:bool -> module_type ->
+      rec_status -> out_sig_item
 val modtype: formatter -> module_type -> unit
 val signature: formatter -> signature -> unit
 val tree_of_modtype_declaration:

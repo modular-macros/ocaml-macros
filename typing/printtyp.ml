@@ -965,7 +965,7 @@ let extension_constructor id ppf ext =
 
 (* Print a value declaration *)
 
-let tree_of_value_description id decl =
+let tree_of_value_description sf id decl =
   (* Format.eprintf "@[%a@]@." raw_type_expr decl.val_type; *)
   let id = Ident.name id in
   let ty = tree_of_type_scheme decl.val_type in
@@ -980,10 +980,10 @@ let tree_of_value_description id decl =
     | Val_prim p -> Primitive.print p vd
     | _ -> vd
   in
-  Osig_value vd
+  Osig_value (sf, vd)
 
-let value_description id ppf decl =
-  !Oprint.out_sig_item ppf (tree_of_value_description id decl)
+let value_description sf id ppf decl =
+  !Oprint.out_sig_item ppf (tree_of_value_description sf id decl)
 
 (* Print a class type *)
 
@@ -1231,20 +1231,20 @@ and tree_of_signature_rec env' in_type_group = function
       trees @ tree_of_signature_rec env' in_type_group rem
 
 and trees_of_sigitem = function
-  | Sig_value(id, _, decl) ->
-      [tree_of_value_description id decl]
+  | Sig_value(id, sf, decl) ->
+      [tree_of_value_description sf id decl]
   | Sig_type(id, _, _) when is_row_name (Ident.name id) ->
       []
   | Sig_type(id, decl, rs) ->
       [tree_of_type_declaration id decl rs]
   | Sig_typext(id, ext, es) ->
       [tree_of_extension_constructor id ext es]
-  | Sig_module(id, md, _, rs) ->
+  | Sig_module(id, md, sf, rs) ->
       let ellipsis =
         List.exists (function ({txt="..."}, Parsetree.PStr []) -> true
                             | _ -> false)
           md.md_attributes in
-      [tree_of_module id md.md_type rs ~ellipsis]
+      [tree_of_module sf id md.md_type rs ~ellipsis]
   | Sig_modtype(id, decl) ->
       [tree_of_modtype_declaration id decl]
   | Sig_class(id, decl, rs) ->
@@ -1260,8 +1260,8 @@ and tree_of_modtype_declaration id decl =
   in
   Osig_modtype (Ident.name id, mty)
 
-and tree_of_module id ?ellipsis mty rs =
-  Osig_module (Ident.name id, tree_of_modtype ?ellipsis mty, tree_of_rec rs)
+and tree_of_module sf id ?ellipsis mty rs =
+  Osig_module (Ident.name id, tree_of_modtype ?ellipsis mty, tree_of_rec rs, sf)
 
 let modtype ppf mty = !Oprint.out_module_type ppf (tree_of_modtype mty)
 let modtype_declaration id ppf decl =

@@ -523,14 +523,10 @@ let include_err ppf = function
       fprintf ppf "The %s `%a' is required but not provided" kind ident id;
       show_loc "Expected declaration" ppf loc
   | Value_descriptions(id, sf1, d1, sf2, d2) ->
-      let fmt_static ppf = function
-      | Asttypes.Static -> fprintf ppf "static "
-      | Asttypes.Nonstatic -> ()
-      in
       fprintf ppf
-        "@[<hv 2>Values do not match:@ %a%a@;<1 -2>is not included in@ %a%a@]"
-        fmt_static sf1 (value_description id) d1
-        fmt_static sf2 (value_description id) d2;
+        "@[<hv 2>Values do not match:@ %a@;<1 -2>is not included in@ %a@]"
+        (value_description sf1 id) d1
+        (value_description sf2 id) d2;
       show_locs ppf (d1.val_loc, d2.val_loc);
   | Type_declarations(id, d1, d2, errs) ->
       fprintf ppf "@[<v>@[<hv>%s:@;<1 2>%a@ %s@;<1 2>%a@]%a%a@]"
