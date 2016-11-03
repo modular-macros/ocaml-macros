@@ -45,6 +45,7 @@ type error =
   | Cannot_scrape_alias of Path.t
   | Static_inside_static
   | Phase of phase * phase
+  | Impure_macro
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -1295,6 +1296,11 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
           let (defs, newenv) =
             Typecore.type_binding
               (Env.with_phase phase env) rec_flag sdefs scope in
+          (* Purity check *)
+          List.iter (fun {vb_expr=exp} ->
+            if not (Typecore.is_nonexpansive ~strict:true exp) then
+              raise (Error (exp.exp_loc, env, Impure_macro)))
+            defs;
           Tstr_macro (rec_flag, defs),
           List.map
             (fun id ->
@@ -1907,6 +1913,9 @@ let report_error ppf = function
       fprintf ppf
         "Expected module of phase %d, but this expression has phase %d"
         funct arg
+  | Impure_macro ->
+      fprintf ppf
+        "Impure constructions are not allowed as macro definitions"
 
 let report_error env ppf err =
   Printtyp.wrap_printing_env env (fun () -> report_error ppf err)

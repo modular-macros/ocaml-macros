@@ -76,6 +76,7 @@ type error =
   | Cannot_scrape_alias of Path.t
   | Static_inside_static
   | Phase of Types.phase * Types.phase
+  | Impure_macro
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
