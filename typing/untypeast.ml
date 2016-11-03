@@ -146,6 +146,9 @@ let structure_item sub item =
     | Tstr_value (static_flag, rec_flag, list) ->
         Pstr_value
           (static_flag, rec_flag, List.map (sub.value_binding sub) list)
+    | Tstr_macro (rec_flag, list) ->
+        Pstr_macro
+          (rec_flag, List.map (sub.value_binding sub) list)
     | Tstr_primitive vd ->
         Pstr_primitive (snd (sub.value_description sub (Nonstatic, vd)))
     | Tstr_type (rec_flag, list) ->

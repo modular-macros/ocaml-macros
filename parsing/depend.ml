@@ -436,6 +436,9 @@ and add_struct_item (bv, m) item : _ StringMap.t * _ StringMap.t =
   | Pstr_value(_, rf, pel) ->
       (* macros: static flag not handled for now *)
       let bv = add_bindings rf bv pel in (bv, m)
+  | Pstr_macro (rf, vbs) ->
+      (* macros: see previous case *)
+      let bv = add_bindings rf bv vbs in (bv, m)
   | Pstr_primitive vd ->
       add_type bv vd.pval_type; (bv, m)
   | Pstr_type (_, dcls) ->

@@ -760,6 +760,9 @@ and structure_item i ppf x =
   | Tstr_value (sf, rf, l) ->
       line i ppf "Tstr_value %a %a\n" fmt_static_flag sf fmt_rec_flag rf;
       list i value_binding ppf l;
+  | Tstr_macro (rf, l) ->
+      line i ppf "Tstr_macro %a\n" fmt_rec_flag rf;
+      list i value_binding ppf l;
   | Tstr_primitive vd ->
       line i ppf "Tstr_primitive\n";
       value_description i ppf vd;

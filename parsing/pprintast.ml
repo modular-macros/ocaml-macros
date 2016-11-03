@@ -525,7 +525,7 @@ and expression ctxt f x =
            (*no identation here, a new line*) *)
         (*   rec_flag rf *)
         pp f "@[<2>%a in@;<1 -2>%a@]"
-          (bindings reset_ctxt) (Nonstatic, rf,l)
+          (bindings "let" reset_ctxt) (rf,l)
           (expression ctxt) e
     | Pexp_apply (e, l) ->
         begin if not (sugar_expr ctxt f x) then
@@ -888,7 +888,7 @@ and class_expr ctxt f x =
           (class_expr ctxt) e
     | Pcl_let (rf, l, ce) ->
         pp f "%a@ in@ %a"
-          (bindings ctxt) (Nonstatic, rf,l)
+          (bindings "let" ctxt) (rf,l)
           (class_expr ctxt) ce
     | Pcl_apply (ce, l) ->
         pp f "((%a)@ %a)" (* Cf: #7200 *)
@@ -1118,17 +1118,17 @@ and binding ctxt f {pvb_pat=p; pvb_expr=x; _} =
         pp f "%a@;=@;%a" (pattern ctxt) p (expression ctxt) x
 
 (* [in] is not printed *)
-and bindings ctxt f (sf, rf,l) =
+and bindings fst_kwd ctxt f (rf,l) =
   let binding kwd rf f x =
-    pp f "@[<2>%s %a%a%a@]@ %a" kwd static_flag sf rec_flag rf
+    pp f "@[<2>%s %a%a@]@ %a" kwd rec_flag rf
       (binding ctxt) x (item_attributes ctxt) x.pvb_attributes
   in
   match l with
   | [] -> ()
-  | [x] -> binding "let" rf f x
+  | [x] -> binding fst_kwd rf f x
   | x::xs ->
       pp f "@[<v>%a@,%a@]"
-        (binding "let" rf) x
+        (binding fst_kwd rf) x
         (list ~sep:"@," (binding "and" Nonrecursive)) xs
 
 and structure_item ctxt f x =
@@ -1141,7 +1141,10 @@ and structure_item ctxt f x =
   | Pstr_type (rf, l)  -> type_def_list ctxt f (rf, l)
   | Pstr_value (sf, rf, l) ->
       (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
-      pp f "@[<2>%a@]" (bindings ctxt) (sf, rf,l)
+      let kwd = if sf = Static then "static" else "let" in
+      pp f "@[<2>%a@]" (bindings kwd ctxt) (rf,l)
+  | Pstr_macro (rf, l) ->
+      pp f "@[<2>%a@]" (bindings "macro" ctxt) (rf, l)
   | Pstr_typext te -> type_extension ctxt f te
   | Pstr_exception ed -> exception_declaration ctxt f ed
   | Pstr_module (sf, x) ->

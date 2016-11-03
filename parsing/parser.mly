@@ -398,6 +398,21 @@ let val_of_let_bindings static_flag lbs =
   | None -> str
   | Some id -> ghstr (Pstr_extension((id, PStr [str]), []))
 
+let val_of_macro_bindings lbs =
+  let bindings =
+    List.map
+      (fun lb ->
+        Vb.mk ~loc:lb.lb_loc ~attrs:lb.lb_attributes
+          ~docs:(Lazy.force lb.lb_docs)
+          ~text:(Lazy.force lb.lb_text)
+          lb.lb_pattern lb.lb_expression)
+      lbs.lbs_bindings
+  in
+  let str = mkstr (Pstr_macro (lbs.lbs_rec, List.rev bindings)) in
+  match lbs.lbs_extension with
+  | None -> str
+  | Some id -> ghstr (Pstr_extension ((id, PStr [str]), []))
+
 let expr_of_let_bindings lbs body =
   let bindings =
     List.map
@@ -828,6 +843,8 @@ structure_item:
       { val_of_let_bindings Nonstatic $1 }
   | static_bindings
       { val_of_let_bindings Static $1 }
+  | macro_bindings
+      { val_of_macro_bindings $1 }
   | primitive_declaration
       { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
   | value_description

@@ -1275,6 +1275,33 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
                 (let_bound_idents defs),
               Env.with_phase old_phase newenv
         else raise (Error (loc, env, Static_inside_static))
+    | Pstr_macro (rec_flag, sdefs) ->
+        let scope =
+          match rec_flag with
+          | Recursive ->
+              Some (Annot.Idef {scope with
+                                Location.loc_start = loc.Location.loc_start})
+          | Nonrecursive ->
+              let start =
+                match srem with
+                | [] -> loc.Location.loc_end
+                | {pstr_loc = loc2} :: _ -> loc2.Location.loc_start
+              in
+              Some (Annot.Idef {scope with Location.loc_start = start})
+        in
+        let old_phase = Env.cur_phase env in
+        let phase = old_phase + 1 in
+        if phase = 1 then
+          let (defs, newenv) =
+            Typecore.type_binding
+              (Env.with_phase phase env) rec_flag sdefs scope in
+          Tstr_macro (rec_flag, defs),
+          List.map
+            (fun id ->
+              Sig_value (id, Static, Env.find_value (Pident id) newenv))
+            (let_bound_idents defs),
+          Env.with_phase old_phase newenv
+        else raise (Error (loc, env, Static_inside_static))
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
         Tstr_primitive

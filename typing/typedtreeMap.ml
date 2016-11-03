@@ -116,6 +116,8 @@ module MakeMap(Map : MapArgument) = struct
           Tstr_eval (exp, attrs) -> Tstr_eval (map_expression exp, attrs)
         | Tstr_value (static_flag, rec_flag, list) ->
           Tstr_value (static_flag, rec_flag, map_bindings list)
+        | Tstr_macro (rec_flag, list) ->
+          Tstr_macro (rec_flag, map_bindings list)
         | Tstr_primitive vd ->
           let (_, v) = (map_value_description (Asttypes.Nonstatic, vd)) in
           Tstr_primitive v

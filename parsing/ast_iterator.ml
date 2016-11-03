@@ -279,6 +279,7 @@ module M = struct
     | Pstr_eval (x, attrs) ->
         sub.expr sub x; sub.attributes sub attrs
     | Pstr_value (_, _r, vbs) -> List.iter (sub.value_binding sub) vbs
+    | Pstr_macro (_r, vbs) -> List.iter (sub.value_binding sub) vbs
     | Pstr_primitive vd -> sub.value_description sub (Asttypes.Nonstatic, vd)
     | Pstr_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Pstr_typext te -> sub.type_extension sub te

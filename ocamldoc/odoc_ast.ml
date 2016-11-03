@@ -106,6 +106,14 @@ module Typedtree_search =
               | Some n -> Hashtbl.add table_values n (pat,exp)
             )
             pat_exp_list
+      | Typedtree.Tstr_macro (_, pat_exp_list) ->
+          List.iter
+            (fun {vb_pat=pat; vb_expr=exp} ->
+              match iter_val_pattern pat.Typedtree.pat_desc with
+                None -> ()
+              | Some n -> Hashtbl.add table_values n (pat,exp)
+            )
+            pat_exp_list
       | Typedtree.Tstr_primitive vd ->
           Hashtbl.add table (P (Name.from_ident vd.val_id)) tt
       | Typedtree.Tstr_open _ -> ()
@@ -1072,7 +1080,9 @@ module Analyser =
       | Parsetree.Pstr_attribute _
       | Parsetree.Pstr_extension _ ->
           (0, env, [])
-      (* macros: not handled *)
+      | Parsetree.Pstr_macro _ ->
+          (* macros: not handled *)
+          (0, env, [])
       | Parsetree.Pstr_value (_, rec_flag, pat_exp_list) ->
           (* of rec_flag * (pattern * expression) list *)
           (* For each value, look for the value name, then look in the

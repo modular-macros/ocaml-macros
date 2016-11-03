@@ -666,6 +666,23 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
             transl_structure loc (placeholders @ fields)
               cc rootpath target_phase item_postproc final_env rem
       end
+      | Tstr_macro(rec_flag, pat_expr_list) ->
+        begin
+          if target_phase = Static then
+            let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
+            let body, size =
+              transl_structure loc ext_fields cc rootpath target_phase
+                item_postproc final_env rem
+            in
+            transl_let rec_flag pat_expr_list body, size
+          else
+            let placeholders =
+              List.map (fun _ -> ident_zero) @@
+                rev_let_bound_idents pat_expr_list
+            in
+            transl_structure loc (placeholders @ fields)
+              cc rootpath target_phase item_postproc final_env rem
+        end
       | Tstr_primitive descr ->
           (if target_phase = Nonstatic then
             record_primitive descr.val_val
@@ -886,6 +903,14 @@ let rec defined_idents static_flag = function
         in
         placeholders @ defined_idents static_flag rem
     )
+    | Tstr_macro (_rec_flag, pat_expr_list) ->
+        if static_flag = Static then
+          let_bound_idents pat_expr_list @ defined_idents static_flag rem
+        else
+          let placeholders =
+            List.map (fun _ -> ident_zero) (let_bound_idents pat_expr_list)
+          in
+          placeholders @ defined_idents static_flag rem
     | Tstr_primitive _ -> defined_idents static_flag rem
     | Tstr_type _ -> defined_idents static_flag rem
     | Tstr_typext tyext ->
@@ -923,6 +948,7 @@ let rec more_idents target_phase = function
     match item.str_desc with
     | Tstr_eval _ -> more_idents target_phase rem
     | Tstr_value _ -> more_idents target_phase rem
+    | Tstr_macro _ -> more_idents target_phase rem
     | Tstr_primitive _ -> more_idents target_phase rem
     | Tstr_type _ -> more_idents target_phase rem
     | Tstr_typext _ -> more_idents target_phase rem
@@ -956,6 +982,10 @@ and all_idents target_phase = function
         | (Nonstatic, Static) -> all_idents target_phase rem
         | _ -> let_bound_idents pat_expr_list @ all_idents target_phase rem
       end
+    | Tstr_macro (_rec_flag, pat_expr_list) ->
+        if target_phase = Static then
+          let_bound_idents pat_expr_list @ all_idents target_phase rem
+        else all_idents target_phase rem
     | Tstr_primitive _ -> all_idents target_phase rem
     | Tstr_type _ -> all_idents target_phase rem
     | Tstr_typext tyext ->
@@ -1041,6 +1071,17 @@ let transl_store_structure target_phase glob map prims str =
               in
               Lsequence(subst_lambda subst lam,
                         transl_store rootpath (add_idents false ids subst) rem)
+            else
+              transl_store rootpath subst rem
+        | Tstr_macro (rec_flag, pat_expr_list) ->
+            if target_phase = Static then
+              let ids = let_bound_idents pat_expr_list in
+              let lam =
+                transl_let rec_flag pat_expr_list
+                  (store_idents Location.none ids)
+              in
+              Lsequence (subst_lambda subst lam,
+                transl_store rootpath (add_idents false ids subst) rem)
             else
               transl_store rootpath subst rem
         | Tstr_primitive descr ->
@@ -1386,6 +1427,12 @@ let transl_toplevel_item target_phase item =
         else lambda_unit
     | Tstr_value(static_flag, rec_flag, pat_expr_list) ->
         if static_flag = target_phase then
+          let idents = let_bound_idents pat_expr_list in
+          transl_let rec_flag pat_expr_list
+            (make_sequence toploop_setvalue_id idents)
+        else lambda_unit
+    | Tstr_macro (rec_flag, pat_expr_list) ->
+        if target_phase = Static then
           let idents = let_bound_idents pat_expr_list in
           transl_let rec_flag pat_expr_list
             (make_sequence toploop_setvalue_id idents)

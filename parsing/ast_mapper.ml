@@ -302,6 +302,8 @@ module M = struct
         eval ~loc ~attrs:(sub.attributes sub attrs) (sub.expr sub x)
     | Pstr_value (s, r, vbs) ->
         value ~loc s r (List.map (sub.value_binding sub) vbs)
+    | Pstr_macro (r, vbs) ->
+        macro_ ~loc r (List.map (sub.value_binding sub) vbs)
     | Pstr_primitive vd ->
         primitive ~loc @@ snd (sub.value_description sub (Asttypes.Nonstatic, vd))
     | Pstr_type (rf, l) -> type_ ~loc rf (List.map (sub.type_declaration sub) l)

@@ -108,6 +108,10 @@ let structure_item sub {str_desc; str_loc; str_env} =
         let (rec_flag, list) =
           sub.value_bindings sub (rec_flag, list) in
         Tstr_value (static_flag, rec_flag, list)
+    | Tstr_macro (rec_flag, list) ->
+        let (rec_flag, list) =
+          sub.value_bindings sub (rec_flag, list) in
+        Tstr_macro (rec_flag, list)
     | Tstr_primitive v ->
         Tstr_primitive (snd (sub.value_description sub (Nonstatic, v)))
     | Tstr_type (rec_flag, list) ->
