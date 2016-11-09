@@ -265,6 +265,7 @@ and value_kind =
   | Val_anc of (string * Ident.t) list * string
                                         (* Ancestor *)
   | Val_unbound                         (* Unbound variable *)
+  | Val_macro
 
 (* Variance *)
 
