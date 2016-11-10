@@ -69,16 +69,6 @@ val with_stage_up: t -> t
 val toplevel_splice: t -> bool
 val with_tl_splice: bool -> t -> t
 
-(** Returns the list of non-global identifiers cross-stagely quoted in the
-   environment [env]. *)
-val cross_stage_ids: t -> Ident.t Asttypes.loc list
-val add_cross_stage: Ident.t Asttypes.loc -> t -> t
-
-(** [concat_cross_stage env_base env] adds the cross-stage identifiers of env at
-    the tail of those of [env_base]. *)
-val concat_cross_stage: t -> t -> t
-val discard_cross_stage: t -> t
-
 type type_descriptions =
     constructor_description list * label_description list
 

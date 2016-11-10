@@ -196,7 +196,6 @@ type t = {
   cur_env_phase: phase;
   cur_env_stage: stage;
   cur_env_toplevel_splice: bool;
-  cur_env_cross_stage: Ident.t loc list;
 }
 
 and module_components =
@@ -264,15 +263,6 @@ let with_stage_down env =
 let toplevel_splice env = env.cur_env_toplevel_splice
 let with_tl_splice tl env = { env with cur_env_toplevel_splice = tl }
 
-let cross_stage_ids env = env.cur_env_cross_stage
-let add_cross_stage id env =
-  { env with cur_env_cross_stage = id :: env.cur_env_cross_stage }
-let concat_cross_stage base_env env =
-  { base_env with cur_env_cross_stage =
-      base_env.cur_env_cross_stage @ env.cur_env_cross_stage }
-let discard_cross_stage env =
-  { env with cur_env_cross_stage = [] }
-
 let same_constr = ref (fun _ _ _ -> assert false)
 
 (* Helper to decide whether to report an identifier shadowing
@@ -314,7 +304,6 @@ let empty = {
   functor_args = Ident.empty;
   cur_env_phase = 0; cur_env_stage = 0;
   cur_env_toplevel_splice = false;
-  cur_env_cross_stage = [];
  }
 
 let in_signature b env =

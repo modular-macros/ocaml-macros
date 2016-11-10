@@ -1255,7 +1255,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         if phase = 0 then
           let (defs, newenv) =
             Typecore.type_binding
-              (Env.with_phase 0 env) rec_flag sdefs scope in
+              (Env.with_phase 0 env) rec_flag sdefs scope Val_reg in
           (* Note: Env.find_value does not trigger the value_used event.
              Values will be marked as being used during the signature
              inclusion test. *)
@@ -1268,7 +1268,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         else if phase = 1 then
               let (defs, newenv) =
                 Typecore.type_binding
-                  (Env.with_phase 1 env) rec_flag sdefs scope in
+                  (Env.with_phase 1 env) rec_flag sdefs scope Val_reg in
               Tstr_value(static_flag, rec_flag, defs),
               List.map
                 (fun id ->
@@ -1294,8 +1294,9 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         let phase = old_phase + 1 in
         if phase = 1 then
           let (defs, newenv) =
-            Typecore.type_binding
-              (Env.with_phase phase env) rec_flag sdefs scope in
+            Typecore.type_binding (Env.with_phase phase env) rec_flag
+              sdefs scope Val_macro
+          in
           (* Purity check *)
           List.iter (fun {vb_expr=exp} ->
             if not (Typecore.is_nonexpansive ~strict:true exp) then

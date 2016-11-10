@@ -33,15 +33,58 @@ type error =
 
 exception Error of Location.t * error
 
-(* ordered array of lambda blocks for stage-0 splices *)
-let item_splices = ref ([] : lambda list)
+(* record macros and cross-stage non-globals in a tree *)
+
+module TreeInspectIt (X : sig
+  val ids : Ident.t loc list ref
+  val macros : Path.t list ref
+end) = struct
+  open TypedtreeIter
+  include DefaultIteratorArgument
+
+  let enter_expression exp =
+    match exp.exp_desc with
+    | Texp_ident (p, _, vd) ->
+        let h = Path.head p in
+        if not (Ident.global h) && not (Ident.persistent h) &&
+            Env.find_stage p exp.exp_env <> Env.cur_stage exp.exp_env then
+          let h' = { txt = h; loc = exp.exp_loc; } in
+          X.ids := h' :: !X.ids
+        ;
+        if vd.val_kind = Val_macro then
+          X.macros := p :: !X.macros
+    | _ -> ()
+end
+
+module TreeInspect : sig
+  val expression : expression -> Ident.t loc list * Path.t list
+end = struct
+  module X = struct
+    let ids = ref ([] : Ident.t loc list)
+    let macros = ref ([] : Path.t list)
+    let reset () =
+      ids := [];
+      macros := []
+  end
+  include TypedtreeIter.MakeIterator(TreeInspectIt(X))
+
+  let expression exp =
+    iter_expression exp;
+    let ret = (!X.ids, !X.macros) in
+    X.reset ();
+    ret
+end
 
 let transl_toplevel_splice exp =
+  let (cs_ids, _) = TreeInspect.expression exp in
   List.fold_left
     (fun lam id -> Translquote.wrap_local exp.exp_loc id.txt
       (Location.mkloc (Ident.name id.txt) (id : Ident.t loc).loc) lam)
     (Translcore.transl_exp exp)
-    (Env.cross_stage_ids exp.exp_env)
+    cs_ids
+
+(* ordered array of lambda blocks for stage-0 splices *)
+let item_splices = ref ([] : lambda list)
 
 module TranslSplicesIterator = struct
   open TypedtreeIter

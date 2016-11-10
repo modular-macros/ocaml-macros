@@ -25,6 +25,7 @@ val type_binding:
         Env.t -> rec_flag ->
           Parsetree.value_binding list ->
           Annot.ident option ->
+          value_kind ->
           Typedtree.value_binding list * Env.t
 val type_let:
         Env.t -> rec_flag ->
