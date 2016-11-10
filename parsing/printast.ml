@@ -97,6 +97,12 @@ let fmt_static_flag f x =
   | Static -> fprintf f "Static";
 ;;
 
+let fmt_macro_flag f =
+  function
+  | Nonmacro sf -> fprintf f "Nonmacro %a" fmt_static_flag sf;
+  | Macro -> fprintf f "Macro";
+;;
+
 let fmt_rec_flag f x =
   match x with
   | Nonrecursive -> fprintf f "Nonrec";
@@ -670,8 +676,8 @@ and signature_item i ppf x =
   line i ppf "signature_item %a\n" fmt_location x.psig_loc;
   let i = i+1 in
   match x.psig_desc with
-  | Psig_value (sf, vd) ->
-      line i ppf "Psig_value %a\n" fmt_static_flag sf;
+  | Psig_value (mf, vd) ->
+      line i ppf "Psig_value %a\n" fmt_macro_flag mf;
       value_description i ppf vd;
   | Psig_type (rf, l) ->
       line i ppf "Psig_type %a\n" fmt_rec_flag rf;

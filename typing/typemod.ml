@@ -586,13 +586,20 @@ and transl_signature env sg =
     | item :: srem ->
         let loc = item.psig_loc in
         match item.psig_desc with
-        | Psig_value (sf, sdesc) ->
+        | Psig_value (mf, sdesc) ->
+            let sf =
+              match mf with
+              | Macro -> Static | Nonmacro Static -> Static
+              | _ -> Nonstatic
+            in
             if Env.cur_phase env > 0 && sf = Static then
               raise (Error (sdesc.pval_loc, env, Static_inside_static))
             ;
             let (tdesc, newenv) =
               Builtin_attributes.with_warning_attribute sdesc.pval_attributes
-                (fun () -> Typedecl.transl_value_decl env item.psig_loc sdesc)
+                (fun () ->
+                  Typedecl.transl_value_decl env item.psig_loc sdesc
+                    (match mf with Macro -> Val_macro | _ -> Val_reg))
             in
             let (trem,rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_value (sf, tdesc)) env loc :: trem,
@@ -1310,7 +1317,8 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
           Env.with_phase old_phase newenv
         else raise (Error (loc, env, Static_inside_static))
     | Pstr_primitive sdesc ->
-        let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
+        let (desc, newenv) =
+          Typedecl.transl_value_decl env loc sdesc Val_reg in
         Tstr_primitive
           desc, [Sig_value(desc.val_id, Nonstatic, desc.val_val)], newenv
     | Pstr_type (rec_flag, sdecls) ->

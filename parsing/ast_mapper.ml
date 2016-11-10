@@ -71,8 +71,8 @@ type mapper = {
   type_extension: mapper -> type_extension -> type_extension;
   type_kind: mapper -> type_kind -> type_kind;
   value_binding: mapper -> value_binding -> value_binding;
-  value_description: mapper -> (Asttypes.static_flag * value_description)
-    -> (Asttypes.static_flag * value_description);
+  value_description: mapper -> (Asttypes.macro_flag * value_description)
+    -> (Asttypes.macro_flag * value_description);
   with_constraint: mapper -> with_constraint -> with_constraint;
 }
 
@@ -250,9 +250,9 @@ module MT = struct
     let open Sig in
     let loc = sub.location sub loc in
     match desc with
-    | Psig_value (sf, vd) ->
-        let (sf', vd') = (sub.value_description sub (sf, vd)) in
-        value ~loc sf' vd'
+    | Psig_value (mf, vd) ->
+        let (mf', vd') = (sub.value_description sub (mf, vd)) in
+        value ~loc mf' vd'
     | Psig_type (rf, l) -> type_ ~loc rf (List.map (sub.type_declaration sub) l)
     | Psig_typext te -> type_extension ~loc (sub.type_extension sub te)
     | Psig_exception ed -> exception_ ~loc (sub.extension_constructor sub ed)
@@ -305,7 +305,7 @@ module M = struct
     | Pstr_macro (r, vbs) ->
         macro_ ~loc r (List.map (sub.value_binding sub) vbs)
     | Pstr_primitive vd ->
-        primitive ~loc @@ snd (sub.value_description sub (Asttypes.Nonstatic, vd))
+        primitive ~loc @@ snd (sub.value_description sub (Asttypes.Nonmacro Asttypes.Nonstatic, vd))
     | Pstr_type (rf, l) -> type_ ~loc rf (List.map (sub.type_declaration sub) l)
     | Pstr_typext te -> type_extension ~loc (sub.type_extension sub te)
     | Pstr_exception ed -> exception_ ~loc (sub.extension_constructor sub ed)

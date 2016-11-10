@@ -25,6 +25,7 @@ type constant =
   | Const_nativeint of nativeint
 
 type static_flag = Nonstatic | Static
+type macro_flag = Nonmacro of static_flag | Macro
 
 type rec_flag = Nonrecursive | Recursive
 

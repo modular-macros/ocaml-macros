@@ -675,9 +675,11 @@ and signature_item =
     }
 
 and signature_item_desc =
-  | Psig_value of static_flag * value_description
+  | Psig_value of macro_flag * value_description
         (*
           val x: T
+          static val x: T
+          macro x: T
           external x: T = "s1" ... "sn"
          *)
   | Psig_type of rec_flag * type_declaration list

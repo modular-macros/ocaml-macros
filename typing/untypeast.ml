@@ -64,7 +64,7 @@ type mapper = {
   type_kind: mapper -> T.type_kind -> type_kind;
   value_binding: mapper -> T.value_binding -> value_binding;
   value_description: mapper -> static_flag * T.value_description
-    -> static_flag * value_description;
+    -> macro_flag * value_description;
   with_constraint:
     mapper -> (Path.t * Longident.t Location.loc * T.with_constraint)
     -> with_constraint;
@@ -186,7 +186,11 @@ let structure_item sub item =
 let value_description sub (sf, v) =
   let loc = sub.location sub v.val_loc in
   let attrs = sub.attributes sub v.val_attributes in
-  (sf,
+  let mf =
+    if v.val_val.Types.val_kind = Types.Val_macro then Macro
+    else Nonmacro sf
+  in
+  (mf,
   Val.mk ~loc ~attrs
     ~prim:v.val_prim
     (map_loc sub v.val_name)
@@ -502,8 +506,8 @@ let signature_item sub item =
   let desc =
     match item.sig_desc with
       Tsig_value (sf, v) ->
-        let (sf, v) = (sub.value_description sub (sf, v)) in
-        Psig_value (sf, v)
+        let (mf, v) = (sub.value_description sub (sf, v)) in
+        Psig_value (mf, v)
     | Tsig_type (rec_flag, list) ->
         Psig_type (rec_flag, List.map (sub.type_declaration sub) list)
     | Tsig_typext tyext ->

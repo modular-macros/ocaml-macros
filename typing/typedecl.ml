@@ -1635,13 +1635,13 @@ let check_unboxable env loc ty =
   with Not_found -> ()
 
 (* Translate a value declaration *)
-let transl_value_decl env loc valdecl =
+let transl_value_decl env loc valdecl kind =
   let cty = Typetexp.transl_type_scheme env valdecl.pval_type in
   let ty = cty.ctyp_type in
   let v =
   match valdecl.pval_prim with
     [] when Env.is_in_signature env ->
-      { val_type = ty; val_kind = Val_reg; Types.val_loc = loc;
+      { val_type = ty; val_kind = kind; Types.val_loc = loc;
         val_attributes = valdecl.pval_attributes }
   | [] ->
       raise (Error(valdecl.pval_loc, Val_in_structure))

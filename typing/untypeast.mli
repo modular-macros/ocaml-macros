@@ -66,7 +66,7 @@ type mapper = {
   value_binding: mapper -> Typedtree.value_binding -> value_binding;
   value_description:
     mapper -> Asttypes.static_flag * Typedtree.value_description
-    -> Asttypes.static_flag * value_description;
+    -> Asttypes.macro_flag * value_description;
   with_constraint:
     mapper -> (Path.t * Longident.t Location.loc * Typedtree.with_constraint)
     -> with_constraint;

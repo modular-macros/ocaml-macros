@@ -847,8 +847,8 @@ structure_item:
       { val_of_macro_bindings $1 }
   | primitive_declaration
       { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
-  | value_description
-      { let (_, (body, ext)) = $1 in mkstr_ext (Pstr_primitive body) ext }
+  | primitive_description
+      { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
   | type_declarations
       { let (nr, l, ext ) = $1 in mkstr_ext (Pstr_type (nr, List.rev l)) ext }
   | str_type_extension
@@ -972,7 +972,7 @@ signature_item:
     value_description
       { let (sf, (body, ext)) = $1 in mksig_ext (Psig_value (sf, body)) ext }
   | primitive_declaration
-      { let (body, ext) = $1 in mksig_ext (Psig_value (Nonstatic, body)) ext}
+      { let (body, ext) = $1 in mksig_ext (Psig_value (Nonmacro Nonstatic, body)) ext}
   | type_declarations
       { let (nr, l, ext) = $1 in mksig_ext (Psig_type (nr, List.rev l)) ext }
   | sig_type_extension
@@ -1986,16 +1986,28 @@ opt_pattern_type_constraint:
 
 value_description:
     VAL ext_attributes val_ident COLON core_type post_item_attributes
-      { (Nonstatic, let (ext, attrs) = $2 in
+      { (Nonmacro Nonstatic, let (ext, attrs) = $2 in
           Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
                 ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
         , ext) }
   | STATIC VAL ext_attributes val_ident COLON core_type post_item_attributes
-      { (Static, let (ext, attrs) = $3 in
+      { (Nonmacro Static, let (ext, attrs) = $3 in
           Val.mk (mkrhs $4 3) $6 ~attrs:(attrs@$7)
                 ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
         , ext) }
+  | MACRO ext_attributes val_ident COLON core_type post_item_attributes
+      { (Macro, let (ext, attrs) = $2 in
+          Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
+                ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+        , ext) }
 ;
+
+primitive_description:
+    VAL ext_attributes val_ident COLON core_type post_item_attributes
+      { (let (ext, attrs) = $2 in
+          Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
+                ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
+        , ext) }
 
 /* Primitive declarations */
 

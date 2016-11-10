@@ -64,7 +64,7 @@ type iterator = {
   type_kind: iterator -> type_kind -> unit;
   value_binding: iterator -> value_binding -> unit;
   value_description: iterator ->
-    (Asttypes.static_flag * value_description) -> unit;
+    (Asttypes.macro_flag * value_description) -> unit;
   with_constraint: iterator -> with_constraint -> unit;
 }
 (** A [iterator] record implements one "method" per syntactic category,
@@ -234,7 +234,7 @@ module MT = struct
   let iter_signature_item sub {psig_desc = desc; psig_loc = loc} =
     sub.location sub loc;
     match desc with
-    | Psig_value (sf, vd) -> sub.value_description sub (sf, vd)
+    | Psig_value (mf, vd) -> sub.value_description sub (mf, vd)
     | Psig_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Psig_typext te -> sub.type_extension sub te
     | Psig_exception ed -> sub.extension_constructor sub ed
@@ -280,7 +280,8 @@ module M = struct
         sub.expr sub x; sub.attributes sub attrs
     | Pstr_value (_, _r, vbs) -> List.iter (sub.value_binding sub) vbs
     | Pstr_macro (_r, vbs) -> List.iter (sub.value_binding sub) vbs
-    | Pstr_primitive vd -> sub.value_description sub (Asttypes.Nonstatic, vd)
+    | Pstr_primitive vd ->
+        sub.value_description sub (Asttypes.Nonmacro Asttypes.Nonstatic, vd)
     | Pstr_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Pstr_typext te -> sub.type_extension sub te
     | Pstr_exception ed -> sub.extension_constructor sub ed
