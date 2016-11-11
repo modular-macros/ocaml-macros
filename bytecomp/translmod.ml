@@ -717,7 +717,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
               transl_structure loc ext_fields cc rootpath target_phase
                 item_postproc final_env rem
             in
-            transl_let rec_flag pat_expr_list body, size
+            transl_macro rec_flag pat_expr_list body, size
           else
             let placeholders =
               List.map (fun _ -> ident_zero) @@

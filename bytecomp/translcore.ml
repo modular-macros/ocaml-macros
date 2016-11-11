@@ -30,6 +30,7 @@ type error =
   | Free_super_var
   | Unknown_builtin_primitive of string
   | Unreachable_reached
+  | Illegal_macro_pat
 
 exception Error of Location.t * error
 
@@ -743,6 +744,14 @@ and transl_exp0 e =
         transl_primitive e.exp_loc p e.exp_env e.exp_type (Some path)
   | Texp_ident(_, _, {val_kind = Val_anc _}) ->
       raise(Error(e.exp_loc, Free_super_var))
+  | Texp_ident(path,lid,{val_kind = Val_macro}) ->
+      Lapply {
+        ap_func = transl_path ~loc:e.exp_loc e.exp_env path;
+        ap_args = [Translquote.marshal_ident lid];
+        ap_loc = e.exp_loc;
+        ap_should_be_tailcall = false;
+        ap_inlined = Default_inline;
+        ap_specialised = Default_specialise; }
   | Texp_ident(path, _, {val_kind = Val_reg | Val_self _}) ->
       transl_path ~loc:e.exp_loc e.exp_env path
   | Texp_ident _ -> fatal_error "Translcore.transl_exp: bad Texp_ident"
@@ -1289,6 +1298,49 @@ and transl_let rec_flag pat_expr_list body =
         (id, lam) in
       Lletrec(List.map2 transl_case pat_expr_list idlist, body)
 
+and transl_macro rec_flag pat_expr_list body =
+  let id_vb_list =
+    List.map
+      (fun ({vb_pat=pat} as vb) -> match pat.pat_desc with
+          Tpat_var (id,_) -> (id, vb)
+        | Tpat_alias ({pat_desc=Tpat_any}, id,_) -> (id, vb)
+        | _ -> raise(Error(pat.pat_loc, Illegal_macro_pat)))
+    pat_expr_list
+  in
+  let transl_one {vb_expr=expr; vb_attributes; vb_loc} =
+    let lam = transl_exp expr in
+    let lam =
+      Translattribute.add_inline_attribute lam vb_loc
+        vb_attributes
+    in
+    let lam =
+      Translattribute.add_specialise_attribute lam vb_loc
+        vb_attributes
+    in
+    if rec_flag = Recursive &&
+        not (check_recursive_lambda (List.map fst id_vb_list) lam) then
+      raise (Error (expr.exp_loc, Illegal_letrec_expr))
+    ;
+    let clos_id = Ident.create "clos" in
+    let lam = Lfunction {
+      kind = Curried;
+      params = [clos_id];
+      body = lam;
+      attr = default_function_attribute;
+      loc = expr.exp_loc; }
+    in
+    lam
+  in
+  match rec_flag with
+  | Nonrecursive ->
+      let transl body (id, vb) =
+        Llet (Alias, Pgenval, id, transl_one vb, body)
+      in
+      List.fold_left transl body (List.rev id_vb_list)
+  | Recursive ->
+      let l = List.map (fun (x,y) -> (x, transl_one y)) id_vb_list in
+      Lletrec (l, body)
+
 and transl_setinstvar loc self var expr =
   let prim =
     match maybe_pointer expr with
@@ -1456,6 +1508,9 @@ let report_error ppf = function
       fprintf ppf "Unknown builtin primitive \"%s\"" prim_name
   | Unreachable_reached ->
       fprintf ppf "Unreachable expression was reached"
+  | Illegal_macro_pat ->
+      fprintf ppf
+        "Only variables are allowed as left-hand side of `let rec'"
 
 let () =
   Location.register_error_of_exn
