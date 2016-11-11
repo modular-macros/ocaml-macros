@@ -744,7 +744,7 @@ and transl_exp0 e =
         transl_primitive e.exp_loc p e.exp_env e.exp_type (Some path)
   | Texp_ident(_, _, {val_kind = Val_anc _}) ->
       raise(Error(e.exp_loc, Free_super_var))
-  | Texp_ident(path,lid,{val_kind = Val_macro}) ->
+  | Texp_ident(path, lid, {val_kind = Val_macro}) ->
       Lapply {
         ap_func = transl_path ~loc:e.exp_loc e.exp_env path;
         ap_args = [Translquote.marshal_ident lid];
