@@ -69,11 +69,6 @@ val with_stage_up: t -> t
 val toplevel_splice: t -> bool
 val with_tl_splice: bool -> t -> t
 
-(** Mapping from paths to indices, representing the structure of a macro's path
-    closure. *)
-val with_path_mapping: int PathMap.t -> t -> t
-val path_mapping: t -> int PathMap.t
-
 type type_descriptions =
     constructor_description list * label_description list
 

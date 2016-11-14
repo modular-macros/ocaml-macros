@@ -196,7 +196,6 @@ type t = {
   cur_env_phase: phase;
   cur_env_stage: stage;
   cur_env_toplevel_splice: bool;
-  cur_path_mapping: int PathMap.t;
 }
 
 and module_components =
@@ -264,10 +263,6 @@ let with_stage_down env =
 let toplevel_splice env = env.cur_env_toplevel_splice
 let with_tl_splice tl env = { env with cur_env_toplevel_splice = tl }
 
-let with_path_mapping m env =
-  { env with cur_path_mapping = m }
-let path_mapping env = env.cur_path_mapping
-
 let same_constr = ref (fun _ _ _ -> assert false)
 
 (* Helper to decide whether to report an identifier shadowing
@@ -309,7 +304,6 @@ let empty = {
   functor_args = Ident.empty;
   cur_env_phase = 0; cur_env_stage = 0;
   cur_env_toplevel_splice = false;
-  cur_path_mapping = PathMap.empty;
  }
 
 let in_signature b env =
