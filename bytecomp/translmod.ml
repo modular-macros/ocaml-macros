@@ -1449,9 +1449,6 @@ let close_toplevel_term (lam, ()) =
                                   toploop_getvalue id, l))
                 (free_variables lam) lam
 
-(* This version of [transl_toplevel_item] translates only run-time components
-   and ignores the static ones. The version in {!module:Translstatic} does the
-   opposite. *)
 let transl_toplevel_item target_phase item =
   let item_lam =
     match item.str_desc with
