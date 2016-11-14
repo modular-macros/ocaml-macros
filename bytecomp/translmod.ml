@@ -33,10 +33,11 @@ type error =
 
 exception Error of Location.t * error
 
-(* record macros and cross-stage non-globals in a tree *)
+(* record macros and cross-stage identifiers in a tree *)
 
 module TreeInspectIt (X : sig
-  val ids : Ident.t loc list ref
+  val cs_glob : Ident.t loc list ref
+  val cs_nonglob : Path.t list ref
   val macros : Path.t list ref
 end) = struct
   open TypedtreeIter
@@ -44,12 +45,14 @@ end) = struct
 
   let enter_expression exp =
     match exp.exp_desc with
-    | Texp_ident (p, _, vd) ->
+    | Texp_ident (p, lid, vd) ->
         let h = Path.head p in
-        if not (Ident.global h) && not (Ident.persistent h) &&
-            Env.find_stage p exp.exp_env <> Env.cur_stage exp.exp_env then
-          let h' = { txt = h; loc = exp.exp_loc; } in
-          X.ids := h' :: !X.ids
+        if Env.find_stage p exp.exp_env <> Env.cur_stage exp.exp_env then
+          if Ident.global h || Ident.persistent h then
+            let h' = { txt = h; loc = lid.loc } in
+            X.cs_glob := h' :: !X.cs_glob
+          else
+            X.cs_nonglob := p :: !X.cs_nonglob
         ;
         if vd.val_kind = Val_macro then
           X.macros := p :: !X.macros
@@ -57,31 +60,33 @@ end) = struct
 end
 
 module TreeInspect : sig
-  val expression : expression -> Ident.t loc list * Path.t list
+  val expression : expression -> Ident.t loc list * Path.t list * Path.t list
 end = struct
   module X = struct
-    let ids = ref ([] : Ident.t loc list)
+    let cs_glob = ref ([] : Ident.t loc list)
+    let cs_nonglob = ref ([] : Path.t list)
     let macros = ref ([] : Path.t list)
     let reset () =
-      ids := [];
+      cs_glob := [];
+      cs_nonglob := [];
       macros := []
   end
   include TypedtreeIter.MakeIterator(TreeInspectIt(X))
 
   let expression exp =
     iter_expression exp;
-    let ret = (!X.ids, !X.macros) in
+    let ret = (!X.cs_glob, !X.cs_nonglob, !X.macros) in
     X.reset ();
     ret
 end
 
 let transl_toplevel_splice exp =
-  let (cs_ids, _) = TreeInspect.expression exp in
+  let (cs_glob, _, _) = TreeInspect.expression exp in
   List.fold_left
     (fun lam id -> Translquote.wrap_local exp.exp_loc id.txt
       (Location.mkloc (Ident.name id.txt) (id : Ident.t loc).loc) lam)
     (Translcore.transl_exp exp)
-    cs_ids
+    cs_glob
 
 (* ordered array of lambda blocks for stage-0 splices *)
 let item_splices = ref ([] : lambda list)
@@ -710,22 +715,14 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
               cc rootpath target_phase item_postproc final_env rem
       end
       | Tstr_macro(rec_flag, pat_expr_list) ->
-        begin
-          if target_phase = Static then
-            let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
-            let body, size =
-              transl_structure loc ext_fields cc rootpath target_phase
-                item_postproc final_env rem
-            in
-            transl_macro rec_flag pat_expr_list body, size
-          else
-            let placeholders =
-              List.map (fun _ -> ident_zero) @@
-                rev_let_bound_idents pat_expr_list
-            in
-            transl_structure loc (placeholders @ fields)
-              cc rootpath target_phase item_postproc final_env rem
-        end
+          let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
+          let body, size =
+            transl_structure loc ext_fields cc rootpath target_phase
+              item_postproc final_env rem
+          in
+          transl_macro target_phase rec_flag pat_expr_list
+            TreeInspect.expression body,
+          size
       | Tstr_primitive descr ->
           (if target_phase = Nonstatic then
             record_primitive descr.val_val
@@ -1117,16 +1114,13 @@ let transl_store_structure target_phase glob map prims str =
             else
               transl_store rootpath subst rem
         | Tstr_macro (rec_flag, pat_expr_list) ->
-            if target_phase = Static then
-              let ids = let_bound_idents pat_expr_list in
-              let lam =
-                transl_macro rec_flag pat_expr_list
-                  (store_idents Location.none ids)
-              in
-              Lsequence (subst_lambda subst lam,
-                transl_store rootpath (add_idents false ids subst) rem)
-            else
-              transl_store rootpath subst rem
+            let ids = let_bound_idents pat_expr_list in
+            let lam =
+              transl_macro target_phase rec_flag pat_expr_list
+                TreeInspect.expression (store_idents Location.none ids)
+            in
+            Lsequence (subst_lambda subst lam,
+              transl_store rootpath (add_idents false ids subst) rem)
         | Tstr_primitive descr ->
             begin if target_phase = Nonstatic then
               record_primitive descr.val_val
@@ -1472,11 +1466,9 @@ let transl_toplevel_item target_phase item =
             (make_sequence toploop_setvalue_id idents)
         else lambda_unit
     | Tstr_macro (rec_flag, pat_expr_list) ->
-        if target_phase = Static then
-          let idents = let_bound_idents pat_expr_list in
-          transl_macro rec_flag pat_expr_list
-            (make_sequence toploop_setvalue_id idents)
-        else lambda_unit
+        let idents = let_bound_idents pat_expr_list in
+        transl_macro target_phase rec_flag pat_expr_list
+          TreeInspect.expression (make_sequence toploop_setvalue_id idents)
     | Tstr_typext(tyext) ->
         if target_phase = Nonstatic then
           let idents =

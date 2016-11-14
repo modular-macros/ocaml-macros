@@ -32,7 +32,9 @@ val transl_apply: ?should_be_tailcall:bool
                   -> lambda -> (arg_label * expression option) list
                   -> Location.t -> lambda
 val transl_let: rec_flag -> value_binding list -> lambda -> lambda
-val transl_macro: rec_flag -> value_binding list -> lambda -> lambda
+val transl_macro: static_flag -> rec_flag -> value_binding list ->
+  (expression -> Ident.t loc list * Path.t list * Path.t list) -> lambda ->
+  lambda
 val transl_primitive: Location.t -> Primitive.description -> Env.t
                       -> Types.type_expr -> Path.t option -> lambda
 
