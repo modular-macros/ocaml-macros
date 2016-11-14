@@ -49,6 +49,9 @@ module Ident : sig
 
   val unmarshal : string -> t
 
+  (** [lfrommacro lid i] returns [Lfrommacro (lid, i)] *)
+  val lfrommacro : t -> int -> t
+
 end
 
 module Label : sig

@@ -785,6 +785,10 @@ module Ident = struct
     let name = Var.name var in
     { name with txt = CamlinternalAST.Lident name.txt }
 
+  let lfrommacro lid i =
+    { txt = CamlinternalAST.Lfrommacro (lid.txt, i);
+      loc = lid.loc }
+
 end
 
 module Label = struct

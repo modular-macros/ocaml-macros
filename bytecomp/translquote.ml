@@ -56,10 +56,12 @@ end
 
 module Constant = struct
   let unmarshal = combinator "Constant" "unmarshal"
+  let integer = combinator "Constant" "integer"
 end
 
 module Identifier = struct
   let unmarshal = combinator "Ident" "unmarshal"
+  let lfrommacro = combinator "Ident" "lfrommacro"
 end
 
 (*
@@ -744,3 +746,9 @@ let quote_expression transl exp =
 let transl_close_expression loc lam =
   apply loc Exp.to_closed [lam]
 
+let transl_clos_field path_id index =
+  apply Location.none Identifier.lfrommacro
+    [apply Location.none Identifier.unmarshal [Lvar path_id];
+     apply Location.none Constant.integer
+       [Lconst (Const_base (Const_int index))]
+    ]

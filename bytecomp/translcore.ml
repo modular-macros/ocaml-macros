@@ -753,7 +753,19 @@ and transl_exp0 path_clos e =
         ap_inlined = Default_inline;
         ap_specialised = Default_specialise; }
   | Texp_ident(path, _, {val_kind = Val_reg | Val_self _}) ->
-      transl_path ~loc:e.exp_loc e.exp_env path
+    begin
+      match path_clos with
+      | None ->
+          Printf.eprintf "nothing\n%!";
+          transl_path ~loc:e.exp_loc e.exp_env path
+      | Some (path_id, map) ->
+          Printf.eprintf "something!\n%!";
+          try
+            let field_index = Env.PathMap.find path map in
+            Translquote.transl_clos_field path_id field_index
+          with Not_found ->
+            transl_path ~loc:e.exp_loc e.exp_env path
+    end
   | Texp_ident _ -> fatal_error "Translcore.transl_exp: bad Texp_ident"
   | Texp_constant cst ->
       Lconst(Const_base cst)
