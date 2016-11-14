@@ -76,7 +76,7 @@ let parenthesize_if_neg ppf fmt v isneg =
 
 let static_flag ppf = function
   | Asttypes.Nonstatic -> ()
-  | Asttypes.Static -> fprintf ppf "static"
+  | Asttypes.Static -> fprintf ppf "static "
 
 let print_out_value ppf tree =
   let rec print_tree_1 ppf =
@@ -444,14 +444,14 @@ and print_out_sig_item ppf =
   | Osig_modtype (name, mty) ->
       fprintf ppf "@[<2>module type %s =@ %a@]" name !out_module_type mty
   | Osig_module (name, Omty_alias id, _, sf) ->
-      fprintf ppf "@[<2>%a module %s =@ %a@]"
+      fprintf ppf "@[<2>%amodule %s =@ %a@]"
         static_flag sf name print_ident id
   | Osig_module (name, mty, rs, sf) ->
       fprintf ppf "@[<2>%a %s :@ %a@]"
         (fun ppf -> function Orec_not ->
-                         fprintf ppf "%a module" static_flag sf
+                         fprintf ppf "%amodule" static_flag sf
                      | Orec_first ->
-                         fprintf ppf "%a module rec" static_flag sf
+                         fprintf ppf "%amodule rec" static_flag sf
                      | Orec_next ->
                          fprintf ppf "and")
         rs
@@ -463,8 +463,7 @@ and print_out_sig_item ppf =
            | Orec_first -> "type"
            | Orec_next  -> "and")
           ppf td
-  | Osig_value (sf, vd) ->
-      let kwd = if vd.oval_prims = [] then "val" else "external" in
+  | Osig_value (mf, vd) ->
       let pr_prims ppf =
         function
           [] -> ()
@@ -472,10 +471,20 @@ and print_out_sig_item ppf =
             fprintf ppf "@ = \"%s\"" s;
             List.iter (fun s -> fprintf ppf "@ \"%s\"" s) sl
       in
-      fprintf ppf "@[<2>%a %s %a :@ %a%a%a@]" static_flag sf
-        kwd value_ident vd.oval_name
+      let f =
+        begin match mf with
+        | Asttypes.Macro ->
+            fprintf ppf "@[<2>macro %a :@ %a%a%a@]"
+        | Asttypes.Nonmacro sf ->
+            fprintf ppf "@[<2>%a%s %a :@ %a%a%a@]"
+              static_flag sf
+              (if vd.oval_prims = [] then "val" else "external")
+        end
+      in
+      f value_ident vd.oval_name
         !out_type vd.oval_type pr_prims vd.oval_prims
-        (fun ppf -> List.iter (fun a -> fprintf ppf "@ [@@@@%s]" a.oattr_name))
+        (fun ppf ->
+          List.iter (fun a -> fprintf ppf "@ [@@@@%s]" a.oattr_name))
         vd.oval_attributes
   | Osig_ellipsis ->
       fprintf ppf "..."

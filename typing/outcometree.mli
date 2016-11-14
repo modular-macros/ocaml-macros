@@ -100,7 +100,7 @@ and out_sig_item =
   | Osig_module of string * out_module_type *
       out_rec_status * Asttypes.static_flag
   | Osig_type of out_type_decl * out_rec_status
-  | Osig_value of Asttypes.static_flag * out_val_decl
+  | Osig_value of Asttypes.macro_flag * out_val_decl
   | Osig_ellipsis
 and out_type_decl =
   { otype_name: string;

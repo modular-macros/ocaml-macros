@@ -980,7 +980,9 @@ let tree_of_value_description sf id decl =
     | Val_prim p -> Primitive.print p vd
     | _ -> vd
   in
-  Osig_value (sf, vd)
+  if decl.val_kind = Val_macro then
+    Osig_value (Macro, vd)
+  else Osig_value (Nonmacro sf, vd)
 
 let value_description sf id ppf decl =
   !Oprint.out_sig_item ppf (tree_of_value_description sf id decl)
