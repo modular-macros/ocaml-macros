@@ -579,11 +579,7 @@ and quote_expression transl stage e =
       | None ->
           match path with
           | Path.Pident id ->
-              if Env.find_stage path env <> Env.cur_stage env
-                  && not (Env.toplevel_splice env) then
-                fatal_error "Quoting non-global identifier with different stage"
-              else
-                apply loc Exp.var [quote_loc loc; Lvar id]
+              apply loc Exp.var [quote_loc loc; Lvar id]
           | Path.Pdot _ | Path.Papply _ ->
               fatal_error "No global path for identifier"
     end
