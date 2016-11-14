@@ -1120,7 +1120,7 @@ let transl_store_structure target_phase glob map prims str =
             if target_phase = Static then
               let ids = let_bound_idents pat_expr_list in
               let lam =
-                transl_let rec_flag pat_expr_list
+                transl_macro rec_flag pat_expr_list
                   (store_idents Location.none ids)
               in
               Lsequence (subst_lambda subst lam,
@@ -1474,7 +1474,7 @@ let transl_toplevel_item target_phase item =
     | Tstr_macro (rec_flag, pat_expr_list) ->
         if target_phase = Static then
           let idents = let_bound_idents pat_expr_list in
-          transl_let rec_flag pat_expr_list
+          transl_macro rec_flag pat_expr_list
             (make_sequence toploop_setvalue_id idents)
         else lambda_unit
     | Tstr_typext(tyext) ->
