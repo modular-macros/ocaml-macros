@@ -56,7 +56,6 @@ end
 
 module Constant = struct
   let unmarshal = combinator "Constant" "unmarshal"
-  let integer = combinator "Constant" "integer"
 end
 
 module Identifier = struct
@@ -351,6 +350,18 @@ let quote_record_label env loc lbl =
   let lid = mkloc lid loc in
   apply loc Identifier.unmarshal [marshal_ident lid]
 
+(** [transl_clos_field id i] returns the lambda code constructing
+    [Lfrommacro (lid, i)], where [lid] is the contents of the variable referred
+    to by [id] ([id] is assumed to be in scope). *)
+let transl_clos_field loc path_id index =
+  let lid =
+    apply loc Identifier.lfrommacro
+      [apply loc Identifier.unmarshal [Lvar path_id];
+       Lconst (Const_base (Const_int index))
+      ]
+  in
+  apply loc Exp.ident [quote_loc loc; lid]
+
 let rec quote_pattern p =
   let env = p.pat_env in
   let loc = p.pat_loc in
@@ -417,7 +428,7 @@ type case_binding =
   | Pattern of lambda * lambda
   | Guarded of lambda * lambda
 
-let rec case_binding exn transl stage case : case_binding =
+let rec case_binding exn transl pclos stage case : case_binding =
   let pat = case.c_lhs in
   let pat_loc = pat.pat_loc in
   match case.c_guard with
@@ -425,7 +436,7 @@ let rec case_binding exn transl stage case : case_binding =
       match pat.pat_desc, exn with
       | Tpat_var(id, name), false ->
           let name = quote_name name.loc name in
-          let body = quote_expression transl stage case.c_rhs in
+          let body = quote_expression transl pclos stage case.c_rhs in
           Simple(name, func id body)
       | _ ->
           match pat_bound_idents pat with
@@ -437,7 +448,7 @@ let rec case_binding exn transl stage case : case_binding =
                 else
                   pat
               in
-              let exp = quote_expression transl stage case.c_rhs in
+              let exp = quote_expression transl pclos stage case.c_rhs in
               Non_binding(pat, exp)
           | id_names ->
               let ids = List.map fst id_names in
@@ -453,7 +464,7 @@ let rec case_binding exn transl stage case : case_binding =
                 else
                   pat
               in
-              let exp = quote_expression transl stage case.c_rhs in
+              let exp = quote_expression transl pclos stage case.c_rhs in
               let pat_id = Ident.create "pattern" in
               let exp_id = Ident.create "expression" in
               let body =
@@ -476,8 +487,8 @@ let rec case_binding exn transl stage case : case_binding =
         if exn then apply pat_loc Pat.exception_ [quote_loc pat_loc; pat]
         else pat
       in
-      let guard = quote_expression transl stage guard in
-      let exp = quote_expression transl stage case.c_rhs in
+      let guard = quote_expression transl pclos stage guard in
+      let exp = quote_expression transl pclos stage case.c_rhs in
       let pat_id = Ident.create "pattern" in
       let guard_id = Ident.create "guard" in
       let exp_id = Ident.create "expression" in
@@ -500,10 +511,10 @@ and quote_case_binding loc cb =
   | Guarded(names, body) ->
       apply loc Case.guarded [quote_loc loc; names; body]
 
-and quote_case exn transl stage loc case =
-  quote_case_binding loc (case_binding exn transl stage case)
+and quote_case exn transl pclos stage loc case =
+  quote_case_binding loc (case_binding exn transl pclos stage case)
 
-and quote_nonrecursive_let transl stage vbs body =
+and quote_nonrecursive_let transl pclos stage vbs body =
   List.fold_right
     (fun vb body ->
       let loc = vb.vb_loc in
@@ -512,14 +523,14 @@ and quote_nonrecursive_let transl stage vbs body =
       match pat.pat_desc with
       | Tpat_var(id, name) ->
           let name = quote_name name.loc name in
-          let exp = quote_expression transl stage exp in
+          let exp = quote_expression transl pclos stage exp in
           apply loc Exp.let_simple
                 [quote_loc loc; name; exp; func id body]
       | _ ->
           match pat_bound_idents pat with
           | [] ->
               let pat = quote_pattern pat in
-              let exp = quote_expression transl stage exp in
+              let exp = quote_expression transl pclos stage exp in
               apply loc Exp.let_nonbinding [quote_loc loc; pat; exp; body]
           | id_names ->
               let ids = List.map fst id_names in
@@ -529,7 +540,7 @@ and quote_nonrecursive_let transl stage vbs body =
                   id_names
               in
               let pat = quote_pattern pat in
-              let exp = quote_expression transl stage exp in
+              let exp = quote_expression transl pclos stage exp in
               let pat_id = Ident.create "pattern" in
               let body_id = Ident.create "body" in
               let body =
@@ -539,9 +550,9 @@ and quote_nonrecursive_let transl stage vbs body =
               in
               apply loc Exp.let_pattern
                     [quote_loc loc; list names; exp; list_func ids body])
-    vbs (quote_expression transl stage body)
+    vbs (quote_expression transl pclos stage body)
 
-and quote_recursive_let transl stage loc vbs body =
+and quote_recursive_let transl pclos stage loc vbs body =
   let id_names, exps =
     List.fold_right
       (fun vb (id_names, exps) ->
@@ -551,7 +562,7 @@ and quote_recursive_let transl stage loc vbs body =
         | Tpat_var(id, name)
         | Tpat_alias ({pat_desc=Tpat_any}, id, name) ->
             let name = quote_name name.loc name in
-            let exp = quote_expression transl stage exp in
+            let exp = quote_expression transl pclos stage exp in
             ((id, name) :: id_names, exp :: exps)
         | _ -> assert false)
       vbs ([], [])
@@ -562,28 +573,39 @@ and quote_recursive_let transl stage loc vbs body =
   let body_id = Ident.create "body" in
   let body =
     bind exps_id (list exps)
-      (bind body_id (quote_expression transl stage body)
+      (bind body_id (quote_expression transl pclos stage body)
         (pair (Lvar exps_id, Lvar body_id)))
   in
   apply loc Exp.let_rec_simple
         [quote_loc loc; list names; list_func ids body]
 
-and quote_expression transl stage e =
+and quote_expression transl pclos stage e =
   let env = e.exp_env in
   let loc = e.exp_loc in
   match e.exp_desc with
-  | Texp_ident(path, _, _) -> begin
-      match lid_of_path path with
-      | Some lid ->
-          let lid = mkloc lid loc in
-          let lid = apply loc Identifier.unmarshal [marshal_ident lid] in
-          apply loc Exp.ident [quote_loc loc; lid]
-      | None ->
-          match path with
-          | Path.Pident id ->
-              apply loc Exp.var [quote_loc loc; Lvar id]
-          | Path.Pdot _ | Path.Papply _ ->
-              fatal_error "No global path for identifier"
+  | Texp_ident(path, _, _) ->
+    begin
+      let quote_path path =
+        match lid_of_path path with
+        | Some lid ->
+            let lid = mkloc lid loc in
+            let lid = apply loc Identifier.unmarshal [marshal_ident lid] in
+            apply loc Exp.ident [quote_loc loc; lid]
+        | None ->
+            match path with
+            | Path.Pident id ->
+                apply loc Exp.var [quote_loc loc; Lvar id]
+            | Path.Pdot _ | Path.Papply _ ->
+                fatal_error "No global path for identifier"
+      in
+      match pclos with
+      | None -> quote_path path
+      | Some (path_id, map) ->
+          try
+            let field_idx = Env.PathMap.find path map in
+            transl_clos_field loc path_id field_idx
+          with Not_found ->
+            quote_path path
     end
   | Texp_constant const ->
       let const = quote_constant loc const in
@@ -591,12 +613,12 @@ and quote_expression transl stage e =
   | Texp_let(rf, vbs, body) -> begin
       match rf with
       | Nonrecursive ->
-          quote_nonrecursive_let transl stage vbs body
+          quote_nonrecursive_let transl pclos stage vbs body
       | Recursive ->
-          quote_recursive_let transl stage loc vbs body
+          quote_recursive_let transl pclos stage loc vbs body
     end
   | Texp_function(label, cases, _) -> begin
-      let cbs = List.map (case_binding false transl stage) cases in
+      let cbs = List.map (case_binding false transl pclos stage) cases in
       match cbs with
       | [Non_binding(pat, exp)] ->
           let label = quote_arg_label loc label in
@@ -612,7 +634,7 @@ and quote_expression transl stage e =
           apply loc Exp.function_ [quote_loc loc; list cases]
     end
   | Texp_apply(fn, args) ->
-      let fn = quote_expression transl stage fn in
+      let fn = quote_expression transl pclos stage fn in
       let args = List.filter (fun (_, exp) -> exp <> None) args in
       let args =
         List.map
@@ -621,22 +643,24 @@ and quote_expression transl stage e =
              | None -> assert false
              | Some exp ->
                  let lbl = quote_arg_label loc lbl in
-                 let exp = quote_expression transl stage exp in
+                 let exp = quote_expression transl pclos stage exp in
                    pair (lbl, exp))
           args
       in
       apply loc Exp.apply [quote_loc loc; fn; list args]
   | Texp_match(exp, cases, exn_cases, _) ->
-      let exp = quote_expression transl stage exp in
-      let cases = List.map (quote_case false transl stage loc) cases in
-      let exn_cases = List.map (quote_case true transl stage loc) exn_cases in
+      let exp = quote_expression transl pclos stage exp in
+      let cases = List.map (quote_case false transl pclos stage loc) cases in
+      let exn_cases =
+        List.map (quote_case true transl pclos stage loc) exn_cases
+      in
       apply loc Exp.match_ [quote_loc loc; exp; list (cases @ exn_cases)]
   | Texp_try(exp, cases) ->
-      let exp = quote_expression transl stage exp in
-      let cases = List.map (quote_case false transl stage loc) cases in
+      let exp = quote_expression transl pclos stage exp in
+      let cases = List.map (quote_case false transl pclos stage loc) cases in
       apply loc Exp.try_ [quote_loc loc; exp; list cases]
   | Texp_tuple exps ->
-      let exps = List.map (quote_expression transl stage) exps in
+      let exps = List.map (quote_expression transl pclos stage) exps in
       apply loc Exp.tuple [quote_loc loc; list exps]
   | Texp_construct(lid, constr, args) ->
       let constr = quote_variant_constructor env lid.loc constr in
@@ -644,16 +668,16 @@ and quote_expression transl stage e =
         match args with
         | [] -> None
         | [arg] ->
-            let arg = quote_expression transl stage arg in
+            let arg = quote_expression transl pclos stage arg in
             Some arg
         | _ :: _ ->
-            let args = List.map (quote_expression transl stage) args in
+            let args = List.map (quote_expression transl pclos stage) args in
             Some (apply loc Exp.tuple [quote_loc loc; list args])
       in
       apply loc Exp.construct [quote_loc loc; constr; option args]
   | Texp_variant(variant, argo) ->
       let variant = quote_variant loc variant in
-      let argo = Misc.may_map (quote_expression transl stage) argo in
+      let argo = Misc.may_map (quote_expression transl pclos stage) argo in
       apply loc Exp.variant [quote_loc loc; variant; option argo]
   | Texp_record { fields=fields; extended_expression=base } ->
       let lbl_exps =
@@ -661,7 +685,7 @@ and quote_expression transl stage e =
           (function
            | (lbl, (Overridden (lid, exp))) ->
              let lbl = quote_record_label env (lid : Longident.t loc).loc lbl in
-             let exp = quote_expression transl stage exp in
+             let exp = quote_expression transl pclos stage exp in
             pair (lbl, exp)
            | _ -> assert false (* unused *)
           ) @@
@@ -671,36 +695,36 @@ and quote_expression transl stage e =
            | _ -> false) @@
         Array.to_list fields
       in
-      let base = Misc.may_map (quote_expression transl stage) base in
+      let base = Misc.may_map (quote_expression transl pclos stage) base in
       apply loc Exp.record [quote_loc loc; list lbl_exps; option base]
   | Texp_field(rcd, lid, lbl) ->
-      let rcd = quote_expression transl stage rcd in
+      let rcd = quote_expression transl pclos stage rcd in
       let lbl = quote_record_label env lid.loc lbl in
       apply loc Exp.field [quote_loc loc; rcd; lbl]
   | Texp_setfield(rcd, lid, lbl, exp) ->
-      let rcd = quote_expression transl stage rcd in
+      let rcd = quote_expression transl pclos stage rcd in
       let lbl = quote_record_label env lid.loc lbl in
-      let exp = quote_expression transl stage exp in
+      let exp = quote_expression transl pclos stage exp in
       apply loc Exp.setfield [quote_loc loc; rcd; lbl; exp]
   | Texp_array exps ->
-      let exps = List.map (quote_expression transl stage) exps in
+      let exps = List.map (quote_expression transl pclos stage) exps in
       apply loc Exp.array [quote_loc loc; list exps]
   | Texp_ifthenelse(cond, then_, else_) ->
-      let cond = quote_expression transl stage cond in
-      let then_ = quote_expression transl stage then_ in
-      let else_ = Misc.may_map (quote_expression transl stage) else_ in
+      let cond = quote_expression transl pclos stage cond in
+      let then_ = quote_expression transl pclos stage then_ in
+      let else_ = Misc.may_map (quote_expression transl pclos stage) else_ in
       apply loc Exp.ifthenelse [quote_loc loc; cond; then_; option else_]
   | Texp_sequence(exp1, exp2) ->
-      let exp1 = quote_expression transl stage exp1 in
-      let exp2 = quote_expression transl stage exp2 in
+      let exp1 = quote_expression transl pclos stage exp1 in
+      let exp2 = quote_expression transl pclos stage exp2 in
       apply loc Exp.sequence [quote_loc loc; exp1; exp2]
   | Texp_while(cond, body) ->
-      let cond = quote_expression transl stage cond in
-      let body = quote_expression transl stage body in
+      let cond = quote_expression transl pclos stage cond in
+      let body = quote_expression transl pclos stage body in
       apply loc Exp.while_ [quote_loc loc; cond; body]
   | Texp_for(id, pat, low, high, dir, body) ->
-      let low = quote_expression transl stage low in
-      let high = quote_expression transl stage high in
+      let low = quote_expression transl pclos stage low in
+      let high = quote_expression transl pclos stage high in
       let dir =
         match dir with
         | Asttypes.Upto -> true_
@@ -714,25 +738,25 @@ and quote_expression transl stage e =
         | _ -> assert false
       in
       let name = quote_name name.loc name in
-      let body = quote_expression transl stage body in
+      let body = quote_expression transl pclos stage body in
       apply loc Exp.for_
             [quote_loc loc; name; low; high; dir; func id body]
   | Texp_send(obj, meth, _) ->
-      let obj = quote_expression transl stage obj in
+      let obj = quote_expression transl pclos stage obj in
       let meth = quote_method loc meth in
       apply loc Exp.send [quote_loc loc; obj; meth]
   | Texp_assert exp ->
-      let exp = quote_expression transl stage exp in
+      let exp = quote_expression transl pclos stage exp in
       apply loc Exp.assert_ [quote_loc loc; exp]
   | Texp_lazy exp ->
-      let exp = quote_expression transl stage exp in
+      let exp = quote_expression transl pclos stage exp in
       apply loc Exp.lazy_ [quote_loc loc; exp]
   | Texp_quote exp ->
-      let exp = quote_expression transl (stage + 1) exp in
+      let exp = quote_expression transl pclos (stage + 1) exp in
       apply loc Exp.quote [quote_loc loc; exp]
   | Texp_escape exp ->
       if stage > 0 then begin
-        let exp = quote_expression transl (stage - 1) exp in
+        let exp = quote_expression transl pclos (stage - 1) exp in
         apply loc Exp.escape [quote_loc loc; exp]
       end else transl exp
   | Texp_new _ | Texp_instvar _ | Texp_setinstvar _ | Texp_override _
@@ -740,15 +764,8 @@ and quote_expression transl stage e =
   | Texp_letexception _ | Texp_extension_constructor _ ->
       fatal_error "Expression cannot be quoted"
 
-let quote_expression transl exp =
-  quote_expression transl 0 exp
+let quote_expression transl pclos exp =
+  quote_expression transl pclos 0 exp
 
 let transl_close_expression loc lam =
   apply loc Exp.to_closed [lam]
-
-let transl_clos_field path_id index =
-  apply Location.none Identifier.lfrommacro
-    [apply Location.none Identifier.unmarshal [Lvar path_id];
-     apply Location.none Constant.integer
-       [Lconst (Const_base (Const_int index))]
-    ]
