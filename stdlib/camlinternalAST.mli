@@ -83,6 +83,7 @@ and ('a, 'b, 'c, 'd) pattern_desc =
   | Ppat_unpack of string loc
   | Ppat_exception of ('a, 'b, 'c, 'd) pattern
   | Ppat_extension of 'a
+  | Ppat_open of lid loc * ('a, 'b, 'c, 'd) pattern
 
 and ('a, 'b, 'c, 'd) expression =
   {
