@@ -80,7 +80,8 @@ let rec narrow_unbound_lid_error : 'a. _ -> _ -> _ -> _ -> 'a =
         raise (Error (loc, env, Illegal_reference_to_recursive_module))
   in
   begin match lid with
-  | Longident.Lident _ | Longident.Lglobal _ -> ()
+  | Longident.Lident _ | Longident.Lglobal _ 
+  | Longident.Lfrommacro _ -> ()
   | Longident.Ldot (mlid, _) ->
       check_module mlid;
       let md = Env.find_module (Env.lookup_module ~load:true mlid env) env in
@@ -91,7 +92,6 @@ let rec narrow_unbound_lid_error : 'a. _ -> _ -> _ -> _ -> 'a =
           raise (Error (loc, env, Cannot_scrape_alias(mlid, p)))
       | _ -> ()
       end
-  | Longident.Lfrommacro _ -> assert false
   | Longident.Lapply (flid, mlid) ->
       check_module flid;
       let fmd = Env.find_module (Env.lookup_module ~load:true flid env) env in

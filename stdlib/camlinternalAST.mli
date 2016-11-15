@@ -46,10 +46,11 @@ type 'a loc = {
 }
 
 type lid =
-  Lident of string
-| Ldot of lid * string
-| Lapply of lid * lid
-| Lfrommacro of lid * int
+    Lident of string
+  | Ldot of lid * string
+  | Lapply of lid * lid
+  | Lglobal of string
+  | Lfrommacro of lid * int
 
 (* 'a = attribute
    'b = core_type
