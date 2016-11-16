@@ -54,7 +54,8 @@ end) = struct
           else if not (List.mem p !X.cs_nonglob) then
             X.cs_nonglob := p :: !X.cs_nonglob
         ;
-        if vd.val_kind = Val_macro then
+        if vd.val_kind = Val_macro &&
+            not (List.mem p !X.macros) then
           X.macros := p :: !X.macros
     | _ -> ()
 end

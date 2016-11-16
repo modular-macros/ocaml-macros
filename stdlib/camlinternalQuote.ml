@@ -785,10 +785,6 @@ module Ident = struct
     let name = Var.name var in
     { name with txt = CamlinternalAST.Lident name.txt }
 
-  let lfrommacro lid i =
-    { txt = CamlinternalAST.Lfrommacro (lid.txt, i);
-      loc = lid.loc }
-
   let eprint lid =
     let rec loop ppf =
       function
@@ -798,7 +794,13 @@ module Ident = struct
       | Lglobal s -> Format.fprintf ppf "%s(*global*)" s
       | Lfrommacro (l, i) -> Format.fprintf ppf "%a.(%d)" loop l i
     in
-    loop Format.err_formatter lid.txt
+    loop Format.err_formatter lid.txt;
+    Format.fprintf Format.err_formatter "lolilol\n%!"
+
+  let lfrommacro lid i =
+    eprint lid;
+    { txt = CamlinternalAST.Lfrommacro (lid.txt, i);
+      loc = lid.loc }
 
 end
 

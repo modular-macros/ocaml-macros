@@ -746,9 +746,20 @@ and transl_exp0 e =
   | Texp_ident(_, _, {val_kind = Val_anc _}) ->
       raise(Error(e.exp_loc, Free_super_var))
   | Texp_ident(path, lid, {val_kind = Val_macro}) ->
+      let get_lid () = Translquote.marshal_ident lid in
+      let lid = begin
+        match !path_clos with
+        | None -> get_lid ()
+        | Some (path_id, map) ->
+            try
+              let field = Env.PathMap.find path map in
+              Translquote.transl_clos_field lid.loc path_id field
+            with Not_found ->
+              get_lid ()
+      end in
       Lapply {
         ap_func = transl_path ~loc:e.exp_loc e.exp_env path;
-        ap_args = [Translquote.marshal_ident lid];
+        ap_args = [lid];
         ap_loc = e.exp_loc;
         ap_should_be_tailcall = false;
         ap_inlined = Default_inline;
@@ -1465,15 +1476,19 @@ let transl_macro target_phase rec_flag pat_expr_list inspect body =
         | _ -> raise(Error(pat.pat_loc, Illegal_macro_pat)))
     pat_expr_list
   in
-  let transl_one {vb_expr=expr; vb_attributes; vb_loc} =
-    let (_, cs_paths, _) = inspect expr in
+  let transl_one id {vb_expr=expr; vb_attributes; vb_loc} =
+    let (_, cs_paths, macro_paths) = inspect expr in
+    (* Filter out the current macro *)
+    let macro_paths =
+      List.filter (fun p -> Path.compare p (Path.Pident id) <> 0) macro_paths
+    in
     let rec build_map acc i =
       function
       | [] -> acc
       | x :: xs -> build_map (Env.PathMap.add x i acc) (succ i) xs
     in
     let path_mapping : int Env.PathMap.t =
-      build_map Env.PathMap.empty 0 cs_paths
+      build_map Env.PathMap.empty 0 (cs_paths @ macro_paths)
     in
     if target_phase = Static then
       let path_id = Ident.create "path" in
@@ -1505,7 +1520,7 @@ let transl_macro target_phase rec_flag pat_expr_list inspect body =
         Lprim (Pmakeblock (0, Immutable, None),
           List.map (fun p ->
             transl_path expr.exp_env p
-          ) cs_paths,
+          ) (cs_paths @ macro_paths),
           Location.none)
       in
       clos_lam
@@ -1513,11 +1528,11 @@ let transl_macro target_phase rec_flag pat_expr_list inspect body =
   match rec_flag with
   | Nonrecursive ->
       let transl body (id, vb) =
-        Llet (Alias, Pgenval, id, transl_one vb, body)
+        Llet (Alias, Pgenval, id, transl_one id vb, body)
       in
       List.fold_left transl body (List.rev id_vb_list)
   | Recursive ->
-      let l = List.map (fun (x,y) -> (x, transl_one y)) id_vb_list in
+      let l = List.map (fun (x,y) -> (x, transl_one x y)) id_vb_list in
       Lletrec (l, body)
 
 (* Wrapper for class compilation *)
