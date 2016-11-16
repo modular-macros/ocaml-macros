@@ -60,7 +60,7 @@ end
 
 module Identifier = struct
   let unmarshal = combinator "Ident" "unmarshal"
-  let _lfrommacro = combinator "Ident" "lfrommacro"
+  let lfrommacro = combinator "Ident" "lfrommacro"
 end
 
 (*
@@ -353,8 +353,7 @@ let quote_record_label env loc lbl =
 (** [transl_clos_field id i] returns the lambda code constructing
     [Lfrommacro (lid, i)], where [lid] is the contents of the variable referred
     to by [id] ([id] is assumed to be in scope). *)
-let transl_clos_field loc _path_id _index =
-  (*
+let transl_clos_field loc path_id index =
   let lid =
     apply loc Identifier.lfrommacro
       [apply loc Identifier.unmarshal [Lvar path_id];
@@ -362,10 +361,6 @@ let transl_clos_field loc _path_id _index =
       ]
   in
   apply loc Exp.ident [quote_loc loc; lid]
-  *)
-  apply loc Exp.ident [quote_loc loc;
-    apply loc Identifier.unmarshal [marshal_ident (mkloc (Longident.Lfrommacro
-    (Longident.Lident "lol", 1)) loc)]]
 
 let rec quote_pattern p =
   let env = p.pat_env in
