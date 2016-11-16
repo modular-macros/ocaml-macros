@@ -789,6 +789,17 @@ module Ident = struct
     { txt = CamlinternalAST.Lfrommacro (lid.txt, i);
       loc = lid.loc }
 
+  let eprint lid =
+    let rec loop ppf =
+      function
+      | Lident s -> Format.fprintf ppf "%s" s
+      | Ldot (l, s) -> Format.fprintf ppf "%a.%s" loop l s
+      | Lapply (l, l') -> Format.fprintf ppf "%a(%a)" loop l loop l'
+      | Lglobal s -> Format.fprintf ppf "%s(*global*)" s
+      | Lfrommacro (l, i) -> Format.fprintf ppf "%a.(%d)" loop l i
+    in
+    loop Format.err_formatter lid.txt
+
 end
 
 module Label = struct

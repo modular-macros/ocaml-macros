@@ -52,6 +52,9 @@ module Ident : sig
   (** [lfrommacro lid i] returns [Lfrommacro (lid, i)] *)
   val lfrommacro : t -> int -> t
 
+  (** Prints to stderr *)
+  val eprint : t -> unit
+
 end
 
 module Label : sig
