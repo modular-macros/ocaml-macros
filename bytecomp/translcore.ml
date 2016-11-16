@@ -1121,10 +1121,14 @@ and transl_exp0 e =
           Format.pp_print_newline ppf () (* flushing necessary *)
         end;
         incr splice_index;
+        (* Deactivate all warnings while compiling splices *)
+        let backup = Warnings.backup () in
+        Warnings.parse_options false "-1..61";
         let lam =
           transl_exp @@
           Typecore.type_expression (Env.with_phase_down e.exp_env) parsetree
         in
+        Warnings.restore backup;
         lam
       | None ->
         lambda_unit
