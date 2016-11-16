@@ -1014,7 +1014,8 @@ let lookup proj1 proj2 global ?loc lid env =
       end
   | Lapply _ ->
       raise Not_found
-  | Lfrommacro (_macro_lid, _field) ->
+  | Lfrommacro _ ->
+      (* should not happen *)
       assert false
 
 let lookup_all_simple proj1 proj2 shadow global ?loc lid env =
@@ -1054,7 +1055,9 @@ let lookup_all_simple proj1 proj2 shadow global ?loc lid env =
       end
   | Lapply _ ->
       raise Not_found
-  | Lfrommacro _ -> assert false
+  | Lfrommacro _ ->
+      (* should not happen *)
+      assert false
 
 let has_local_constraints env = not (PathMap.is_empty env.local_constraints)
 
@@ -1065,11 +1068,28 @@ let cstr_shadow cstr1 cstr2 =
 
 let lbl_shadow _lbl1 _lbl2 = false
 
-let lookup_value =
+let rec lookup_value ?loc lid env =
+  match lid with
+  | Lfrommacro (macro_lid, field) ->
+      let (p, _) =
+        lookup_value ?loc macro_lid env
+      in
+      let str =
+        "(" ^ string_of_int field ^ ")"
+      in
+      let vd = {
+        val_type = newgenvar ();
+        val_kind = Val_reg;
+        val_loc = (match loc with Some l -> l | None -> Location.none);
+        val_attributes = []; }
+      in
+      (Pdot (p, str, field), vd)
+  | _ ->
     lookup (fun env -> env.values) (fun sc -> sc.comp_values)
       (fun ((p, _vd), _slot) ->
         let h = Path.head p in
         Ident.persistent h || Ident.global h)
+      ?loc lid env
 and lookup_all_constructors =
   lookup_all_simple (fun env -> env.constrs) (fun sc -> sc.comp_constrs)
     cstr_shadow (fun _ -> true)

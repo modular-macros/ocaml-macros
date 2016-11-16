@@ -703,6 +703,7 @@ let try_ids = Hashtbl.create 8
 
 let splice_array = ref (None : Parsetree.expression array ref option)
 let splice_index = ref 0
+let path_clos = ref (None : (Ident.t * int Env.PathMap.t) option)
 
 let set_transl_splices opt =
   splice_index := 0;
@@ -710,7 +711,7 @@ let set_transl_splices opt =
   | None -> splice_array := None
   | Some a -> splice_array := Some a
 
-let rec transl_exp path_clos e =
+let rec transl_exp e =
   List.iter (Translattribute.check_attribute e) e.exp_attributes;
   let eval_once =
     (* Whether classes for immediate objects must be cached *)
@@ -718,10 +719,10 @@ let rec transl_exp path_clos e =
       Texp_function _ | Texp_for _ | Texp_while _ -> false
     | _ -> true
   in
-  if eval_once then transl_exp0 path_clos e else
-  Translobj.oo_wrap e.exp_env true (transl_exp0 path_clos) e
+  if eval_once then transl_exp0 e else
+  Translobj.oo_wrap e.exp_env true transl_exp0 e
 
-and transl_exp0 path_clos e =
+and transl_exp0 e =
   match e.exp_desc with
     Texp_ident(path, _, {val_kind = Val_prim p}) ->
       let public_send = p.prim_name = "%send" in
@@ -759,7 +760,7 @@ and transl_exp0 path_clos e =
       Lconst(Const_base cst)
   | Texp_let(rec_flag, pat_expr_list, body) ->
       transl_let rec_flag pat_expr_list
-        (event_before body (transl_exp path_clos body))
+        (event_before body (transl_exp body))
   | Texp_function (_, pat_expr_list, partial) ->
       let ((kind, params), body) =
         event_function e
@@ -856,12 +857,12 @@ and transl_exp0 path_clos e =
       let e = { e with exp_desc = Texp_apply(funct, oargs) } in
       event_after e
         (transl_apply ~should_be_tailcall ~inlined ~specialised
-           (transl_exp path_clos funct) oargs e.exp_loc)
+           (transl_exp funct) oargs e.exp_loc)
   | Texp_match(arg, pat_expr_list, exn_pat_expr_list, partial) ->
     transl_match e arg pat_expr_list exn_pat_expr_list partial
   | Texp_try(body, pat_expr_list) ->
       let id = name_pattern "exn" pat_expr_list in
-      Ltrywith(transl_exp path_clos body, id,
+      Ltrywith(transl_exp body, id,
                Matching.for_trywith (Lvar id) (transl_cases_try pat_expr_list))
   | Texp_tuple el ->
       let ll, shape = transl_list_with_shape el in
@@ -900,7 +901,7 @@ and transl_exp0 path_clos e =
       begin match arg with
         None -> Lconst(Const_pointer tag)
       | Some arg ->
-          let lam = transl_exp path_clos arg in
+          let lam = transl_exp arg in
           try
             Lconst(Const_block(0, [Const_base(Const_int tag);
                                    extract_constant lam]))
@@ -912,7 +913,7 @@ and transl_exp0 path_clos e =
       transl_record e.exp_loc e.exp_env fields representation
         extended_expression
   | Texp_field(arg, _, lbl) ->
-      let targ = transl_exp path_clos arg in
+      let targ = transl_exp arg in
       begin match lbl.lbl_repres with
           Record_regular | Record_inlined _ ->
           Lprim (Pfield lbl.lbl_pos, [targ], e.exp_loc)
@@ -933,7 +934,7 @@ and transl_exp0 path_clos e =
           Psetfield (lbl.lbl_pos + 1, maybe_pointer newval, Assignment)
       in
       Lprim(access,
-        [transl_exp path_clos arg; transl_exp path_clos newval],
+        [transl_exp arg; transl_exp newval],
         e.exp_loc)
   | Texp_array expr_list ->
       let kind = array_kind e in
@@ -981,25 +982,25 @@ and transl_exp0 path_clos e =
         Lprim(Pmakearray (kind, Mutable), ll, e.exp_loc)
       end
   | Texp_ifthenelse(cond, ifso, Some ifnot) ->
-      Lifthenelse(transl_exp path_clos cond,
-                  event_before ifso (transl_exp path_clos ifso),
-                  event_before ifnot (transl_exp path_clos ifnot))
+      Lifthenelse(transl_exp cond,
+                  event_before ifso (transl_exp ifso),
+                  event_before ifnot (transl_exp ifnot))
   | Texp_ifthenelse(cond, ifso, None) ->
-      Lifthenelse(transl_exp path_clos cond,
-                  event_before ifso (transl_exp path_clos ifso),
+      Lifthenelse(transl_exp cond,
+                  event_before ifso (transl_exp ifso),
                   lambda_unit)
   | Texp_sequence(expr1, expr2) ->
-      Lsequence(transl_exp path_clos expr1,
-        event_before expr2 (transl_exp path_clos expr2))
+      Lsequence(transl_exp expr1,
+        event_before expr2 (transl_exp expr2))
   | Texp_while(cond, body) ->
-      Lwhile(transl_exp path_clos cond,
-        event_before body (transl_exp path_clos body))
+      Lwhile(transl_exp cond,
+        event_before body (transl_exp body))
   | Texp_for(param, _, low, high, dir, body) ->
-      Lfor(param, transl_exp path_clos low, transl_exp path_clos high, dir,
-           event_before body (transl_exp path_clos body))
-  | Texp_send(_, _, Some exp) -> transl_exp path_clos exp
+      Lfor(param, transl_exp low, transl_exp high, dir,
+           event_before body (transl_exp body))
+  | Texp_send(_, _, Some exp) -> transl_exp exp
   | Texp_send(expr, met, None) ->
-      let obj = transl_exp path_clos expr in
+      let obj = transl_exp expr in
       let lam =
         match met with
           Tmeth_val id -> Lsend (Self, Lvar id, obj, [], e.exp_loc)
@@ -1039,11 +1040,11 @@ and transl_exp0 path_clos e =
   | Texp_letmodule(id, _, modl, body) ->
       Llet(Strict, Pgenval, id,
            !transl_module Tcoerce_none None modl,
-           transl_exp path_clos body)
+           transl_exp body)
   | Texp_letexception(cd, body) ->
       Llet(Strict, Pgenval,
            cd.ext_id, transl_extension_constructor e.exp_env None cd,
-           transl_exp path_clos body)
+           transl_exp body)
   | Texp_pack modl ->
       !transl_module Tcoerce_none None modl
   | Texp_assert {exp_desc=Texp_construct(_, {cstr_name="false"}, _)} ->
@@ -1051,7 +1052,7 @@ and transl_exp0 path_clos e =
   | Texp_assert (cond) ->
       if !Clflags.noassert
       then lambda_unit
-      else Lifthenelse (transl_exp path_clos cond, lambda_unit, assert_failed e)
+      else Lifthenelse (transl_exp cond, lambda_unit, assert_failed e)
   | Texp_lazy e ->
       (* when e needs no computation (constants, identifiers, ...), we
          optimize the translation just as Lazy.lazy_from_val would
@@ -1063,12 +1064,12 @@ and transl_exp0 path_clos e =
           | Const_int32 _ | Const_int64 _ | Const_nativeint _ )
       | Texp_function(_, _, _)
       | Texp_construct (_, {cstr_arity = 0}, _)
-        -> transl_exp path_clos e
+        -> transl_exp e
       | Texp_constant(Const_float _) ->
           (* We don't need to wrap with Popaque: this forward
              block will never be shortcutted since it points to a float. *)
           Lprim(Pmakeblock(Obj.forward_tag, Immutable, None),
-                [transl_exp path_clos e], e.exp_loc)
+                [transl_exp e], e.exp_loc)
       | Texp_ident _ ->
           (* CR-someday mshinwell: Consider adding a new primitive
              that expresses the construction of forward_tag blocks.
@@ -1080,15 +1081,15 @@ and transl_exp0 path_clos e =
           then
             Lprim (Popaque,
                    [Lprim(Pmakeblock(Obj.forward_tag, Immutable, None),
-                          [transl_exp path_clos e], e.exp_loc)],
+                          [transl_exp e], e.exp_loc)],
                    e.exp_loc)
-          else transl_exp path_clos e
+          else transl_exp e
       (* other cases compile to a lazy block holding a function *)
       | _ ->
          let fn = Lfunction {kind = Curried; params = [Ident.create "param"];
                              attr = default_function_attribute;
                              loc = e.exp_loc;
-                             body = transl_exp path_clos e} in
+                             body = transl_exp e} in
           Lprim(Pmakeblock(Config.lazy_tag, Mutable, None), [fn], e.exp_loc)
       end
   | Texp_object (cs, meths) ->
@@ -1102,7 +1103,7 @@ and transl_exp0 path_clos e =
           cl_attributes = [];
          }
   | Texp_quote e ->
-      Translquote.quote_expression (transl_exp path_clos) path_clos e
+      Translquote.quote_expression transl_exp !path_clos e
   | Texp_escape e ->
     begin
       match !splice_array with
@@ -1121,7 +1122,7 @@ and transl_exp0 path_clos e =
         end;
         incr splice_index;
         let lam =
-          transl_exp path_clos @@
+          transl_exp @@
           Typecore.type_expression (Env.with_phase_down e.exp_env) parsetree
         in
         lam
@@ -1132,21 +1133,21 @@ and transl_exp0 path_clos e =
       raise (Error (e.exp_loc, Unreachable_reached))
 
 and transl_list expr_list =
-  List.map (transl_exp None) expr_list
+  List.map transl_exp expr_list
 
 and transl_list_with_shape expr_list =
   let transl_with_shape e =
     let shape = Typeopt.value_kind e.exp_env e.exp_type in
-    (transl_exp None) e, shape
+    transl_exp e, shape
   in
   List.split (List.map transl_with_shape expr_list)
 
 and transl_guard guard rhs =
-  let expr = event_before rhs ((transl_exp None) rhs) in
+  let expr = event_before rhs (transl_exp rhs) in
   match guard with
   | None -> expr
   | Some cond ->
-      event_before cond (Lifthenelse((transl_exp None) cond, expr, staticfail))
+      event_before cond (Lifthenelse(transl_exp cond, expr, staticfail))
 
 and transl_case {c_lhs; c_guard; c_rhs} =
   c_lhs, transl_guard c_guard c_rhs
@@ -1238,7 +1239,7 @@ and transl_apply ?(should_be_tailcall=false) ?(inlined = Default_inline)
         lapply lam (List.rev_map fst args)
   in
   (build_apply lam [] (List.map (fun (l, x) ->
-                                   may_map (transl_exp None) x, Btype.is_optional l)
+                                   may_map transl_exp x, Btype.is_optional l)
                                 sargs)
      : Lambda.lambda)
 
@@ -1283,7 +1284,7 @@ and transl_let rec_flag pat_expr_list body =
         [] ->
           body
       | {vb_pat=pat; vb_expr=expr; vb_attributes=attr; vb_loc} :: rem ->
-          let lam = transl_exp None expr in
+          let lam = transl_exp expr in
           let lam =
             Translattribute.add_inline_attribute lam vb_loc attr
           in
@@ -1301,7 +1302,7 @@ and transl_let rec_flag pat_expr_list body =
             | _ -> raise(Error(pat.pat_loc, Illegal_letrec_pat)))
         pat_expr_list in
       let transl_case {vb_expr=expr; vb_attributes; vb_loc} id =
-        let lam = transl_exp None expr in
+        let lam = transl_exp expr in
         let lam =
           Translattribute.add_inline_attribute lam vb_loc
             vb_attributes
@@ -1322,7 +1323,7 @@ and transl_setinstvar loc self var expr =
     | Immediate -> Pintarray
   in
   Lprim(Parraysetu prim,
-    [self; transl_normal_path var; transl_exp None expr], loc)
+    [self; transl_normal_path var; transl_exp expr], loc)
 
 and transl_record loc env fields repres opt_init_expr =
   let size = Array.length fields in
@@ -1349,7 +1350,7 @@ and transl_record loc env fields repres opt_init_expr =
                Lprim(access, [Lvar init_id], loc), field_kind
            | Overridden (_lid, expr) ->
                let field_kind = value_kind expr.exp_env expr.exp_type in
-               transl_exp None expr, field_kind)
+               transl_exp expr, field_kind)
         fields
     in
     let ll, shape = List.split (Array.to_list lv) in
@@ -1391,7 +1392,7 @@ and transl_record loc env fields repres opt_init_expr =
     begin match opt_init_expr with
       None -> lam
     | Some init_expr -> Llet(Strict, Pgenval, init_id,
-                             transl_exp None init_expr, lam)
+                             transl_exp init_expr, lam)
     end
   end else begin
     (* Take a shallow copy of the init record, then mutate the fields
@@ -1413,13 +1414,13 @@ and transl_record loc env fields repres opt_init_expr =
             | Record_extension ->
                 Psetfield(lbl.lbl_pos + 1, maybe_pointer expr, Assignment)
           in
-          Lsequence(Lprim(upd, [Lvar copy_id; transl_exp None expr], loc), cont)
+          Lsequence(Lprim(upd, [Lvar copy_id; transl_exp expr], loc), cont)
     in
     begin match opt_init_expr with
       None -> assert false
     | Some init_expr ->
         Llet(Strict, Pgenval, copy_id,
-             Lprim(Pduprecord (repres, size), [transl_exp None init_expr], loc),
+             Lprim(Pduprecord (repres, size), [transl_exp init_expr], loc),
              Array.fold_left update_field (Lvar copy_id) fields)
     end
   end
@@ -1445,10 +1446,10 @@ and transl_match e arg pat_expr_list exn_pat_expr_list partial =
     static_catch (transl_list argl) val_ids
       (Matching.for_multiple_match e.exp_loc lvars cases partial)
   | arg, [] ->
-    Matching.for_function e.exp_loc None (transl_exp None arg) cases partial
+    Matching.for_function e.exp_loc None (transl_exp arg) cases partial
   | arg, _ :: _ ->
     let val_id = name_pattern "val" pat_expr_list in
-    static_catch [transl_exp None arg] [val_id]
+    static_catch [transl_exp arg] [val_id]
       (Matching.for_function e.exp_loc None (Lvar val_id) cases partial)
 
 let transl_macro target_phase rec_flag pat_expr_list inspect body =
@@ -1472,7 +1473,9 @@ let transl_macro target_phase rec_flag pat_expr_list inspect body =
     in
     if target_phase = Static then
       let path_id = Ident.create "path" in
-      let lam = transl_exp (Some (path_id, path_mapping)) expr in
+      path_clos := Some (path_id, path_mapping);
+      let lam = transl_exp expr in
+      path_clos := None;
       let lam =
         Translattribute.add_inline_attribute lam vb_loc
           vb_attributes
@@ -1512,9 +1515,6 @@ let transl_macro target_phase rec_flag pat_expr_list inspect body =
   | Recursive ->
       let l = List.map (fun (x,y) -> (x, transl_one y)) id_vb_list in
       Lletrec (l, body)
-
-(* Wrapper for exposure to the outside world *)
-let transl_exp = transl_exp None
 
 (* Wrapper for class compilation *)
 
