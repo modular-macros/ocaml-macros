@@ -51,7 +51,7 @@ end) = struct
           if Ident.global h || Ident.persistent h then
             let h' = { txt = h; loc = lid.loc } in
             X.cs_glob := h' :: !X.cs_glob
-          else
+          else if not (List.mem p !X.cs_nonglob) then
             X.cs_nonglob := p :: !X.cs_nonglob
         ;
         if vd.val_kind = Val_macro then
