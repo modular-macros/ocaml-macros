@@ -795,12 +795,14 @@ module Ident = struct
       | Lfrommacro (l, i) -> Format.fprintf ppf "%a.(%d)" loop l i
     in
     loop Format.err_formatter lid.txt;
-    Format.fprintf Format.err_formatter "lolilol\n%!"
+    Format.pp_print_newline Format.err_formatter ()
 
   let lfrommacro lid i =
-    eprint lid;
-    { txt = CamlinternalAST.Lfrommacro (lid.txt, i);
+    let lid =
+      { txt = CamlinternalAST.Lfrommacro (lid.txt, i);
       loc = lid.loc }
+    in
+    lid
 
 end
 

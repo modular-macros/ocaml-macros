@@ -350,17 +350,17 @@ let quote_record_label env loc lbl =
   let lid = mkloc lid loc in
   apply loc Identifier.unmarshal [marshal_ident lid]
 
+let unmarshal_ident loc lid =
+  apply loc Identifier.unmarshal [lid]
+
 (** [transl_clos_field id i] returns the lambda code constructing
     [Lfrommacro (lid, i)], where [lid] is the contents of the variable referred
     to by [id] ([id] is assumed to be in scope). *)
 let transl_clos_field loc path_id index =
-  let lid =
-    apply loc Identifier.lfrommacro
-      [apply loc Identifier.unmarshal [Lvar path_id];
-       Lconst (Const_base (Const_int index))
-      ]
-  in
-  apply loc Exp.ident [quote_loc loc; lid]
+  apply loc Identifier.lfrommacro
+    [Lvar path_id;
+     Lconst (Const_base (Const_int index))
+    ]
 
 let rec quote_pattern p =
   let env = p.pat_env in
@@ -603,7 +603,10 @@ and quote_expression transl pclos stage e =
       | Some (path_id, map) ->
           try
             let field_idx = Env.PathMap.find path map in
-            transl_clos_field loc path_id field_idx
+            let lid =
+              transl_clos_field loc path_id field_idx
+            in
+            apply loc Exp.ident [quote_loc loc; lid]
           with Not_found ->
             quote_path path
     end

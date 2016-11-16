@@ -12,6 +12,7 @@ val transl_close_expression : Location.t -> lambda -> lambda
 val wrap_local : Location.t -> Ident.t -> string loc -> lambda -> lambda
 
 val marshal_ident : Longident.t loc -> lambda
+val unmarshal_ident : Location.t -> lambda -> lambda
 
 (** [transl_clos_field id i] returns the lambda code constructing
     [Lfrommacro (lid, i)], where [lid] is the contents of the variable referred

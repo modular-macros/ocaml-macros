@@ -703,6 +703,11 @@ let try_ids = Hashtbl.create 8
 
 let splice_array = ref (None : Parsetree.expression array ref option)
 let splice_index = ref 0
+
+(** If a macro is being translated, then contains the identifier of the path
+    argument and the mapping from paths to indices in the macro closure.
+    Index -1 is associated with the name of the macro being translated (to
+    detect recursive calls). *)
 let path_clos = ref (None : (Ident.t * int Env.PathMap.t) option)
 
 let set_transl_splices opt =
@@ -746,14 +751,19 @@ and transl_exp0 e =
   | Texp_ident(_, _, {val_kind = Val_anc _}) ->
       raise(Error(e.exp_loc, Free_super_var))
   | Texp_ident(path, lid, {val_kind = Val_macro}) ->
-      let get_lid () = Translquote.marshal_ident lid in
+      let get_lid () =
+        Translquote.unmarshal_ident lid.loc (Translquote.marshal_ident lid)
+      in
       let lid = begin
         match !path_clos with
         | None -> get_lid ()
         | Some (path_id, map) ->
             try
               let field = Env.PathMap.find path map in
-              Translquote.transl_clos_field lid.loc path_id field
+              if field = -1 then
+                Lvar path_id
+              else
+                Translquote.transl_clos_field lid.loc path_id field
             with Not_found ->
               get_lid ()
       end in
@@ -1479,8 +1489,9 @@ let transl_macro target_phase rec_flag pat_expr_list inspect body =
   let transl_one id {vb_expr=expr; vb_attributes; vb_loc} =
     let (_, cs_paths, macro_paths) = inspect expr in
     (* Filter out the current macro *)
+    let this_macro = Path.Pident id in
     let macro_paths =
-      List.filter (fun p -> Path.compare p (Path.Pident id) <> 0) macro_paths
+      List.filter (fun p -> Path.compare p this_macro <> 0) macro_paths
     in
     let rec build_map acc i =
       function
@@ -1490,6 +1501,7 @@ let transl_macro target_phase rec_flag pat_expr_list inspect body =
     let path_mapping : int Env.PathMap.t =
       build_map Env.PathMap.empty 0 (cs_paths @ macro_paths)
     in
+    let path_mapping = Env.PathMap.add this_macro (-1) path_mapping in
     if target_phase = Static then
       let path_id = Ident.create "path" in
       path_clos := Some (path_id, path_mapping);
