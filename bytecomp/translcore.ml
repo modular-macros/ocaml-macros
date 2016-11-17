@@ -760,7 +760,7 @@ and transl_exp0 e =
         | Some (path_id, map) ->
             try
               let field = Env.PathMap.find path map in
-              if field = 0 then (* recursive call *)
+              if field = -1 then
                 Lvar path_id
               else
                 Translquote.transl_clos_field lid.loc path_id field
@@ -768,9 +768,7 @@ and transl_exp0 e =
               get_lid ()
       end in
       Lapply {
-        ap_func = Lprim(Pfield 0,
-          [transl_path ~loc:e.exp_loc e.exp_env path],
-          Location.none);
+        ap_func = transl_path ~loc:e.exp_loc e.exp_env path;
         ap_args = [lid];
         ap_loc = e.exp_loc;
         ap_should_be_tailcall = false;
@@ -1479,7 +1477,7 @@ and transl_match e arg pat_expr_list exn_pat_expr_list partial =
     static_catch [transl_exp arg] [val_id]
       (Matching.for_function e.exp_loc None (Lvar val_id) cases partial)
 
-let transl_macro target_phase toplevel_macro rec_flag pat_expr_list inspect body =
+let transl_macro target_phase rec_flag pat_expr_list inspect body =
   let id_vb_list =
     List.map
       (fun ({vb_pat=pat} as vb) -> match pat.pat_desc with
@@ -1501,9 +1499,9 @@ let transl_macro target_phase toplevel_macro rec_flag pat_expr_list inspect body
       | x :: xs -> build_map (Env.PathMap.add x i acc) (succ i) xs
     in
     let path_mapping : int Env.PathMap.t =
-      build_map Env.PathMap.empty 1 (cs_paths @ macro_paths)
+      build_map Env.PathMap.empty 0 (cs_paths @ macro_paths)
     in
-    let path_mapping = Env.PathMap.add this_macro 0 path_mapping in
+    let path_mapping = Env.PathMap.add this_macro (-1) path_mapping in
     if target_phase = Static then
       let path_id = Ident.create "path" in
       path_clos := Some (path_id, path_mapping);
@@ -1528,28 +1526,13 @@ let transl_macro target_phase toplevel_macro rec_flag pat_expr_list inspect body
         attr = default_function_attribute;
         loc = expr.exp_loc; }
       in
-      let block =
-        Lprim (Pmakeblock (0, Immutable, None),
-          macro_ ::
-            List.map (fun _ ->
-              Lprim (Pmakeblock (0, Immutable, None), [], Location.none))
-              (cs_paths @ macro_paths),
-          Location.none)
-      in
-      block
+      macro_
     else
       let clos_lam =
         Lprim (Pmakeblock (0, Immutable, None),
-          (* dummy block, or existing macro if in REPL *)
-          (match toplevel_macro with
-          | Some toploop_getvalue ->
-              Lprim (Pfield 0, [toploop_getvalue id], Location.none)
-          | None ->
-              Lprim (Pmakeblock (0, Immutable, None), [], Location.none)
-          ) ::
-            List.map (fun p ->
-              transl_path expr.exp_env p
-            ) (cs_paths @ macro_paths),
+          List.map (fun p ->
+            transl_path expr.exp_env p
+          ) (cs_paths @ macro_paths),
           Location.none)
       in
       clos_lam

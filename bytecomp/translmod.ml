@@ -721,7 +721,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
             transl_structure loc ext_fields cc rootpath target_phase
               item_postproc final_env rem
           in
-          transl_macro target_phase None rec_flag pat_expr_list
+          transl_macro target_phase rec_flag pat_expr_list
             TreeInspect.expression body,
           size
       | Tstr_primitive descr ->
@@ -1111,7 +1111,7 @@ let transl_store_structure target_phase glob map prims str =
         | Tstr_macro (rec_flag, pat_expr_list) ->
             let ids = let_bound_idents pat_expr_list in
             let lam =
-              transl_macro target_phase None rec_flag pat_expr_list
+              transl_macro target_phase rec_flag pat_expr_list
                 TreeInspect.expression (store_idents Location.none ids)
             in
             Lsequence (subst_lambda subst lam,
@@ -1472,8 +1472,8 @@ let transl_toplevel_item target_phase item =
         else lambda_unit
     | Tstr_macro (rec_flag, pat_expr_list) ->
         let idents = let_bound_idents pat_expr_list in
-        transl_macro target_phase (Some (toploop_getvalue Static)) rec_flag
-          pat_expr_list TreeInspect.expression
+        transl_macro target_phase rec_flag pat_expr_list
+          TreeInspect.expression
           (make_sequence (toploop_setvalue_id target_phase) idents)
     | Tstr_typext(tyext) ->
         if target_phase = Nonstatic then
