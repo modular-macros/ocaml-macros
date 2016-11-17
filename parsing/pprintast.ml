@@ -177,8 +177,8 @@ let paren: 'a . ?first:space_formatter -> ?last:space_formatter ->
 let rec longident f = function
   | Lident s -> protect_ident f s
   | Lglobal s -> protect_ident f (s ^ "(*global*)")
-  | Lfrommacro(y, i) ->
-      protect_longident f longident y ("(" ^ string_of_int i ^ ")")
+  | Lfrommacro(y, s, i) ->
+      protect_longident f longident y (s ^ "(*" ^ string_of_int i ^ "*)")
   | Ldot(y,s) -> protect_longident f longident y s
   | Lapply (y,s) ->
       pp f "%a(%a)" longident y longident s

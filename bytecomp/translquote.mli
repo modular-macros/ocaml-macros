@@ -14,7 +14,7 @@ val wrap_local : Location.t -> Ident.t -> string loc -> lambda -> lambda
 val marshal_ident : Longident.t loc -> lambda
 val unmarshal_ident : Location.t -> lambda -> lambda
 
-(** [transl_clos_field id i] returns the lambda code constructing
-    [Lfrommacro (lid, i)], where [lid] is the contents of the variable referred
-    to by [id] ([id] is assumed to be in scope). *)
-val transl_clos_field : Location.t -> Ident.t -> int -> lambda
+(** [transl_clos_field id s i] returns the lambda code constructing
+    [Lfrommacro (lid, s, i)], where [lid] is the contents of the variable
+    referred to by [id] ([id] is assumed to be in scope). *)
+val transl_clos_field : Location.t -> Ident.t -> string -> int -> lambda

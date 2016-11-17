@@ -356,9 +356,10 @@ let unmarshal_ident loc lid =
 (** [transl_clos_field id i] returns the lambda code constructing
     [Lfrommacro (lid, i)], where [lid] is the contents of the variable referred
     to by [id] ([id] is assumed to be in scope). *)
-let transl_clos_field loc path_id index =
+let transl_clos_field loc path_id str index =
   apply loc Identifier.lfrommacro
     [Lvar path_id;
+     string str;
      Lconst (Const_base (Const_int index))
     ]
 
@@ -583,7 +584,7 @@ and quote_expression transl pclos stage e =
   let env = e.exp_env in
   let loc = e.exp_loc in
   match e.exp_desc with
-  | Texp_ident(path, _, _) ->
+  | Texp_ident(path, lid, _) ->
     begin
       let quote_path path =
         match lid_of_path path with
@@ -603,8 +604,15 @@ and quote_expression transl pclos stage e =
       | Some (path_id, map) ->
           try
             let field_idx = Env.PathMap.find path map in
+            let ppf = Format.str_formatter in
+            let open Parsetree in
+            Pprintast.expression ppf {
+              pexp_desc = (Pexp_ident lid);
+              pexp_loc = Location.none;
+              pexp_attributes = []; };
+            let str = Format.flush_str_formatter () in
             let lid =
-              transl_clos_field loc path_id field_idx
+              transl_clos_field loc path_id str field_idx
             in
             apply loc Exp.ident [quote_loc loc; lid]
           with Not_found ->

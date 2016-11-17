@@ -792,17 +792,17 @@ module Ident = struct
       | Ldot (l, s) -> Format.fprintf ppf "%a.%s" loop l s
       | Lapply (l, l') -> Format.fprintf ppf "%a(%a)" loop l loop l'
       | Lglobal s -> Format.fprintf ppf "%s(*global*)" s
-      | Lfrommacro (l, i) -> Format.fprintf ppf "%a.(%d)" loop l i
+      | Lfrommacro (l, s, i) -> Format.fprintf ppf "%a.%s(*%d*)" loop l s i
     in
     loop Format.err_formatter lid.txt;
     Format.pp_print_newline Format.err_formatter ()
 
-  let lfrommacro lid i =
+  let lfrommacro lid s i =
     let lid =
-      { txt = CamlinternalAST.Lfrommacro (lid.txt, i);
+      { txt = CamlinternalAST.Lfrommacro (lid.txt, s, i);
       loc = lid.loc }
     in
-    lid
+    eprint lid; lid
 
 end
 

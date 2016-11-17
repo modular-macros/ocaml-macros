@@ -36,8 +36,8 @@ let rec fmt_longident_aux f x =
   | Longident.Lident (s) -> fprintf f "%s" s;
   | Longident.Lglobal s -> fprintf f "%s(*global*)" s;
   | Longident.Ldot (y, s) -> fprintf f "%a.%s" fmt_longident_aux y s;
-  | Longident.Lfrommacro (y, i) ->
-      fprintf f "%a.(%d)" fmt_longident_aux y i;
+  | Longident.Lfrommacro (y, s, i) ->
+      fprintf f "%a.%s(*%d*)" fmt_longident_aux y s i;
   | Longident.Lapply (y, z) ->
       fprintf f "%a(%a)" fmt_longident_aux y fmt_longident_aux z;
 ;;

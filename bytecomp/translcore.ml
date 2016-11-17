@@ -763,7 +763,14 @@ and transl_exp0 e =
               if field = -1 then
                 Lvar path_id
               else
-                Translquote.transl_clos_field lid.loc path_id field
+                let ppf = Format.str_formatter in
+                let open Parsetree in
+                Pprintast.expression ppf {
+                  pexp_desc = (Pexp_ident lid);
+                  pexp_loc = Location.none;
+                  pexp_attributes = []; };
+                let str = Format.flush_str_formatter () in
+                Translquote.transl_clos_field lid.loc path_id str field
             with Not_found ->
               get_lid ()
       end in

@@ -50,7 +50,7 @@ type lid =
   | Ldot of lid * string
   | Lapply of lid * lid
   | Lglobal of string
-  | Lfrommacro of lid * int
+  | Lfrommacro of lid * string * int
 
 (* 'a = attribute
    'b = core_type

@@ -1070,7 +1070,7 @@ let lbl_shadow _lbl1 _lbl2 = false
 
 let rec lookup_value ?loc lid env =
   match lid with
-  | Lfrommacro (macro_lid, field) ->
+  | Lfrommacro (macro_lid, _, field) ->
       let (p, _) =
         lookup_value ?loc macro_lid env
       in

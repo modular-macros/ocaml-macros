@@ -50,7 +50,7 @@ module Ident : sig
   val unmarshal : string -> t
 
   (** [lfrommacro lid i] returns [Lfrommacro (lid, i)] *)
-  val lfrommacro : t -> int -> t
+  val lfrommacro : t -> string -> int -> t
 
   (** Prints to stderr *)
   val eprint : t -> unit

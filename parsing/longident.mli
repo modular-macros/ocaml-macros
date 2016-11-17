@@ -25,10 +25,15 @@ type t =
          identifiers be shadowed by local ones after macro expansion.
          This variant should only be created by macros, and never by the
          parser. *)
-  | Lfrommacro of t * int
+  | Lfrommacro of t * string * int
       (* Used to refer to an element of a path closure after macro expansion.
          This variant should only be created by macros, and never by the
-         parser. *)
+         parser.
+         Lfrommacro (lid, s, i) where:
+           lid = path to macro closure
+           s = name of the field (only used for pretty-printing)
+           i = index of the field in the closure
+      *)
 
 val flatten: t -> string list
 val last: t -> string

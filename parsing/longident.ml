@@ -18,14 +18,14 @@ type t =
   | Ldot of t * string
   | Lapply of t * t
   | Lglobal of string
-  | Lfrommacro of t * int
+  | Lfrommacro of t * string * int
 
-let field_to_string i = "(" ^ string_of_int i ^ ")"
+let field_to_string s i = s ^ "(*" ^ string_of_int i ^ "*)"
 
 let rec flat accu = function
     Lident s
   | Lglobal s -> s :: accu
-  | Lfrommacro(lid, i) -> flat (field_to_string i :: accu) lid
+  | Lfrommacro(lid, s, i) -> flat (field_to_string s i :: accu) lid
   | Ldot(lid, s) -> flat (s :: accu) lid
   | Lapply(_, _) -> Misc.fatal_error "Longident.flat"
 
@@ -34,7 +34,7 @@ let flatten lid = flat [] lid
 let last = function
     Lident s
   | Lglobal s -> s
-  | Lfrommacro(_, i) -> field_to_string i
+  | Lfrommacro(_, s, i) -> field_to_string s i
   | Ldot(_, s) -> s
   | Lapply(_, _) -> Misc.fatal_error "Longident.last"
 
@@ -54,7 +54,7 @@ let parse s =
 let rec is_lifted = function
   | Lident s
   | Lglobal s -> String.length s <> 0 && s.[0] == '^'
-  | Lfrommacro (id, _)
+  | Lfrommacro (id, _, _)
   | Ldot (id, _) -> is_lifted id
   | Lapply (id, _) -> is_lifted id
 
@@ -63,6 +63,6 @@ let rec lift = function
       if String.length s <> 0 && s.[0] == '^' then l else Lident ("^" ^ s)
   | Lglobal s as l ->
       if String.length s <> 0 && s.[0] == '^' then l else Lglobal ("^" ^ s)
-  | Lfrommacro (id, s) -> Lfrommacro (lift id, s)
+  | Lfrommacro (id, s, i) -> Lfrommacro (lift id, s, i)
   | Ldot (id, s) -> Ldot (lift id, s)
   | Lapply (_,_) -> Misc.fatal_error "Longident.lift on functor"
