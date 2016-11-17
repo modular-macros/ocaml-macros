@@ -38,7 +38,7 @@ research project.
 Main collaborators:
 
 * Olivier Nicole, main developer 
-* Leo White, quoting library and original design
-* Jeremy Yallop, original design
+* Leo White, quoting library, original design and supervision
+* Jeremy Yallop, original design and supervision
 * Oleg Kiselyov, developer of BER MetaOCaml, from which macros are inspired
 * Gemma Gordon, project manager
