@@ -1,10 +1,10 @@
 
-#       module S : sig val x : int end
+#       static module S : sig val x : int end
 #     Characters 9-12:
   let x = S.x (* Error: wrong phase *)
           ^^^
 Error: Attempt to use value S.x of phase 1 in an environment of phase 0
-#     val x : int = 42
+#     static val x : int = 42
 #             module type St = sig val x : int end
 module F : functor (X : St) -> sig val y : int end
 #     Characters 14-15:
@@ -15,10 +15,10 @@ Error: Expected module of phase 0, but this expression has phase 1
   static module M = F(S) (* Error wrong phase *)
                     ^
 Error: Expected module of phase 1, but this expression has phase 0
-#         module F : functor (X : St) -> sig val y : int end
-#     module M : sig val y : int end
+#         static module F : functor (X : St) -> sig val y : int end
+#     static module M : sig val y : int end
 #     43
-#         module G :
+#         static module G :
   functor
     (X : sig
            external raise : exn -> 'a = "%raise"
@@ -265,6 +265,6 @@ Error: Expected module of phase 1, but this expression has phase 0
            val do_at_exit : unit -> unit
          end) ->
     sig val x : int end
-#     module N : sig val x : int end
+#     static module N : sig val x : int end
 #     42
 # 
