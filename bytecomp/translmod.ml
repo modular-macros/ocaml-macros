@@ -945,13 +945,7 @@ let rec defined_idents static_flag = function
         placeholders @ defined_idents static_flag rem
     )
     | Tstr_macro (_rec_flag, pat_expr_list) ->
-        if static_flag = Static then
-          let_bound_idents pat_expr_list @ defined_idents static_flag rem
-        else
-          let placeholders =
-            List.map (fun _ -> ident_zero) (let_bound_idents pat_expr_list)
-          in
-          placeholders @ defined_idents static_flag rem
+        let_bound_idents pat_expr_list @ defined_idents static_flag rem
     | Tstr_primitive _ -> defined_idents static_flag rem
     | Tstr_type _ -> defined_idents static_flag rem
     | Tstr_typext tyext ->
