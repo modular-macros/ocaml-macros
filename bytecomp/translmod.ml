@@ -529,7 +529,7 @@ let compile_recmodule phase compile_rhs bindings cont =
 
 let rec bound_value_identifiers = function
     [] -> []
-  | Sig_value(id, _, {val_kind = Val_reg}) :: rem ->
+  | Sig_value(id, _, {val_kind = Val_reg | Val_macro}) :: rem ->
       id :: bound_value_identifiers rem
   | Sig_typext(id, _, _) :: rem -> id :: bound_value_identifiers rem
   | Sig_module(id, _, _, _) :: rem -> id :: bound_value_identifiers rem
