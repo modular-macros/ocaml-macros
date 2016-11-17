@@ -46,7 +46,7 @@ val transl_package_flambda:
 
 val toplevel_name: Ident.t -> string
 val nat_toplevel_name: Ident.t -> Ident.t * int
-val close_toplevel_term: lambda * unit -> lambda
+val close_toplevel_term: static_flag -> lambda * unit -> lambda
 
 val field_path: Path.t option -> Ident.t -> Path.t option
 

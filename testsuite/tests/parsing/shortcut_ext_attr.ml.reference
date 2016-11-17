@@ -769,7 +769,7 @@
             Psig_extension "foo"
             [
               signature_item (shortcut_ext_attr.ml[92,1814+2]..[92,1814+21])
-                Psig_value Nonstatic
+                Psig_value Nonmacro Nonstatic
                 value_description "x" (shortcut_ext_attr.ml[92,1814+16]..[92,1814+17]) (shortcut_ext_attr.ml[92,1814+2]..[92,1814+21])
                   attribute "foo"
                     []
@@ -782,7 +782,7 @@
             Psig_extension "foo"
             [
               signature_item (shortcut_ext_attr.ml[93,1836+2]..[93,1836+31])
-                Psig_value Nonstatic
+                Psig_value Nonmacro Nonstatic
                 value_description "x" (shortcut_ext_attr.ml[93,1836+21]..[93,1836+22]) (shortcut_ext_attr.ml[93,1836+2]..[93,1836+31])
                   attribute "foo"
                     []

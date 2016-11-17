@@ -752,7 +752,7 @@ and transl_exp0 e =
       raise(Error(e.exp_loc, Free_super_var))
   | Texp_ident(path, lid, {val_kind = Val_macro}) ->
       let get_lid () =
-        Translquote.unmarshal_ident lid.loc (Translquote.marshal_ident lid)
+        Translquote.path_arg e.exp_loc path
       in
       let lid = begin
         match !path_clos with
@@ -1151,7 +1151,7 @@ and transl_exp0 e =
         incr splice_index;
         (* Deactivate all warnings while compiling splices *)
         let backup = Warnings.backup () in
-        Warnings.parse_options false "-1..61";
+        Warnings.deactivate_all ();
         let lam =
           transl_exp @@
           Typecore.type_expression (Env.with_phase_down e.exp_env) parsetree

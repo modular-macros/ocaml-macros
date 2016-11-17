@@ -211,6 +211,12 @@ let restore x = current := x
 let is_active x = (!current).active.(number x);;
 let is_error x = (!current).error.(number x);;
 
+let deactivate_all () =
+  current := {
+    active = Array.make (last_warning_number + 1) false;
+    error = Array.make (last_warning_number + 1) false;
+  }
+
 let parse_opt error active flags s =
   let set i = flags.(i) <- true in
   let clear i = flags.(i) <- false in

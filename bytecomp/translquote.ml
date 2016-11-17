@@ -300,21 +300,13 @@ let lid_of_path p =
   let rec loop = function
     | Path.Pident id ->
         if Ident.global id then Longident.Lglobal (Ident.name id)
-        else begin
-          match
-            List.find (fun (_, bid) -> Ident.equal id bid)
-                      Predef.builtin_idents
-          with
-          | name, _ -> Longident.Lglobal name
-          | exception Not_found -> raise Exit
-        end
+        else Longident.Lident (Ident.name id)
     | Path.Pdot(p, s, _) ->
         Longident.Ldot(loop p, s)
-    | Path.Papply _ -> raise Exit
+    | Path.Papply (p, p') ->
+        Longident.Lapply (loop p, loop p')
   in
-    match loop p with
-    | lid -> Some lid
-    | exception Exit -> None
+  loop p
 
 let lid_of_type_path env ty =
   let desc =
@@ -322,17 +314,16 @@ let lid_of_type_path env ty =
   in
   match desc with
   | Tconstr(p, _, _) -> lid_of_path p
-  | _ -> None
+  | _ -> fatal_error "No path for type"
 
 let quote_variant_constructor env loc constr =
   let lid =
     match lid_of_type_path env constr.cstr_res with
-    | None -> fatal_error "No global path for variant constructor"
-    | Some (Longident.Lident _) -> Longident.Lident constr.cstr_name
-    | Some (Longident.Lglobal _) -> Longident.Lglobal constr.cstr_name
-    | Some (Longident.Ldot(lid, _)) -> Longident.Ldot(lid, constr.cstr_name)
-    | Some (Longident.Lfrommacro _) -> assert false
-    | Some (Longident.Lapply _) -> assert false
+    | Longident.Lident _ -> Longident.Lident constr.cstr_name
+    | Longident.Lglobal _ -> Longident.Lglobal constr.cstr_name
+    | Longident.Ldot(lid, _) -> Longident.Ldot(lid, constr.cstr_name)
+    | Longident.Lfrommacro _ -> assert false
+    | Longident.Lapply _ -> assert false
   in
   let lid = mkloc lid loc in
   apply loc Identifier.unmarshal [marshal_ident lid]
@@ -340,18 +331,14 @@ let quote_variant_constructor env loc constr =
 let quote_record_label env loc lbl =
   let lid =
     match lid_of_type_path env lbl.lbl_res with
-    | None -> fatal_error "No global path for record label"
-    | Some (Longident.Lident _) -> Longident.Lident lbl.lbl_name
-    | Some (Longident.Lglobal _) -> Longident.Lglobal lbl.lbl_name
-    | Some (Longident.Ldot(lid, _)) -> Longident.Ldot(lid, lbl.lbl_name)
-    | Some (Longident.Lfrommacro _) -> assert false
-    | Some (Longident.Lapply _) -> assert false
+    | Longident.Lident _ -> Longident.Lident lbl.lbl_name
+    | Longident.Lglobal _ -> Longident.Lglobal lbl.lbl_name
+    | Longident.Ldot(lid, _) -> Longident.Ldot(lid, lbl.lbl_name)
+    | Longident.Lfrommacro _ -> assert false
+    | Longident.Lapply _ -> assert false
   in
   let lid = mkloc lid loc in
   apply loc Identifier.unmarshal [marshal_ident lid]
-
-let unmarshal_ident loc lid =
-  apply loc Identifier.unmarshal [lid]
 
 (** [transl_clos_field id i] returns the lambda code constructing
     [Lfrommacro (lid, i)], where [lid] is the contents of the variable referred
@@ -362,6 +349,11 @@ let transl_clos_field loc path_id str index =
      string str;
      Lconst (Const_base (Const_int index))
     ]
+
+let path_arg loc p =
+  let lid = mkloc (lid_of_path p) loc in
+  let lid = marshal_ident lid in
+  apply loc Identifier.unmarshal [lid]
 
 let rec quote_pattern p =
   let env = p.pat_env in
@@ -587,17 +579,21 @@ and quote_expression transl pclos stage e =
   | Texp_ident(path, lid, _) ->
     begin
       let quote_path path =
-        match lid_of_path path with
-        | Some lid ->
-            let lid = mkloc lid loc in
-            let lid = apply loc Identifier.unmarshal [marshal_ident lid] in
-            apply loc Exp.ident [quote_loc loc; lid]
-        | None ->
-            match path with
-            | Path.Pident id ->
-                apply loc Exp.var [quote_loc loc; Lvar id]
-            | Path.Pdot _ | Path.Papply _ ->
-                fatal_error "No global path for identifier"
+        let env = e.exp_env in
+        (* If cross-stage, quote as identifier (should be global).
+         * Otherwise, quote as var, i.e. bound variable *)
+        if Env.cur_stage env <> Env.find_stage path env then
+          let lid = lid_of_path path in
+          let lid = mkloc lid loc in
+          let lid = apply loc Identifier.unmarshal [marshal_ident lid] in
+          apply loc Exp.ident [quote_loc loc; lid]
+        else begin
+          match path with
+          | Path.Pident id ->
+              apply loc Exp.var [quote_loc loc; Lvar id]
+          | _ ->
+              fatal_error "Cross-stage identifier has compound path"
+        end
       in
       match pclos with
       | None -> quote_path path

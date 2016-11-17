@@ -284,14 +284,14 @@
             Ptyp_extension "foo"
             [
               signature_item (extensions.ml[17,421+11]..[17,421+20])
-                Psig_value Nonstatic
+                Psig_value Nonmacro Nonstatic
                 value_description "x" (extensions.ml[17,421+15]..[17,421+16]) (extensions.ml[17,421+11]..[17,421+20])
                   core_type (extensions.ml[17,421+19]..[17,421+20])
                     Ptyp_constr "t" (extensions.ml[17,421+19]..[17,421+20])
                     []
                   []
               signature_item (extensions.ml[17,421+22]..[17,421+31])
-                Psig_value Nonstatic
+                Psig_value Nonmacro Nonstatic
                 value_description "y" (extensions.ml[17,421+26]..[17,421+27]) (extensions.ml[17,421+22]..[17,421+31])
                   core_type (extensions.ml[17,421+30]..[17,421+31])
                     Ptyp_constr "t" (extensions.ml[17,421+30]..[17,421+31])
