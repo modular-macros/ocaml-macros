@@ -1410,32 +1410,42 @@ let toplevel_name id =
   try Ident.find_same id !aliased_idents
   with Not_found -> Ident.name id
 
-let toploop_getvalue id =
+let toploop_getvalue phase id =
+  let phase =
+    match phase with Static -> 1 | Nonstatic -> 0
+  in
   Lapply{ap_should_be_tailcall=false;
          ap_loc=Location.none;
          ap_func=Lprim(Pfield toploop_getvalue_pos,
                        [Lprim(Pgetglobal toploop_ident, [], Location.none)],
                        Location.none);
-         ap_args=[Lconst(Const_base(Const_string (toplevel_name id, None)))];
+         ap_args=[
+           Lconst(Const_base(Const_int phase));
+           Lconst(Const_base(Const_string (toplevel_name id, None)))];
          ap_inlined=Default_inline;
          ap_specialised=Default_specialise}
 
-let toploop_setvalue id lam =
+let toploop_setvalue phase id lam =
+  let phase =
+    match phase with Static -> 1 | Nonstatic -> 0
+  in
   Lapply{ap_should_be_tailcall=false;
          ap_loc=Location.none;
          ap_func=Lprim(Pfield toploop_setvalue_pos,
                        [Lprim(Pgetglobal toploop_ident, [], Location.none)],
                        Location.none);
-         ap_args=[Lconst(Const_base(Const_string (toplevel_name id, None)));
+         ap_args=[
+           Lconst(Const_base(Const_int phase));
+           Lconst(Const_base(Const_string (toplevel_name id, None)));
                   lam];
          ap_inlined=Default_inline;
          ap_specialised=Default_specialise}
 
-let toploop_setvalue_id id = toploop_setvalue id (Lvar id)
+let toploop_setvalue_id phase id = toploop_setvalue phase id (Lvar id)
 
-let close_toplevel_term (lam, ()) =
+let close_toplevel_term target_phase (lam, ()) =
   IdentSet.fold (fun id l -> Llet(Strict, Pgenval, id,
-                                  toploop_getvalue id, l))
+                                  toploop_getvalue target_phase id, l))
                 (free_variables lam) lam
 
 let transl_toplevel_item target_phase item =
@@ -1458,12 +1468,13 @@ let transl_toplevel_item target_phase item =
         if static_flag = target_phase then
           let idents = let_bound_idents pat_expr_list in
           transl_let rec_flag pat_expr_list
-            (make_sequence toploop_setvalue_id idents)
+            (make_sequence (toploop_setvalue_id target_phase) idents)
         else lambda_unit
     | Tstr_macro (rec_flag, pat_expr_list) ->
         let idents = let_bound_idents pat_expr_list in
-        transl_macro target_phase (Some toploop_getvalue) rec_flag pat_expr_list
-          TreeInspect.expression (make_sequence toploop_setvalue_id idents)
+        transl_macro target_phase (Some (toploop_getvalue Static)) rec_flag
+          pat_expr_list TreeInspect.expression
+          (make_sequence (toploop_setvalue_id target_phase) idents)
     | Tstr_typext(tyext) ->
         if target_phase = Nonstatic then
           let idents =
@@ -1473,13 +1484,13 @@ let transl_toplevel_item target_phase item =
              definitions of the same extension constructor in the toplevel *)
           List.iter set_toplevel_unique_name idents;
             transl_type_extension item.str_env None tyext
-              (make_sequence toploop_setvalue_id idents)
+              (make_sequence (toploop_setvalue_id target_phase) idents)
         else lambda_unit
     | Tstr_exception ext ->
         if target_phase = Nonstatic then
           begin
           set_toplevel_unique_name ext.ext_id;
-          toploop_setvalue ext.ext_id
+          toploop_setvalue target_phase ext.ext_id
             (transl_extension_constructor item.str_env None ext)
           end
         else lambda_unit
@@ -1493,7 +1504,7 @@ let transl_toplevel_item target_phase item =
           let lam =
             transl_module Tcoerce_none (Some(Pident id)) target_phase modl
           in
-          toploop_setvalue id lam
+          toploop_setvalue target_phase id lam
         end
     | Tstr_recmodule (sf, bindings) ->
         if sf = Static && target_phase = Nonstatic then
@@ -1504,7 +1515,7 @@ let transl_toplevel_item target_phase item =
             (fun id modl ->
               transl_module Tcoerce_none (Some(Pident id)) target_phase modl)
             bindings
-            (make_sequence toploop_setvalue_id idents)
+            (make_sequence (toploop_setvalue_id target_phase) idents)
         end
     | Tstr_class cl_list ->
         if target_phase = Nonstatic then begin
@@ -1512,7 +1523,8 @@ let transl_toplevel_item target_phase item =
              be a value named identically *)
           let (ids, class_bindings) = transl_class_bindings cl_list in
           List.iter set_toplevel_unique_name ids;
-          Lletrec(class_bindings, make_sequence toploop_setvalue_id ids)
+          Lletrec(class_bindings,
+            make_sequence (toploop_setvalue_id target_phase) ids)
         end
         else lambda_unit
     | Tstr_include incl ->
@@ -1524,7 +1536,7 @@ let transl_toplevel_item target_phase item =
             lambda_unit
         | id :: ids ->
             Lsequence(
-              toploop_setvalue id
+              toploop_setvalue target_phase id
                 (Lprim(Pfield pos, [Lvar mid], Location.none)),
               set_idents (pos + 1) ids)
         in
@@ -1555,7 +1567,7 @@ let transl_toplevel_item target_phase item =
     item_lam
 
 let transl_toplevel_item_and_close target_phase itm =
-  close_toplevel_term
+  close_toplevel_term target_phase
     (transl_label_init (fun () -> transl_toplevel_item target_phase itm, ()))
 
 let rec insert_splice_array_toplevel splice_ids = function

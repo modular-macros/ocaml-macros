@@ -18,8 +18,8 @@ open Format
 (* Accessors for the table of toplevel value bindings.  These functions
    must appear as first and second exported functions in this module.
    (See module Translmod.) *)
-val getvalue : string -> Obj.t
-val setvalue : string -> Obj.t -> unit
+val getvalue : Types.phase -> string -> Obj.t
+val setvalue : Types.phase -> string -> Obj.t -> unit
 
 (* Set the load paths, before running anything *)
 

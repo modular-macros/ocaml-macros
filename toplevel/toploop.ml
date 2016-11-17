@@ -39,39 +39,48 @@ type directive_info = {
 
 (* The table of toplevel value bindings and its accessors *)
 
-module StringMap = Map.Make(String)
+module Key = struct
+  type t = Types.phase * string
+  let compare (p, s) (p', s') =
+    match Pervasives.compare p p' with
+    | 0 -> String.compare s s'
+    | n -> n
+end
+module StringMap = Map.Make(Key)
 
 let toplevel_value_bindings : Obj.t StringMap.t ref = ref StringMap.empty
 
-let getvalue name =
+let getvalue phase name =
   try
-    StringMap.find name !toplevel_value_bindings
+    StringMap.find (phase, name) !toplevel_value_bindings
   with Not_found ->
     fatal_error (name ^ " unbound at toplevel")
 
-let setvalue name v =
-  toplevel_value_bindings := StringMap.add name v !toplevel_value_bindings
+let setvalue phase name v =
+  toplevel_value_bindings :=
+    StringMap.add (phase, name) v !toplevel_value_bindings
 
 (* Return the value referred to by a path *)
 
-let rec eval_path = function
+let rec eval_path phase = function
   | Pident id ->
       if Ident.persistent id || Ident.global id then
-        Symtable.get_global_value (0 (* macros: not sure *), id)
+        Symtable.get_global_value (phase, id)
       else begin
         let name = Translmod.toplevel_name id in
         try
-          StringMap.find name !toplevel_value_bindings
+          StringMap.find (phase, name) !toplevel_value_bindings
         with Not_found ->
           raise (Symtable.Error(Symtable.Undefined_global name))
       end
   | Pdot(p, _s, pos) ->
-      Obj.field (eval_path p) pos
+      Obj.field (eval_path phase p) pos
   | Papply _ ->
       fatal_error "Toploop.eval_path"
 
 let eval_path env path =
-  eval_path (Env.normalize_path (Some Location.none) env path)
+  eval_path (Env.find_phase path env)
+    (Env.normalize_path (Some Location.none) env path)
 
 (* To print values *)
 
@@ -210,8 +219,9 @@ let load_lambda phase ppf lam =
 let pr_item =
   Printtyp.print_items
     (fun env -> function
-      | Sig_value(id, _, {val_kind = Val_reg; val_type}) ->
-          Some (outval_of_value env (getvalue (Translmod.toplevel_name id))
+      | Sig_value(id, sf, {val_kind = Val_reg; val_type}) ->
+          let phase = Env.phase_of_sf sf in
+          Some (outval_of_value env (getvalue phase (Translmod.toplevel_name id))
                   val_type)
       | _ -> None
     )
