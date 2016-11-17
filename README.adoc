@@ -29,3 +29,16 @@ inconvenience by opening an issue on this repo.
 Found a bug and know how to fix it? We certainly appreciate pull requests.
 If you plan on making big changes, please file an issue first to discuss why
 theses changes are needed.
+
+== List of Contributors
+
+The implementation of macros is an https://github.com/ocamllabs[OCaml Labs]
+research project.
+
+Main collaborators:
+
+* Olivier Nicole, main developer 
+* Leo White, quoting library and original design
+* Jeremy Yallop, original design
+* Oleg Kiselyov, developer of BER MetaOCaml, from which macros are inspired
+* Gemma Gordon, project manager
