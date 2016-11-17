@@ -1144,7 +1144,7 @@ and transl_exp0 e =
         incr splice_index;
         (* Deactivate all warnings while compiling splices *)
         let backup = Warnings.backup () in
-        Warnings.parse_options false "-1..61";
+        Warnings.deactivate_all ();
         let lam =
           transl_exp @@
           Typecore.type_expression (Env.with_phase_down e.exp_env) parsetree

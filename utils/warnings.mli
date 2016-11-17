@@ -96,6 +96,8 @@ val reset_fatal: unit -> unit
 
 val help_warnings: unit -> unit
 
+val deactivate_all : unit -> unit
+
 type state
 val backup: unit -> state
 val restore: state -> unit
