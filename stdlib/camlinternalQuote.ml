@@ -802,7 +802,7 @@ module Ident = struct
       { txt = CamlinternalAST.Lfrommacro (lid.txt, s, i);
       loc = lid.loc }
     in
-    eprint lid; lid
+    lid
 
 end
 
