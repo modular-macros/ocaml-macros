@@ -1,5 +1,5 @@
 
-#   val x : int = 42
+#   static val x : int = 42
 #     Characters 14-15:
   let y = succ x (* Error: phase mismatch *)
                ^
