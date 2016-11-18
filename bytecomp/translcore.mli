@@ -52,6 +52,7 @@ type error =
   | Unknown_builtin_primitive of string
   | Unreachable_reached
   | Illegal_macro_pat
+  | Illegal_quoting
 
 exception Error of Location.t * error
 

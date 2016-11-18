@@ -31,6 +31,7 @@ type error =
   | Unknown_builtin_primitive of string
   | Unreachable_reached
   | Illegal_macro_pat
+  | Illegal_quoting
 
 exception Error of Location.t * error
 
@@ -1130,8 +1131,11 @@ and transl_exp0 e =
           cl_env = e.exp_env;
           cl_attributes = [];
          }
-  | Texp_quote e ->
-      Translquote.quote_expression transl_exp !path_clos e
+  | Texp_quote exp ->
+      if !path_clos = None then (* not in a macro *)
+        raise (Error (e.exp_loc, Illegal_quoting))
+      ;
+      Translquote.quote_expression transl_exp !path_clos exp
   | Texp_escape e ->
     begin
       match !splice_array with
@@ -1588,6 +1592,9 @@ let report_error ppf = function
   | Illegal_macro_pat ->
       fprintf ppf
         "Only variables are allowed as left-hand side of `let rec'"
+  | Illegal_quoting ->
+      fprintf ppf
+        "Quoting is banned outside of macros"
 
 let () =
   Location.register_error_of_exn
