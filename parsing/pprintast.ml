@@ -963,8 +963,8 @@ and signature_item ctxt f x : unit =
       let intro =
         match mf with
         | Nonmacro sf ->
-            if sf = Static then "static " else "" ^
-              if vd.pval_prim = [] then "val" else "external"
+            (if sf = Static then "static " else "") ^
+              (if vd.pval_prim = [] then "val" else "external")
         | Macro -> "macro"
       in
       pp f "@[<2>%s@ %a@ :@ %a@]%a" intro
