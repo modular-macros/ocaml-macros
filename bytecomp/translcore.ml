@@ -32,6 +32,7 @@ type error =
   | Unreachable_reached
   | Illegal_macro_pat
   | Illegal_quoting
+  | Illegal_macro_app
 
 exception Error of Location.t * error
 
@@ -752,6 +753,10 @@ and transl_exp0 e =
   | Texp_ident(_, _, {val_kind = Val_anc _}) ->
       raise(Error(e.exp_loc, Free_super_var))
   | Texp_ident(path, lid, {val_kind = Val_macro}) ->
+      if not (Env.toplevel_splice e.exp_env) && !path_clos = None then
+        (* not in a macro nor in a splice *)
+        raise (Error (e.exp_loc, Illegal_macro_app))
+      ;
       let get_lid () =
         Translquote.path_arg e.exp_loc path
       in
@@ -1132,7 +1137,8 @@ and transl_exp0 e =
           cl_attributes = [];
          }
   | Texp_quote exp ->
-      if !path_clos = None then (* not in a macro *)
+      if not (Env.toplevel_splice e.exp_env) && !path_clos = None then
+        (* not in a macro nor in a splice *)
         raise (Error (e.exp_loc, Illegal_quoting))
       ;
       Translquote.quote_expression transl_exp !path_clos exp
@@ -1594,7 +1600,10 @@ let report_error ppf = function
         "Only variables are allowed as left-hand side of `let rec'"
   | Illegal_quoting ->
       fprintf ppf
-        "Quoting is banned outside of macros"
+        "Quoting is only allowed in macros and under `$'"
+  | Illegal_macro_app ->
+      fprintf ppf
+        "Macro application is only allowed in macros and under `$'"
 
 let () =
   Location.register_error_of_exn

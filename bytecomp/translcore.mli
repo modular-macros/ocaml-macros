@@ -53,6 +53,7 @@ type error =
   | Unreachable_reached
   | Illegal_macro_pat
   | Illegal_quoting
+  | Illegal_macro_app
 
 exception Error of Location.t * error
 
