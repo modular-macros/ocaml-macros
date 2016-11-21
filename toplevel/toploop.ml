@@ -216,6 +216,13 @@ let load_lambda phase ppf lam =
 
 (* Print the outcome of an evaluation *)
 
+let apply_macro macro_name =
+  let macro_ : Longident.t -> 'a =
+    Obj.obj (getvalue 1 macro_name)
+  in
+  let lid = Longident.Lident macro_name in
+  macro_ lid
+
 let pr_item =
   Printtyp.print_items
     (fun env -> function
@@ -223,6 +230,9 @@ let pr_item =
           let phase = Env.phase_of_sf sf in
           Some (outval_of_value env (getvalue phase (Translmod.toplevel_name id))
                   val_type)
+      | Sig_value(id, _, {val_kind = Val_macro; val_type}) ->
+          let result = apply_macro (Translmod.toplevel_name id) in
+          Some (outval_of_value env result val_type)
       | _ -> None
     )
 
