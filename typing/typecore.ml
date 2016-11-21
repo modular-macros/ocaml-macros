@@ -2883,7 +2883,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         type_expect
         (let env = Env.with_phase_up env in
           if Env.cur_stage env = 0 then Env.with_tl_splice true env
-          else Env.with_stage_down (Env.with_tl_splice false env))
+          else Env.with_stage_down env)
         sbody (Predef.type_expr ty_expected)
       in
         re {
