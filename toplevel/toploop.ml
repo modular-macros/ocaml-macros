@@ -142,7 +142,7 @@ let parse_mod_use_file name lb =
   let items =
     List.concat
       (List.map
-         (function Ptop_def s -> s | Ptop_dir _ -> [])
+         (function Ptop_stat_eval _ -> [] | Ptop_def s -> s | Ptop_dir _ -> [])
          (!parse_use_file lb))
   in
   [ Ptop_def
@@ -273,6 +273,45 @@ let add_directive name dir_fun dir_info =
 
 let execute_phrase print_outcome ppf phr =
   match phr with
+  | Ptop_stat_eval exp ->
+      Typecore.reset_delayed_checks ();
+      let tmp_env =
+        (* We tl_splice to true to allow macro application *)
+        Env.with_tl_splice true (Env.with_phase 1 !toplevel_env)
+      in
+      let exp =
+        Typecore.type_expression tmp_env exp
+      in
+      Typecore.force_delayed_checks ();
+      let slam = Translmod.close_toplevel_term Asttypes.Static
+        (Translcore.transl_exp exp, ())
+      in
+      begin try
+        let res = load_lambda 1 ppf slam in
+        let out_phr =
+          match res with
+          | Result v ->
+              if print_outcome then
+                Printtyp.wrap_printing_env !toplevel_env (fun () ->
+                  let outv = outval_of_value tmp_env v exp.exp_type in
+                  let ty = Printtyp.tree_of_type_scheme exp.exp_type in
+                  Ophr_eval (outv, ty))
+              else Ophr_signature []
+          | Exception exn ->
+              if exn = Out_of_memory then Gc.full_major ();
+              let outv =
+                outval_of_value !toplevel_env (Obj.repr exn) Predef.type_exn
+              in
+              Ophr_exception (exn, outv)
+        in
+        !print_out_phrase ppf out_phr;
+        begin match out_phr with
+        | Ophr_eval _ -> true
+        | _ -> false
+        end
+      with x ->
+        raise x
+      end
   | Ptop_def sstr ->
       let oldenv = !toplevel_env in
       Typecore.reset_delayed_checks ();

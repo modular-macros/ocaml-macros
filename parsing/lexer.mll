@@ -478,6 +478,7 @@ rule token = parse
   | ":>" { COLONGREATER }
   | ";"  { SEMI }
   | ";;" { SEMISEMI }
+  | ";;;" { SEMISEMISEMI }
   | "<"  { LESS }
   | "<-" { LESSMINUS }
   | "="  { EQUAL }

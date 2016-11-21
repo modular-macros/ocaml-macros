@@ -354,6 +354,7 @@ let ml_file_dependencies source_file =
   let parse_use_file_as_impl lexbuf =
     let f x =
       match x with
+      | Ptop_stat_eval _ -> [] (* macros: probably wrong *)
       | Ptop_def s -> s
       | Ptop_dir _ -> []
     in

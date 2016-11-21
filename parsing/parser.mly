@@ -579,6 +579,7 @@ let package_type_of_module_type pmty =
 %token RPAREN
 %token SEMI
 %token SEMISEMI
+%token SEMISEMISEMI
 %token HASH
 %token <string> HASHOP
 %token SIG
@@ -701,6 +702,7 @@ interface:
 ;
 toplevel_phrase:
     top_structure SEMISEMI               { Ptop_def (extra_str 1 $1) }
+  | expr SEMISEMISEMI                    { Ptop_stat_eval $1 }
   | toplevel_directive SEMISEMI          { $1 }
   | EOF                                  { raise End_of_file }
 ;

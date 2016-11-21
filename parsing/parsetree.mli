@@ -862,6 +862,7 @@ and module_binding =
 (* Toplevel phrases *)
 
 type toplevel_phrase =
+  | Ptop_stat_eval of expression
   | Ptop_def of structure
   | Ptop_dir of string * directive_argument
      (* #use, #load ... *)

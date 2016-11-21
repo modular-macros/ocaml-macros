@@ -495,6 +495,7 @@ and add_implementation_binding bv l =
   snd (add_structure_binding bv l)
 
 and add_top_phrase bv = function
+  | Ptop_stat_eval e -> add_expr bv e; bv
   | Ptop_def str -> add_structure bv str
   | Ptop_dir (_, _) -> bv
 

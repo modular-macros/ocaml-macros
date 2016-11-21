@@ -913,6 +913,9 @@ and label_x_bool_x_core_type_list i ppf x =
 
 let rec toplevel_phrase i ppf x =
   match x with
+  | Ptop_stat_eval e ->
+      line i ppf "Ptop_stat_eval\n";
+      expression (i+1) ppf e
   | Ptop_def (s) ->
       line i ppf "Ptop_def\n";
       structure (i+1) ppf s;

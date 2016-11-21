@@ -1437,6 +1437,8 @@ and directive_argument f x =
 
 let toplevel_phrase f x =
   match x with
+  | Ptop_stat_eval e ->
+      pp f "@[<2>%a@];;;" (expression reset_ctxt) e
   | Ptop_def (s) ->pp f "@[<hov0>%a@]"  (list (structure_item reset_ctxt)) s
    (* pp_open_hvbox f 0; *)
    (* pp_print_list structure_item f s ; *)
