@@ -1147,17 +1147,6 @@ and transl_exp0 e =
       match !splice_array with
       | Some arr_ref ->
         let parsetree = Array.get !arr_ref !splice_index in
-        let ppf = Format.err_formatter in
-        if !Clflags.dump_parsetree then begin
-          Format.fprintf ppf "splice #%d:\n" !splice_index;
-          Printast.expression 0 ppf parsetree;
-          Format.pp_print_flush ppf ();
-        end;
-        if !Clflags.dump_source then begin
-          Format.fprintf ppf "splice #%d:\n" !splice_index;
-          Pprintast.expression ppf parsetree;
-          Format.pp_print_newline ppf () (* flushing necessary *)
-        end;
         incr splice_index;
         (* Deactivate all warnings while compiling splices *)
         let backup = Warnings.backup () in
