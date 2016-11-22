@@ -7,7 +7,7 @@ Leo White and Jeremy Yallop:
 
 http://www.lpw25.net/ocaml2015-abs1.pdf
 
-You can find a (slightly out-of-date!) summary of the current progress here:
+You can find a summary of the current progress here:
 
 https://oliviernicole.github.io/about_macros.html
 
