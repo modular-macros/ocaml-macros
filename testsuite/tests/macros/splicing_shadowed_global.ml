@@ -1,5 +1,5 @@
-static x = << List.map Pervasives.pred [1;2;3] >>;;
-static y = << Some 42 >>;;
+macro x = << List.map Pervasives.pred [1;2;3] >>;;
+macro y = << Some 42 >>;;
 
 module Pervasives = struct
   let pred = Pervasives.succ

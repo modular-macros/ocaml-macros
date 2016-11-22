@@ -1,7 +1,7 @@
 
-# static val x : int list expr =
+# macro x : int list expr =
   << List(*global*).map Pervasives(*global*).pred [1; 2; 3] >>
-# static val y : int option expr = << Some 42 >>
+# macro y : int option expr = << Some 42 >>
 #       module Pervasives : sig val pred : int -> int end
 #         type fake_option = Blah | Some of int
 #   val l : int list = [0; 1; 2]
