@@ -1563,62 +1563,61 @@ let rec final_subexpression sexp =
    If set, [strict] ensures that the expression is pure, i.e. without any side
    effects. *)
 
-let rec is_nonexpansive ?strict exp =
-  let strict_set = match strict with None -> false | _ -> true in
+let rec is_nonexpansive strict exp =
   match exp.exp_desc with
     Texp_ident(_,_,_) -> true
   | Texp_constant _ -> true
   | Texp_let(_rec_flag, pat_exp_list, body) ->
-      List.for_all (fun vb -> is_nonexpansive ?strict vb.vb_expr)
+      List.for_all (fun vb -> is_nonexpansive strict vb.vb_expr)
         pat_exp_list
       &&
-        is_nonexpansive ?strict body
+        is_nonexpansive strict body
   | Texp_function _ -> true
   | Texp_apply(e, (_,None)::el) ->
-      is_nonexpansive ?strict e &&
-        List.for_all (is_nonexpansive_opt ?strict) (List.map snd el)
+      is_nonexpansive strict e &&
+        List.for_all (is_nonexpansive_opt strict) (List.map snd el)
   | Texp_match(e, cases, [], _) ->
-      is_nonexpansive e &&
+      is_nonexpansive strict e &&
       List.for_all
         (fun {c_lhs = _; c_guard; c_rhs} ->
-           is_nonexpansive_opt ?strict c_guard && is_nonexpansive ?strict c_rhs
+           is_nonexpansive_opt strict c_guard && is_nonexpansive strict c_rhs
         ) cases
   | Texp_tuple el ->
-      List.for_all (is_nonexpansive ?strict) el
+      List.for_all (is_nonexpansive strict) el
   | Texp_construct( _, _, el) ->
-      List.for_all (is_nonexpansive ?strict) el
-  | Texp_variant(_, arg) -> is_nonexpansive_opt ?strict arg
+      List.for_all (is_nonexpansive strict) el
+  | Texp_variant(_, arg) -> is_nonexpansive_opt strict arg
   | Texp_record { fields; extended_expression } ->
       Array.for_all
         (fun (lbl, definition) ->
            match definition with
            | Overridden (_, exp) ->
-               lbl.lbl_mut = Immutable && is_nonexpansive ?strict exp
+               lbl.lbl_mut = Immutable && is_nonexpansive strict exp
            | Kept _ -> true)
         fields
-      && is_nonexpansive_opt ?strict extended_expression
-  | Texp_field(exp, _, _) -> is_nonexpansive ?strict exp
+      && is_nonexpansive_opt strict extended_expression
+  | Texp_field(exp, _, _) -> is_nonexpansive strict exp
   | Texp_array [] -> true
   | Texp_ifthenelse(_cond, ifso, ifnot) ->
-      (not strict_set || ifnot <> None) &&
-      is_nonexpansive ?strict ifso && is_nonexpansive_opt ?strict ifnot
-  | Texp_sequence (_e1, e2) ->
-      not strict_set &&
-        is_nonexpansive ?strict e2  (* PR#4354 *)
+      (not strict || ifnot <> None) &&
+      is_nonexpansive strict ifso && is_nonexpansive_opt strict ifnot
+  | Texp_sequence (e1, e2) ->
+      (not strict || is_nonexpansive strict e1) &&
+        is_nonexpansive strict e2  (* PR#4354 *)
   | Texp_new (_, _, cl_decl) when Ctype.class_type_arity cl_decl.cty_type > 0 ->
       true
   (* Note: nonexpansive only means no _observable_ side effects *)
-  | Texp_lazy e -> is_nonexpansive ?strict e
+  | Texp_lazy e -> is_nonexpansive strict e
   | Texp_object ({cstr_fields=fields; cstr_type = { csig_vars=vars}}, _) ->
       let count = ref 0 in
       List.for_all
         (fun field -> match field.cf_desc with
             Tcf_method _ -> true
           | Tcf_val (_, _, _, Tcfk_concrete (_, e), _) ->
-              incr count; is_nonexpansive ?strict e
+              incr count; is_nonexpansive strict e
           | Tcf_val (_, _, _, Tcfk_virtual _, _) ->
               incr count; true
-          | Tcf_initializer e -> is_nonexpansive ?strict e
+          | Tcf_initializer e -> is_nonexpansive strict e
           | Tcf_constraint _ -> true
           | Tcf_inherit _ -> false
           | Tcf_attribute _ -> true)
@@ -1627,20 +1626,19 @@ let rec is_nonexpansive ?strict exp =
         vars true &&
       !count = 0
   | Texp_letmodule (_, _, mexp, e) ->
-      is_nonexpansive_mod ?strict mexp && is_nonexpansive ?strict e
+      is_nonexpansive_mod strict mexp && is_nonexpansive strict e
   | Texp_pack mexp ->
-      is_nonexpansive_mod ?strict mexp
+      is_nonexpansive_mod strict mexp
   | Texp_quote _ -> true
-  | Texp_escape e -> is_nonexpansive ?strict e
+  | Texp_escape e -> is_nonexpansive strict e
   | _ -> false
 
-and is_nonexpansive_mod ?strict mexp =
-  let strict_set = match strict with None -> false | _ -> true in
+and is_nonexpansive_mod strict mexp =
   match mexp.mod_desc with
   | Tmod_ident _ -> true
   | Tmod_functor _ -> true
-  | Tmod_unpack (e, _) -> not strict_set && is_nonexpansive ?strict e
-  | Tmod_constraint (m, _, _, _) -> is_nonexpansive_mod ?strict m
+  | Tmod_unpack (e, _) -> not strict && is_nonexpansive strict e
+  | Tmod_constraint (m, _, _, _) -> is_nonexpansive_mod strict m
   | Tmod_structure str ->
       List.for_all
         (fun item -> match item.str_desc with
@@ -1648,14 +1646,14 @@ and is_nonexpansive_mod ?strict mexp =
           | Tstr_modtype _ | Tstr_open _ | Tstr_class_type _  -> true
           | Tstr_value (_, _, pat_exp_list) ->
               List.for_all
-                (fun vb -> is_nonexpansive ?strict vb.vb_expr) pat_exp_list
+                (fun vb -> is_nonexpansive strict vb.vb_expr) pat_exp_list
           | Tstr_macro (_, pat_exp_list) ->
               List.for_all
-                (fun vb -> is_nonexpansive ?strict vb.vb_expr) pat_exp_list
+                (fun vb -> is_nonexpansive strict vb.vb_expr) pat_exp_list
           | Tstr_module (_, {mb_expr=m;_})
-          | Tstr_include {incl_mod=m;_} -> is_nonexpansive_mod ?strict m
+          | Tstr_include {incl_mod=m;_} -> is_nonexpansive_mod strict m
           | Tstr_recmodule (_, id_mod_list) ->
-              List.for_all (fun {mb_expr=m;_} -> is_nonexpansive_mod ?strict m)
+              List.for_all (fun {mb_expr=m;_} -> is_nonexpansive_mod strict m)
                 id_mod_list
           | Tstr_exception {ext_kind = Text_decl _} ->
               false (* true would be unsound *)
@@ -1671,9 +1669,9 @@ and is_nonexpansive_mod ?strict mexp =
         str.str_items
   | Tmod_apply _ -> false
 
-and is_nonexpansive_opt ?strict = function
+and is_nonexpansive_opt strict = function
     None -> true
-  | Some e -> is_nonexpansive ?strict e
+  | Some e -> is_nonexpansive strict e
 
 (* Approximate the type of an expression, for better recursion *)
 
@@ -1747,7 +1745,7 @@ let list_labels env ty =
 
 (* Check that all univars are safe in a type *)
 let check_univars env expans kind exp ty_expected vars =
-  if expans && not (is_nonexpansive exp) then
+  if expans && not (is_nonexpansive false exp) then
     generalize_expansive env exp.exp_type;
   (* need to expand twice? cf. Ctype.unify2 *)
   let vars = List.map (expand_head env) vars in
@@ -2164,7 +2162,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       begin_def ();
       let arg = type_exp env sarg in
       end_def ();
-      if not (is_nonexpansive arg) then generalize_expansive env arg.exp_type;
+      if not (is_nonexpansive false arg) then
+        generalize_expansive env arg.exp_type;
       generalize arg.exp_type;
       let rec split_cases vc ec = function
         | [] -> List.rev vc, List.rev ec
@@ -3411,7 +3410,7 @@ and type_label_exp create env loc ty_expected
     try
       check_univars env (vars <> []) "field value" arg label.lbl_arg vars;
       arg
-    with exn when not (is_nonexpansive arg) -> try
+    with exn when not (is_nonexpansive false arg) -> try
       (* Try to retype without propagating ty_arg, cf PR#4862 *)
       may Btype.backtrack snap;
       begin_def ();
@@ -3502,7 +3501,7 @@ and type_argument ?recarg env sarg ty_expected' ty_expected =
            (List.map (fun (l, _) -> Printtyp.string_of_label l) args));
       if warn then Location.prerr_warning texp.exp_loc
           (Warnings.Without_principality "eliminated optional argument");
-      if is_nonexpansive texp then func texp else
+      if is_nonexpansive false texp then func texp else
       (* let-expand to have side effects *)
       let let_pat, let_var = var_pair "arg" texp.exp_type in
       re { texp with exp_type = ty_fun; exp_desc =
@@ -4166,7 +4165,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
   end_def();
   List.iter2
     (fun pat exp ->
-       if not (is_nonexpansive exp) then
+       if not (is_nonexpansive false exp) then
          iter_pattern (fun pat -> generalize_expansive env pat.pat_type) pat)
     pat_list exp_list;
   List.iter
@@ -4207,7 +4206,7 @@ let type_expression env sexp =
   begin_def();
   let exp = type_exp env sexp in
   end_def();
-  if not (is_nonexpansive exp) then generalize_expansive env exp.exp_type;
+  if not (is_nonexpansive false exp) then generalize_expansive env exp.exp_type;
   generalize exp.exp_type;
   match sexp.pexp_desc with
     Pexp_ident lid ->

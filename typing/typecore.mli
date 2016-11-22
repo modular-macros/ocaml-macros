@@ -19,7 +19,7 @@ open Asttypes
 open Types
 open Format
 
-val is_nonexpansive: ?strict:bool -> Typedtree.expression -> bool
+val is_nonexpansive: bool -> Typedtree.expression -> bool
 
 val type_binding:
         Env.t -> rec_flag ->
