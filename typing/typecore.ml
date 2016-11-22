@@ -1606,8 +1606,8 @@ let rec is_nonexpansive strict exp =
         is_nonexpansive strict e2  (* PR#4354 *)
   | Texp_new (_, _, cl_decl) when Ctype.class_type_arity cl_decl.cty_type > 0 ->
       true
-  (* Note: nonexpansive only means no _observable_ side effects *)
-  | Texp_lazy e -> is_nonexpansive strict e
+  (* Note: [nonexpansive false] only means no _observable_ side effects *)
+  | Texp_lazy e -> not strict && is_nonexpansive strict e
   | Texp_object ({cstr_fields=fields; cstr_type = { csig_vars=vars}}, _) ->
       let count = ref 0 in
       List.for_all
