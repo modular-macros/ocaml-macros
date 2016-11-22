@@ -22,6 +22,7 @@ module type OBJ =
   sig
     type t
     val obj : t -> 'a
+    val repr : 'a -> t
     val is_block : t -> bool
     val tag : t -> int
     val size : t -> int
@@ -64,6 +65,12 @@ module type S =
           int -> int ->
           (int -> t -> Types.type_expr -> Outcometree.out_value option) ->
           Env.t -> t -> type_expr -> Outcometree.out_value
+    val outval_of_macro :
+          int -> int ->
+          (int -> t -> Types.type_expr -> Outcometree.out_value option) ->
+          Env.t -> t -> type_expr -> Longident.t -> Outcometree.out_value
+      (** same as [outval_of_value], but takes the path argument to the macro as
+          a parameter *)
   end
 
 module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) :

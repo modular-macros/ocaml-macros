@@ -110,6 +110,9 @@ let print_untyped_exception ppf obj =
 let outval_of_value env obj ty =
   Printer.outval_of_value !max_printer_steps !max_printer_depth
     (fun _ _ _ -> None) env obj ty
+let outval_of_macro env obj ty =
+  Printer.outval_of_macro !max_printer_steps !max_printer_depth
+    (fun _ _ _ -> None) env obj ty
 let print_value env obj ppf ty =
   !print_out_value ppf (outval_of_value env obj ty)
 
@@ -216,13 +219,6 @@ let load_lambda phase ppf lam =
 
 (* Print the outcome of an evaluation *)
 
-let apply_macro macro_name =
-  let macro_ : Longident.t -> 'a =
-    Obj.obj (getvalue 1 macro_name)
-  in
-  let lid = Longident.Lident macro_name in
-  macro_ lid
-
 let pr_item =
   Printtyp.print_items
     (fun env -> function
@@ -231,8 +227,9 @@ let pr_item =
           Some (outval_of_value env (getvalue phase (Translmod.toplevel_name id))
                   val_type)
       | Sig_value(id, _, {val_kind = Val_macro; val_type}) ->
-          let result = apply_macro (Translmod.toplevel_name id) in
-          Some (outval_of_value env result val_type)
+          let name = Translmod.toplevel_name id in
+          let lid = Longident.Lident name in
+          Some (outval_of_macro env (getvalue 1 name) val_type lid)
       | _ -> None
     )
 

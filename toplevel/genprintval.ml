@@ -26,6 +26,7 @@ module type OBJ =
   sig
     type t
     val obj : t -> 'a
+    val repr : 'a -> t
     val is_block : t -> bool
     val tag : t -> int
     val size : t -> int
@@ -65,6 +66,10 @@ module type S =
           int -> int ->
           (int -> t -> Types.type_expr -> Outcometree.out_value option) ->
           Env.t -> t -> type_expr -> Outcometree.out_value
+    val outval_of_macro :
+          int -> int ->
+          (int -> t -> Types.type_expr -> Outcometree.out_value option) ->
+          Env.t -> t -> type_expr -> Longident.t -> Outcometree.out_value
   end
 
 module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
@@ -535,5 +540,12 @@ module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
 
 
     in nest tree_of_val max_depth obj ty
+
+    let apply_macro macro_ lid =
+      let f : Longident.t -> 'a = O.obj macro_ in
+      O.repr (f lid)
+
+    let outval_of_macro m m' f env macro_ ty lid =
+      outval_of_value m m' f env (apply_macro macro_ lid) ty
 
 end

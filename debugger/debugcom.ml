@@ -212,6 +212,9 @@ module Remote_value =
         with End_of_file | Failure _ ->
           raise Marshalling_error
 
+    let repr t =
+      Local (Obj.repr t)
+
     let is_block = function
     | Local obj -> Obj.is_block obj
     | Remote v -> Obj.is_block (Array.unsafe_get (Obj.magic v : Obj.t array) 0)

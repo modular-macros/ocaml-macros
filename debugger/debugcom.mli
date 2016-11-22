@@ -94,6 +94,7 @@ module Remote_value :
     type t
 
     val obj : t -> 'a
+    val repr : 'a -> t
     val is_block : t -> bool
     val tag : t -> int
     val size : t -> int
