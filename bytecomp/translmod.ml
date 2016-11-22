@@ -1582,7 +1582,7 @@ let rec insert_splice_array_toplevel splice_ids = function
             (fun id ->
               Translquote.transl_close_expression Location.none
               (Lvar id))
-            (List.rev splice_ids),
+            splice_ids,
           Location.none)
       in
       Lsequence (
