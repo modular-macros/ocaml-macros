@@ -1,0 +1,25 @@
+
+#         module type S = sig macro x : int expr val y : int end
+#                   module Foo :
+  functor (F : functor (X : S) -> S) ->
+    sig
+      module One : sig val y : int macro x : int expr end
+      module Result : sig macro x : int expr val y : int end
+    end
+#                 module Add1 :
+  functor (X : sig macro x : int expr end) ->
+    sig
+      val y : int
+      val add : int -> int -> int
+      macro x : int expr
+      static val blah : string
+      val blah' : string
+    end
+#   module Bar :
+  sig
+    module One : sig val y : int macro x : int expr end
+    module Result : sig macro x : int expr val y : int end
+  end
+#   2
+# 43
+# 
