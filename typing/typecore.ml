@@ -1630,7 +1630,7 @@ let rec is_nonexpansive strict exp =
   | Texp_pack mexp ->
       is_nonexpansive_mod strict mexp
   | Texp_quote _ -> true
-  | Texp_escape e -> is_nonexpansive strict e
+  | Texp_escape e -> false
   | _ -> false
 
 and is_nonexpansive_mod strict mexp =
