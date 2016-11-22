@@ -26,22 +26,6 @@ let run_static ppf lam =
       Symtable.update_global_table ();
       let splices = (Meta.reify_bytecode code code_size) () in
       let splices : Parsetree.expression array = Obj.obj splices in
-      let n = Array.length splices in
-      (* print splices in reverse order *)
-      if !Clflags.dump_parsetree then
-        for i = 1 to n do
-          Format.fprintf ppf "splice #%d:\n" i;
-          Printast.expression 0 ppf splices.(n - i);
-          Format.pp_print_flush ppf ()
-        done
-      ;
-      if !Clflags.dump_source then
-        for i = 1 to n do
-          Format.fprintf ppf "splice #%d:\n" i;
-          Pprintast.expression ppf splices.(n - i);
-          Format.pp_print_newline ppf ()
-        done
-      ;
       splices
     end else if Sys.backend_type = Sys.Native then
       let open Filename in
@@ -72,6 +56,21 @@ let run_static ppf lam =
   in
   Symtable.reset ();
   Bytelink.reset ();
+  let n = Array.length splices in
+  if !Clflags.dump_parsetree then
+    for i = 0 to n-1 do
+      Format.fprintf ppf "splice #%d:\n" (i + 1);
+      Printast.expression 0 ppf splices.(i);
+      Format.pp_print_flush ppf ()
+    done
+  ;
+  if !Clflags.dump_source then
+    for i = 0 to n-1 do
+      Format.fprintf ppf "splice #%d:\n" (i + 1);
+      Pprintast.expression ppf splices.(i);
+      Format.pp_print_newline ppf ()
+    done
+  ;
   splices
 
 let load_static_deps ppf reloc =
