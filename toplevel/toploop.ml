@@ -228,7 +228,7 @@ let pr_item =
                   val_type)
       | Sig_value(id, _, {val_kind = Val_macro; val_type}) ->
           let name = Translmod.toplevel_name id in
-          let lid = Longident.Lident name in
+          let lid = mkloc (Longident.Lident name) Location.none in
           Some (outval_of_macro env (getvalue 1 name) val_type lid)
       | _ -> None
     )
