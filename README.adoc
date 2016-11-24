@@ -1,4 +1,4 @@
-= About the macros branch =
+= About the macros_unstable branch =
 
 This branch is intended to be merged into
 https://github.com/OlivierNicole/ocaml/tree/macros[macros] on a regular basis,
