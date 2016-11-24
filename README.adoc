@@ -1,9 +1,8 @@
 = About the macros branch =
 
-This branch is intended to follow the evolution of
-https://github.com/OlivierNicole/ocaml/tree/macros_unstable[macros_unstable].
-`macros_unstable` is merged into this branch on a regular basis, once a set of
-changes has been applied and the tests run.
+This branch is intended to be merged into
+https://github.com/OlivierNicole/ocaml/tree/macros[macros] on a regular basis,
+once a set of changes has been applied and the tests run.
 
 == Overview
 
