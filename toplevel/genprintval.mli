@@ -68,7 +68,8 @@ module type S =
     val outval_of_macro :
           int -> int ->
           (int -> t -> Types.type_expr -> Outcometree.out_value option) ->
-          Env.t -> t -> type_expr -> Longident.t -> Outcometree.out_value
+          Env.t -> t -> type_expr -> Longident.t Location.loc ->
+          Outcometree.out_value
       (** same as [outval_of_value], but takes the path argument to the macro as
           a parameter *)
   end

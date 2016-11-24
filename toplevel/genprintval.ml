@@ -69,7 +69,8 @@ module type S =
     val outval_of_macro :
           int -> int ->
           (int -> t -> Types.type_expr -> Outcometree.out_value option) ->
-          Env.t -> t -> type_expr -> Longident.t -> Outcometree.out_value
+          Env.t -> t -> type_expr -> Longident.t Location.loc ->
+          Outcometree.out_value
   end
 
 module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
@@ -542,7 +543,7 @@ module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
     in nest tree_of_val max_depth obj ty
 
     let apply_macro macro_ lid =
-      let f : Longident.t -> 'a = O.obj macro_ in
+      let f : Longident.t Location.loc -> 'a = O.obj macro_ in
       O.repr (f lid)
 
     let outval_of_macro m m' f env macro_ ty lid =
