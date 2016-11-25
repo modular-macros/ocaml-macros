@@ -158,11 +158,13 @@ let init () =
                             ])
       in
       literal_table := (c, cst) :: !literal_table;
-      (* Add the lifted version of this literal as a pointer to the unlifted
-         version (the only one actually existing in the runtime *)
+      (* Add the lifted and unlifted versions of this literal as pointers to the
+       * unlifted version (the only one actually existing in the runtime) *)
       let lifted_id = Ident.lift id in
       global_table := { !global_table with
-        num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
+        num_tbl =
+          Tbl.add (1, lifted_id) c (
+          Tbl.add (1, id) c !global_table.num_tbl) })
     Runtimedef.builtin_exceptions;
   (* Initialize the known C primitives *)
   if String.length !Clflags.use_prims > 0 then begin
@@ -353,7 +355,7 @@ let init_toplevel () =
       with Not_found -> [] in
     (* Done *)
     sect.close_reader();
-    (* Add lifted version of the `Toploop` module to phase 1 *)
+    (* Add `Toploop` module to phase 1 *)
     let id = Ident.create_persistent "Toploop" in
     let pos = get_global_position (0, id) in
     global_table := { !global_table
@@ -367,7 +369,9 @@ let init_toplevel () =
         let lifted_id = Ident.lift id in
         let pos = get_global_position (0, id) in
         global_table := { !global_table with
-          num_tbl = Tbl.add (1, lifted_id) pos !global_table.num_tbl })
+          num_tbl =
+            Tbl.add (1, lifted_id) pos (
+            Tbl.add (1, id) pos !global_table.num_tbl) })
       Runtimedef.builtin_exceptions;
     Bytesections.reset ();
     crcintfs
@@ -421,11 +425,13 @@ let init_static () =
             in
             literal_table := (c, cst) :: !literal_table
           end;
-          (* Add lifted version *)
+          (* Add phase 1 version *)
           let c = get_global_position (0, id) in
           let lifted_id = Ident.lift id in
           global_table := { !global_table with
-            num_tbl = Tbl.add (1, lifted_id) c !global_table.num_tbl })
+            num_tbl =
+              Tbl.add (1, lifted_id) c (
+              Tbl.add (1, id) c !global_table.num_tbl) })
         Runtimedef.builtin_exceptions;
       Bytesections.reset ();
       crc
