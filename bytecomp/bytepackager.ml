@@ -101,7 +101,8 @@ let read_member_info file = (
   let name =
     String.capitalize_ascii(Filename.basename(chop_extensions file)) in
   let kind =
-    if Filename.check_suffix file ".cmo" then begin
+    if Filename.check_suffix file ".cmo" ||
+       Filename.check_suffix file ".cmm" then begin
     let ic = open_in_bin file in
     try
       let buffer =
@@ -202,7 +203,8 @@ let build_global_target oc target_name members mapping pos coercion =
     Emitcode.to_packed_file oc instrs in
   relocs := List.map (fun (r, ofs) -> (r, pos + ofs)) rel @ !relocs
 
-(* Build the .cmo file obtained by packaging the given .cmo files. *)
+(* Build the .cmo (or .cmm) file obtained by packaging the given .cmo (or .cmm)
+   files. *)
 
 let package_object_files ppf files targetfile targetname coercion =
   let members =
@@ -272,22 +274,51 @@ let package_object_files ppf files targetfile targetname coercion =
     close_out oc;
     raise x
 
+let reset () =
+  relocs := [];
+  events := [];
+  primitives := [];
+  force_link := false;
+  Bytegen.reset ();
+  Emitcode.reset ();
+  Translmod.reset ();
+  Bytelink.reset ()
+
 (* The entry point *)
 
 let package_files ppf initial_env files targetfile =
-    let files =
-    List.map
+    let cmo_files =
+      List.map
         (fun f ->
-        try find_in_path !Config.load_path f
+          try find_in_path !Config.load_path f
+          with Not_found -> raise(Error(File_not_found f)))
+        files
+    in
+    let cmm_files =
+      List.map
+        (fun f ->
+          let f =
+            if Filename.check_suffix f ".cmo" then
+              Filename.remove_extension f ^ ".cmm"
+            else f (* keep .cmi *)
+          in
+          try find_in_path !Config.load_path f
         with Not_found -> raise(Error(File_not_found f)))
-        files in
+        files
+    in
     let prefix = chop_extensions targetfile in
     let targetcmi = prefix ^ ".cmi" in
+    let targetcmo = prefix ^ ".cmo" in
+    let targetcmm = prefix ^ ".cmm" in
     let targetname = String.capitalize_ascii(Filename.basename prefix) in
     try
       let coercion =
-        Typemod.package_units initial_env files targetcmi targetname in
-      package_object_files ppf files targetfile targetname coercion
+        Typemod.package_units initial_env cmo_files targetcmi targetname in
+      package_object_files ppf cmm_files targetcmm targetname
+        coercion;
+      reset ();
+      package_object_files ppf cmo_files targetcmo targetname
+        coercion
     with x ->
       remove_file targetfile; raise x
 
@@ -319,9 +350,3 @@ let () =
       | Error err -> Some (Location.error_of_printer_file report_error err)
       | _ -> None
     )
-
-let reset () =
-  relocs := [];
-  events := [];
-  primitives := [];
-  force_link := false

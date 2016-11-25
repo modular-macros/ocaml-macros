@@ -13,8 +13,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* "Package" a set of .cmo files into one .cmo file having the
-   original compilation units as sub-modules. *)
+(* "Package" a set of .cmo,.cmm pairs into one .cmo and one .cmm file having the
+   original compilation units as sub-modules. The file names are expected
+   to end in ".cmo", although both a ".cmo" and a ".cmm" will be produced. For
+   each ".cmo", a corresponding ".cmm" is expected in the path. *)
 
 val package_files: Format.formatter -> Env.t -> string list -> string -> unit
 

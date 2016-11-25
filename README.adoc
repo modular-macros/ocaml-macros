@@ -23,6 +23,31 @@ Installation instruction are the same as for the standard OCaml distribution.
 You can find a few examples of what is possible in the links above. You can also
 take a look at the `testsuite/tests/macros/` directory.
 
+=== Installing OPAM packages
+
+You may want to set up a switch with this version of the compiler in order to
+install packages. However, quite a lot of packages currently fail to compile for
+one of the following reasons:
+
+* a backward-incompatibility in the syntax. The most prevalent incompatibility
+is expressions like `"str"^M.foo`, without spaces around `^`, which is parsed as
+a string, followed by a lifted path. These incompatibilities are generally very
+quick to fix, so if you encounter one, don't hesitate to file a pull request!
+Other possible syntax errors:
+** a use of the reserved words `static` or `macro` as an identifier;
+** a use of `$` as a regular operator.
+* a wrong depency tree. A compilation unit may now have both static and run-time
+dependencies, and `ocamldep` has not yet been updated to take into account the
+static ones. A fix is on its way.
+
+The following packages are known to be broken with macros:
+
+* ocamlbuild (syntax error, pull request pending). As a temporary workaround,
+you can pin ocamlbuild to this [fixed
+repo](https://github.com/OlivierNicole/ocamlbuild).
+* camlp4: syntax errors, differences with the compiler AST and wrong dependency
+tree. I'm working on a fix.
+
 == Contributing
 
 You are very welcome to try out macros. Please do report any bugs or
