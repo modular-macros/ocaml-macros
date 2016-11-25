@@ -101,7 +101,8 @@ let read_member_info file = (
   let name =
     String.capitalize_ascii(Filename.basename(chop_extensions file)) in
   let kind =
-    if Filename.check_suffix file ".cmo" then begin
+    if Filename.check_suffix file ".cmo" ||
+       Filename.check_suffix file ".cmm" then begin
     let ic = open_in_bin file in
     try
       let buffer =
@@ -273,6 +274,16 @@ let package_object_files ppf files targetfile targetname coercion =
     close_out oc;
     raise x
 
+let reset () =
+  relocs := [];
+  events := [];
+  primitives := [];
+  force_link := false;
+  Bytegen.reset ();
+  Emitcode.reset ();
+  Translmod.reset ();
+  Bytelink.reset ()
+
 (* The entry point *)
 
 let package_files ppf initial_env files targetfile =
@@ -303,9 +314,10 @@ let package_files ppf initial_env files targetfile =
     try
       let coercion =
         Typemod.package_units initial_env cmo_files targetcmi targetname in
-      package_object_files ppf cmo_files targetcmo targetname
-        coercion;
       package_object_files ppf cmm_files targetcmm targetname
+        coercion;
+      reset ();
+      package_object_files ppf cmo_files targetcmo targetname
         coercion
     with x ->
       remove_file targetfile; raise x
@@ -338,9 +350,3 @@ let () =
       | Error err -> Some (Location.error_of_printer_file report_error err)
       | _ -> None
     )
-
-let reset () =
-  relocs := [];
-  events := [];
-  primitives := [];
-  force_link := false
