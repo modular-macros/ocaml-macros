@@ -42,9 +42,9 @@ static ones. A fix is on its way.
 
 The following packages are known to be broken with macros:
 
-* ocamlbuild (syntax error, pull request pending). As a temporary workaround,
-you can pin ocamlbuild to this https://github.com/OlivierNicole/ocamlbuild[fixed
-repo].
+* ocamlbuild: syntax error, pull request merged. The change should be in the
+next release. If you can't wait, you can pin ocamlbuild to the `master` branch
+of https://github.com/ocaml/ocamlbuild[its repo].
 * camlp4: syntax errors, differences with the compiler AST and wrong dependency
 tree. I'm working on a fix.
 
