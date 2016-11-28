@@ -1487,7 +1487,14 @@ let get_mod_field modname field =
       with Not_found ->
         fatal_error ("Primitive "^modname^"."^field^" not found.")
       in
-      Lprim(Pfield p,
+      let i =
+        match p with
+        | Path.Uniphase (Nonstatic, i) -> i
+        | _ ->
+            fatal_error ("Primitive "^modname^"."^field^
+              " has unexpected position in block.")
+      in
+      Lprim(Pfield i,
             [Lprim(Pgetglobal mod_ident, [], Location.none)],
             Location.none)
     with Not_found -> fatal_error ("Module "^modname^" unavailable.")
@@ -2922,7 +2929,7 @@ let partial_function loc () =
   (* [Location.get_pos_info] is too expensive *)
   let (fname, line, char) = Location.get_pos_info loc.Location.loc_start in
   Lprim(Praise Raise_regular, [Lprim(Pmakeblock(0, Immutable, None),
-          [transl_normal_path Predef.path_match_failure;
+          [transl_normal_path Nonstatic Predef.path_match_failure;
            Lconst(Const_block(0,
               [Const_base(Const_string (fname, None));
                Const_base(Const_int line);

@@ -15,9 +15,21 @@
 
 (* Access paths *)
 
+(* Position of a value in a block. A uniphase value only exists in one phase. A
+   biphase value (e.g. macros, modules) exists in two phases and has one
+   position in each phase. For example, in:
+     let x = ...
+     macro y = ...
+   x will be given the position Uniphase (Nonstatic, 0) while y will be given
+   Biphase (1, 0). *)
+type pos =
+    Nopos
+  | Uniphase of Asttypes.static_flag * int
+  | Biphase of int * int
+
 type t =
     Pident of Ident.t
-  | Pdot of t * string * int
+  | Pdot of t * string * pos
   | Papply of t * t
 
 val same: t -> t -> bool
@@ -25,7 +37,7 @@ val compare: t -> t -> int
 val isfree: Ident.t -> t -> bool
 val binding_time: t -> int
 
-val nopos: int
+val nopos: pos
 
 val name: ?paren:(string -> bool) -> t -> string
     (* [paren] tells whether a path suffix needs parentheses *)

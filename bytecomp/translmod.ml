@@ -286,7 +286,8 @@ let rec apply_coercion loc static_flag strict restr arg =
         zero_lam
   | Tcoerce_alias (path, cc) ->
       name_lambda strict arg
-        (fun _ -> apply_coercion loc static_flag Alias cc (transl_normal_path path))
+        (fun _ -> apply_coercion loc static_flag Alias cc
+          (transl_normal_path static_flag path))
 
 and apply_coercion_field loc static_flag get_field (pos, cc) =
   apply_coercion loc static_flag Alias cc (get_field pos)
@@ -369,7 +370,7 @@ let mod_prim phase name =
     else "CamlinternalMod"
   in
   try
-    transl_normal_path
+    transl_normal_path phase
       (fst (Env.lookup_value (Ldot (Lident mod_name, name))
                              Env.empty))
   with Not_found ->
@@ -547,9 +548,14 @@ let transl_class_bindings cl_list =
        (id, transl_class ids id meths cl vf))
      cl_list)
 
-(* Compile a module expression *)
+(* Filter a coercion by phase *)
 
-let ident_zero = Ident.create_persistent "0"
+let filter_coercion phase = function
+  | Tcoerce_none -> Tcoerce_none
+  | Tcoerce_structure (pos_cc_list, id_pos_list) ->
+
+
+(* Compile a module expression *)
 
 let rec transl_module cc rootpath target_phase mexp =
   if target_phase = Static then (* Avoid checking attributes twice *)
@@ -626,9 +632,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
         match cc with
           Tcoerce_none ->
             Lprim(Pmakeblock(0, Immutable, None),
-                  List.map (fun id ->
-                    if Ident.name id = "0" then zero_lam
-                    else Lvar id)
+                  List.map (fun id -> Lvar id)
                     (List.rev fields),
                   loc),
               List.length fields
@@ -641,8 +645,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
             let v = Array.of_list (List.rev fields) in
             let get_field pos =
               let id = v.(pos) in
-              if Ident.name id = "0" then zero_lam
-              else Lvar id
+              Lvar id
             and ids = List.fold_right IdentSet.add fields IdentSet.empty in
             let lam =
               Lprim(Pmakeblock(0, Immutable, None),
@@ -707,13 +710,8 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
                 item_postproc final_env rem in
             transl_let rec_flag pat_expr_list body, size
           end else
-            (* Put zero as a placeholder for ignored items *)
-            let placeholders =
-              List.map (fun _ -> ident_zero) @@
-                rev_let_bound_idents pat_expr_list
-            in
-            transl_structure loc (placeholders @ fields)
-              cc rootpath target_phase item_postproc final_env rem
+            transl_structure loc fields cc rootpath target_phase
+              item_postproc final_env rem
       end
       | Tstr_macro(rec_flag, pat_expr_list) ->
           let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
@@ -742,7 +740,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
           transl_type_extension item.str_env rootpath tyext body, size
       | Tstr_exception ext ->
           if target_phase = Static then
-            transl_structure loc (ident_zero :: fields) cc rootpath target_phase
+            transl_structure loc fields cc rootpath target_phase
               item_postproc final_env rem
           else
             let id = ext.ext_id in
@@ -926,8 +924,7 @@ let transl_implementation module_name target_phase (str, cc) =
     { implementation with code }
 
 (* Build the list of value identifiers defined by a toplevel structure
-   (excluding primitive declarations and replacing different-phase identifiers
-    with placeholders). *)
+   (excluding primitive declarations). *)
 
 let rec defined_idents static_flag = function
     [] -> []
@@ -938,11 +935,7 @@ let rec defined_idents static_flag = function
       if sf = static_flag then
         let_bound_idents pat_expr_list @ defined_idents static_flag rem
       else
-        let placeholders =
-          List.map (fun _ -> ident_zero)
-            (let_bound_idents pat_expr_list)
-        in
-        placeholders @ defined_idents static_flag rem
+        defined_idents static_flag rem
     )
     | Tstr_macro (_rec_flag, pat_expr_list) ->
         let_bound_idents pat_expr_list @ defined_idents static_flag rem
@@ -1247,8 +1240,7 @@ let transl_store_structure target_phase glob map prims str =
         | Tstr_class cl_list ->
             let (ids, class_bindings) = transl_class_bindings cl_list in
             if target_phase = Static then
-              transl_store rootpath (add_idents false
-                (List.map (fun _ -> ident_zero) ids) subst) rem
+              transl_store rootpath (add_idents false ids subst) rem
             else
               let lam =
                 Lletrec(class_bindings, store_idents Location.none ids)

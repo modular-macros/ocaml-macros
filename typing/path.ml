@@ -13,12 +13,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
+type pos =
+    Nopos
+  | Uniphase of Asttypes.static_flag * int
+  | Biphase of int * int
+
 type t =
     Pident of Ident.t
-  | Pdot of t * string * int
+  | Pdot of t * string * pos
   | Papply of t * t
 
-let nopos = -1
+let nopos = Nopos
 
 let rec same p1 p2 =
   match (p1, p2) with

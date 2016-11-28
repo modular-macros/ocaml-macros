@@ -508,20 +508,39 @@ let rec patch_guarded patch = function
 
 (* Translate an access path *)
 
-let rec transl_normal_path = function
+let rec transl_normal_path target_phase = function
     Pident id ->
       if Ident.global id
       then Lprim(Pgetglobal id, [], Location.none)
       else Lvar id
   | Pdot(p, _s, pos) ->
-      Lprim(Pfield pos, [transl_normal_path p], Location.none)
+    begin
+      match pos with
+      | Nopos -> assert false
+      | Uniphase (sf, _pos) when sf <> target_phase ->
+          Printf.eprintf "Uniphase (%d, %d) str %s w/ target %d\n%!"
+            (Env.phase_of_sf sf) _pos _s (Env.phase_of_sf target_phase);
+          assert false
+      | Uniphase (_, pos) ->
+          Lprim(Pfield pos, [transl_normal_path target_phase p],
+            Location.none)
+      | Biphase (pos_s, pos_rt) ->
+          let pos =
+            if target_phase = Static then pos_s else pos_rt
+          in
+          Lprim(Pfield pos, [transl_normal_path target_phase p],
+            Location.none)
+    end
   | Papply _ ->
       fatal_error "Lambda.transl_path"
 
 (* Translation of value identifiers *)
 
 let transl_path ?(loc=Location.none) env path =
-  transl_normal_path (Env.normalize_path (Some loc) env path)
+  let target_phase =
+    if Env.cur_phase env > 0 then Static else Nonstatic
+  in
+  transl_normal_path target_phase (Env.normalize_path (Some loc) env path)
 
 (* Compile a sequence of expressions *)
 

@@ -612,7 +612,7 @@ let path_of_context = function
     Module id :: rem ->
       let rec subm path = function
           [] -> path
-        | Module id :: rem -> subm (Pdot (path, Ident.name id, -1)) rem
+        | Module id :: rem -> subm (Pdot (path, Ident.name id, nopos)) rem
         | _ -> assert false
       in subm (Pident id) rem
   | _ -> assert false

@@ -687,7 +687,7 @@ let assert_failed exp =
     Location.get_pos_info exp.exp_loc.Location.loc_start in
   Lprim(Praise Raise_regular, [event_after exp
     (Lprim(Pmakeblock(0, Immutable, None),
-          [transl_normal_path Predef.path_assert_failure;
+          [transl_normal_path Nonstatic Predef.path_assert_failure;
            Lconst(Const_block(0,
               [Const_base(Const_string (fname, None));
                Const_base(Const_int line);
@@ -1052,17 +1052,23 @@ and transl_exp0 e =
              ap_inlined=Default_inline;
              ap_specialised=Default_specialise}
   | Texp_instvar(path_self, path, _) ->
+      let sf =
+        if Env.cur_phase e.exp_env > 0 then Static else Nonstatic
+      in
       Lprim(Parrayrefu Paddrarray,
-            [transl_normal_path path_self; transl_normal_path path], e.exp_loc)
+            [transl_normal_path sf path_self; transl_normal_path sf path],
+            e.exp_loc)
   | Texp_setinstvar(path_self, path, _, expr) ->
-      transl_setinstvar e.exp_loc (transl_normal_path path_self) path expr
+      let sf = Env.sf_of_phase (Env.cur_phase e.exp_env) in
+      transl_setinstvar e.exp_loc (transl_normal_path sf path_self) path expr
   | Texp_override(path_self, modifs) ->
       let cpy = Ident.create "copy" in
+      let sf = Env.sf_of_phase (Env.cur_phase e.exp_env) in
       Llet(Strict, Pgenval, cpy,
            Lapply{ap_should_be_tailcall=false;
                   ap_loc=Location.none;
                   ap_func=Translobj.oo_prim "copy";
-                  ap_args=[transl_normal_path path_self];
+                  ap_args=[transl_normal_path sf path_self];
                   ap_inlined=Default_inline;
                   ap_specialised=Default_specialise},
            List.fold_right
@@ -1353,8 +1359,9 @@ and transl_setinstvar loc self var expr =
     | Pointer -> Paddrarray
     | Immediate -> Pintarray
   in
+  let sf = Env.sf_of_phase (Env.cur_phase expr.exp_env) in
   Lprim(Parraysetu prim,
-    [self; transl_normal_path var; transl_exp expr], loc)
+    [self; transl_normal_path sf var; transl_exp expr], loc)
 
 and transl_record loc env fields repres opt_init_expr =
   let size = Array.length fields in

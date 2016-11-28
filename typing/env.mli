@@ -52,6 +52,7 @@ val with_phase_up: t -> t
 (** [phase_of_sf sf] returns 0 if [sf] is [Nonstatic] and [1] if [sf] is
     [Static]. *)
 val phase_of_sf: Asttypes.static_flag -> phase
+val sf_of_phase: phase -> Asttypes.static_flag
 
 (** Represents the stage of a computation, i.e. the number of surroundig quotes
     minus the number of surrounding, non-zero-phase escapes. Should be
@@ -357,6 +358,9 @@ val fold_cltypes:
 (** Utilities *)
 val scrape_alias: t -> module_type -> module_type
 val check_value_name: string -> Location.t -> unit
+val advance_pos:
+  Asttypes.static_flag -> signature_item -> int -> int ->
+  Path.pos * int * int
 
 module Persistent_signature : sig
   type t =
