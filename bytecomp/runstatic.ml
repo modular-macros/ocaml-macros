@@ -44,15 +44,15 @@ let run_static ppf lam =
            file as an argument to write the results in *)
         Config.standard_runtime ^ " " ^ execfilename ^ " " ^ resultfilename
       in
-      if Sys.command command <> 0 then
+      if Sys.command command <> 0 then begin
+        Sys.remove resultfilename;
         Misc.fatal_error @@
           "Something went wrong when executing splice generation command: "
-          ^ command;
+          ^ command
+      end;
       let ic = open_in resultfilename in
       let splices : Parsetree.expression array = Marshal.from_channel ic in
       close_in ic;
-      Sys.remove execfilename;
-      Sys.remove resultfilename;
       splices
     else assert false (* other backends not supported *)
   in
