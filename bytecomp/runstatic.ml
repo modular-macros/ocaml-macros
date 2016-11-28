@@ -51,6 +51,8 @@ let run_static ppf lam =
       let ic = open_in resultfilename in
       let splices : Parsetree.expression array = Marshal.from_channel ic in
       close_in ic;
+      Sys.remove execfilename;
+      Sys.remove resultfilename;
       splices
     else assert false (* other backends not supported *)
   in
