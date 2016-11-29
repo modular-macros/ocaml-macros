@@ -341,6 +341,46 @@ let rec compose_coercions c1 c2 =
   | (_, _) ->
       fatal_error "Translmod.compose_coercions"
 
+let ident_zero = Ident.create_persistent "0"
+
+(* Remove [pos] in [pos_cc_list] (if it exists) and shift down all greater
+   positions to keep the references consistent. *)
+let rec remove_pos_and_shift pos = function
+  | [] -> []
+  | (x, cc) :: rem ->
+      if x = pos then
+        remove_pos_and_shift pos rem
+      else if x > pos then
+        (pred x, cc) :: remove_pos_and_shift pos rem
+      else
+        (x, cc) :: remove_pos_and_shift pos rem
+
+(* Same as above, for id_pos_list *)
+let rec remove_pos_and_shift' pos = function
+  | [] -> []
+  | (id, x, cc) :: rem ->
+      if x = pos then
+        remove_pos_and_shift' pos rem
+      else if x > pos then
+        (id, pred x, cc) :: remove_pos_and_shift' pos rem
+      else
+        (id, x, cc) :: remove_pos_and_shift' pos rem
+
+(* Filter out the "0" placeholders while keeping the coercion consistent with
+   the list of ids. *)
+let filter_coercion fields pos_cc_list id_pos_list =
+  let (_, pos_cc_list, id_pos_list) =
+    List.fold_left (fun (i, pos_cc_list, id_pos_list) id ->
+      if Ident.compare id ident_zero = 0 then
+        (i, remove_pos_and_shift i pos_cc_list,
+          remove_pos_and_shift' i id_pos_list)
+      else
+        (succ i, pos_cc_list, id_pos_list)
+    ) (0, pos_cc_list, id_pos_list) fields
+  in
+  (pos_cc_list, id_pos_list,
+    List.filter (fun id -> Ident.compare id ident_zero <> 0) fields)
+
 (*
 let apply_coercion a b c =
   Format.eprintf "@[<2>apply_coercion@ %a@]@." Includemod.print_coercion b;
@@ -548,13 +588,6 @@ let transl_class_bindings cl_list =
        (id, transl_class ids id meths cl vf))
      cl_list)
 
-(* Filter a coercion by phase *)
-
-let filter_coercion phase = function
-  | Tcoerce_none -> Tcoerce_none
-  | Tcoerce_structure (pos_cc_list, id_pos_list) ->
-
-
 (* Compile a module expression *)
 
 let rec transl_module cc rootpath target_phase mexp =
@@ -633,15 +666,19 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
           Tcoerce_none ->
             Lprim(Pmakeblock(0, Immutable, None),
                   List.map (fun id -> Lvar id)
-                    (List.rev fields),
+                    (List.filter (fun id -> Ident.compare id ident_zero <> 0)
+                      (List.rev fields)),
                   loc),
               List.length fields
-        | Tcoerce_structure(pos_cc_list, id_pos_list) ->
+        | Tcoerce_structure (pos_cc_list, id_pos_list) ->
                 (* Do not ignore id_pos_list ! *)
             (*Format.eprintf "%a@.@[" Includemod.print_coercion cc;
             List.iter (fun l -> Format.eprintf "%a@ " Ident.print l)
               fields;
             Format.eprintf "@]@.";*)
+            let (pos_cc_list, id_pos_list, fields) =
+              filter_coercion fields pos_cc_list id_pos_list
+            in
             let v = Array.of_list (List.rev fields) in
             let get_field pos =
               let id = v.(pos) in
@@ -710,8 +747,13 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
                 item_postproc final_env rem in
             transl_let rec_flag pat_expr_list body, size
           end else
-            transl_structure loc fields cc rootpath target_phase
-              item_postproc final_env rem
+            (* Put zero as a placeholder for ignored items *)
+            let placeholders =
+              List.map (fun _ -> ident_zero) @@
+                rev_let_bound_idents pat_expr_list
+            in
+            transl_structure loc (placeholders @ fields)
+              cc rootpath target_phase item_postproc final_env rem
       end
       | Tstr_macro(rec_flag, pat_expr_list) ->
           let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
@@ -740,7 +782,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
           transl_type_extension item.str_env rootpath tyext body, size
       | Tstr_exception ext ->
           if target_phase = Static then
-            transl_structure loc fields cc rootpath target_phase
+            transl_structure loc (ident_zero :: fields) cc rootpath target_phase
               item_postproc final_env rem
           else
             let id = ext.ext_id in
@@ -798,7 +840,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
           if target_phase = Static then
             transl_structure loc
               (List.rev_append
-                (List.map (fun _ -> Ident.create_persistent "0") ids)
+                (List.map (fun _ -> ident_zero) ids)
                 fields)
               cc rootpath target_phase item_postproc final_env rem
           else
@@ -924,7 +966,8 @@ let transl_implementation module_name target_phase (str, cc) =
     { implementation with code }
 
 (* Build the list of value identifiers defined by a toplevel structure
-   (excluding primitive declarations). *)
+   (excluding primitive declarations and replacing different-phase identifiers
+    with placeholders). *)
 
 let rec defined_idents static_flag = function
     [] -> []
@@ -1240,7 +1283,8 @@ let transl_store_structure target_phase glob map prims str =
         | Tstr_class cl_list ->
             let (ids, class_bindings) = transl_class_bindings cl_list in
             if target_phase = Static then
-              transl_store rootpath (add_idents false ids subst) rem
+              transl_store rootpath (add_idents false
+                (List.map (fun _ -> ident_zero) ids) subst) rem
             else
               let lam =
                 Lletrec(class_bindings, store_idents Location.none ids)
