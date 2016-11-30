@@ -1445,8 +1445,6 @@ let advance_pos static_flag item pos_stat pos_rt =
   match item with
   | Sig_value (_id, sf, decl) ->
       let sf = add static_flag sf in
-      Printf.eprintf "advance_pos on %s with sf %d\n%!"
-        (Ident.name _id) (phase_of_sf sf);
       begin match decl.val_kind with
       | Val_macro ->
         (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
@@ -1482,6 +1480,9 @@ let rec prefix_idents root static_flag pos_stat pos_rt sub =
     [] -> ([], sub)
   | item :: rem ->
     begin
+      let static_flag =
+        if Path.lifted root then Static else static_flag
+      in
       let (pos, nextpos_s, nextpos_rt) =
         advance_pos static_flag item pos_stat pos_rt
       in

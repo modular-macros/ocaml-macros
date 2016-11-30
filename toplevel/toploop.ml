@@ -74,7 +74,19 @@ let rec eval_path phase = function
           raise (Symtable.Error(Symtable.Undefined_global name))
       end
   | Pdot(p, _s, pos) ->
-      Obj.field (eval_path phase p) pos
+    begin
+      match pos with
+      | Uniphase (sf, _) when Env.phase_of_sf sf <> phase ->
+          fatal_error "Eval with unexpected phase at toplevel"
+      | Uniphase (_, i) ->
+          Obj.field (eval_path phase p) i
+      | Biphase (i, _) when phase = 1 ->
+          Obj.field (eval_path phase p) i
+      | Biphase (_, i) when phase = 0 ->
+          Obj.field (eval_path phase p) i
+      | _ ->
+          fatal_error "Eval with unexpected phase at toplevel"
+    end
   | Papply _ ->
       fatal_error "Toploop.eval_path"
 
