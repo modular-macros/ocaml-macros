@@ -568,14 +568,38 @@ let compile_recmodule phase compile_rhs bindings cont =
    correspond to a run-time value: values, extensions, modules, classes.
    Note: manifest primitives do not correspond to a run-time value! *)
 
-let rec bound_value_identifiers = function
+let rec bound_value_identifiers phase env = function
     [] -> []
-  | Sig_value(id, _, {val_kind = Val_reg | Val_macro}) :: rem ->
-      id :: bound_value_identifiers rem
-  | Sig_typext(id, _, _) :: rem -> id :: bound_value_identifiers rem
-  | Sig_module(id, _, _, _) :: rem -> id :: bound_value_identifiers rem
-  | Sig_class(id, _, _) :: rem -> id :: bound_value_identifiers rem
-  | _ :: rem -> bound_value_identifiers rem
+  | Sig_value(id, sf, {val_kind = Val_reg}) :: rem ->
+      (if phase = sf then id else ident_zero) ::
+        bound_value_identifiers phase env rem
+  | Sig_value(id, _, {val_kind = Val_macro}) :: rem ->
+      id :: bound_value_identifiers phase env rem
+  | Sig_typext(id, _, _) :: rem -> id :: bound_value_identifiers phase env rem
+  | Sig_module(id, decl, sf, _) :: rem ->
+      if phase = Nonstatic && sf = Static then
+        ident_zero :: bound_value_identifiers phase env rem
+      else if bound_value_identifiers_mty phase env decl.md_type = [] then
+        ident_zero :: bound_value_identifiers phase env rem
+      else
+        id :: bound_value_identifiers phase env rem
+  | Sig_class(id, _, _) :: rem ->
+      (if phase = Static then ident_zero else id) ::
+        bound_value_identifiers phase env rem
+  | _ :: rem -> bound_value_identifiers phase env rem
+
+and bound_value_identifiers_mty phase env = function
+  | Mty_ident path ->
+      bound_value_identifiers_mty phase env
+        (Env.find_module path env).md_type
+  | Mty_signature sg ->
+      bound_value_identifiers phase env sg
+  | Mty_functor (_, _, ty_res) ->
+      bound_value_identifiers_mty phase env ty_res
+  | Mty_alias (_, path) ->
+      bound_value_identifiers_mty phase env
+        (Env.find_module (Env.normalize_path None env path)
+          env).md_type
 
 
 (* Code to translate class entries in a structure *)
@@ -851,7 +875,9 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
             in
             Lletrec(class_bindings, body), size
       | Tstr_include incl ->
-          let ids = bound_value_identifiers incl.incl_type in
+          let ids = bound_value_identifiers target_phase item.str_env
+            incl.incl_type
+          in
           let modl = incl.incl_mod in
           let mid = Ident.create "include" in
           let rec rebind_idents pos newfields = function
@@ -1008,7 +1034,8 @@ let rec defined_idents static_flag = function
       List.map (fun (ci, _) -> ci.ci_id_class) cl_list @ defined_idents static_flag rem
     | Tstr_class_type _ -> defined_idents static_flag rem
     | Tstr_include incl ->
-      bound_value_identifiers incl.incl_type @ defined_idents static_flag rem
+      bound_value_identifiers static_flag item.str_env incl.incl_type @
+        defined_idents static_flag rem
     | Tstr_attribute _ -> defined_idents static_flag rem
 
 (* second level idents (module M = struct ... let id = ... end),
@@ -1075,7 +1102,8 @@ and all_idents target_phase = function
       List.map (fun (ci, _) -> ci.ci_id_class) cl_list @ all_idents target_phase rem
     | Tstr_class_type _ -> all_idents target_phase rem
     | Tstr_include incl ->
-      bound_value_identifiers incl.incl_type @ all_idents target_phase rem
+      bound_value_identifiers target_phase item.str_env incl.incl_type @
+        all_idents target_phase rem
     | Tstr_module (sf, {mb_id;mb_expr={mod_desc = Tmod_structure str}})
     | Tstr_module (sf, {mb_id;
                         mb_expr={mod_desc =
@@ -1292,7 +1320,9 @@ let transl_store_structure target_phase glob map prims str =
               Lsequence(subst_lambda subst lam,
                         transl_store rootpath (add_idents false ids subst) rem)
         | Tstr_include incl ->
-            let ids = bound_value_identifiers incl.incl_type in
+            let ids = bound_value_identifiers target_phase item.str_env
+              incl.incl_type
+            in
             let modl = incl.incl_mod in
             let mid = Ident.create "include" in
             let loc = incl.incl_loc in
@@ -1564,7 +1594,8 @@ let transl_toplevel_item target_phase item =
         end
         else lambda_unit
     | Tstr_include incl ->
-        let ids = bound_value_identifiers incl.incl_type in
+        let ids = bound_value_identifiers target_phase item.str_env 
+          incl.incl_type in
         let modl = incl.incl_mod in
         let mid = Ident.create "include" in
         let rec set_idents pos = function
