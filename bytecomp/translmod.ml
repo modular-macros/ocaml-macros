@@ -568,6 +568,37 @@ let compile_recmodule phase compile_rhs bindings cont =
    correspond to a run-time value: values, extensions, modules, classes.
    Note: manifest primitives do not correspond to a run-time value! *)
 
+let rec contains_phase phase env = function
+  | [] -> false
+  | Sig_value (_, sf, {val_kind = Val_reg}) :: rem ->
+      phase = sf || contains_phase phase env rem
+  | Sig_value (_, _, {val_kind = Val_macro}) :: _ ->
+      true
+  | Sig_typext _ :: _ -> true
+  | Sig_module (_, decl, sf, _) :: rem ->
+      if phase = Nonstatic && sf = Static then
+        contains_phase phase env rem
+      else
+        contains_phase_mty phase env decl.md_type ||
+        contains_phase phase env rem
+  | Sig_class _ :: rem ->
+      phase = Nonstatic || contains_phase phase env rem
+  | _ :: rem -> contains_phase phase env rem
+
+and contains_phase_mty phase env = function
+  | Mty_ident path ->
+      contains_phase_mty phase env
+        (Env.find_modtype_expansion path env)
+  | Mty_signature sg ->
+      contains_phase phase env sg
+  | Mty_functor (_, _, ty_res) ->
+      contains_phase_mty phase env ty_res
+  | Mty_alias (_, path) ->
+      contains_phase_mty phase env
+        (Env.find_module (Env.normalize_path None env path)
+          env).md_type
+
+
 let rec bound_value_identifiers phase env = function
     [] -> []
   | Sig_value(id, sf, {val_kind = Val_reg}) :: rem ->
@@ -579,28 +610,14 @@ let rec bound_value_identifiers phase env = function
   | Sig_module(id, decl, sf, _) :: rem ->
       if phase = Nonstatic && sf = Static then
         ident_zero :: bound_value_identifiers phase env rem
-      else if bound_value_identifiers_mty phase env decl.md_type = [] then
-        ident_zero :: bound_value_identifiers phase env rem
-      else
+      else if contains_phase_mty phase env decl.md_type then
         id :: bound_value_identifiers phase env rem
+      else
+        ident_zero :: bound_value_identifiers phase env rem
   | Sig_class(id, _, _) :: rem ->
       (if phase = Static then ident_zero else id) ::
         bound_value_identifiers phase env rem
   | _ :: rem -> bound_value_identifiers phase env rem
-
-and bound_value_identifiers_mty phase env = function
-  | Mty_ident path ->
-      bound_value_identifiers_mty phase env
-        (Env.find_module path env).md_type
-  | Mty_signature sg ->
-      bound_value_identifiers phase env sg
-  | Mty_functor (_, _, ty_res) ->
-      bound_value_identifiers_mty phase env ty_res
-  | Mty_alias (_, path) ->
-      bound_value_identifiers_mty phase env
-        (Env.find_module (Env.normalize_path None env path)
-          env).md_type
-
 
 (* Code to translate class entries in a structure *)
 
@@ -819,7 +836,10 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
                  transl_extension_constructor item.str_env path ext,
                  body), size
       | Tstr_module (sf, mb) ->
-          if sf = Static && target_phase = Nonstatic then
+          if (sf = Static && target_phase = Nonstatic) ||
+              not (contains_phase_mty target_phase item.str_env
+              mb.mb_expr.mod_type) then
+            let fields = ident_zero :: fields in
             transl_structure loc fields cc rootpath target_phase item_postproc
               final_env rem
           else
@@ -840,7 +860,12 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
                  module_body,
                  body), size
       | Tstr_recmodule (sf, bindings) ->
-          if sf = Static && target_phase = Nonstatic then
+          if sf = Static && target_phase = Nonstatic ||
+              not (List.exists
+                (fun mb -> contains_phase_mty target_phase item.str_env
+                  mb.mb_expr.mod_type) bindings
+              ) then
+            let fields = List.map (fun _ -> ident_zero) bindings @ fields in
             transl_structure loc fields cc rootpath target_phase item_postproc
               final_env rem
           else
@@ -878,24 +903,29 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
           let ids = bound_value_identifiers target_phase item.str_env
             incl.incl_type
           in
-          let modl = incl.incl_mod in
-          let mid = Ident.create "include" in
-          let rec rebind_idents pos newfields = function
-              [] ->
-                transl_structure loc newfields cc rootpath target_phase
-                  item_postproc final_env rem
-            | id :: ids ->
-                let body, size =
-                  rebind_idents (pos + 1) (id :: newfields) ids
-                in
-                Llet(Alias, Pgenval, id,
-                     Lprim(Pfield pos, [Lvar mid], incl.incl_loc), body),
-                size
-          in
-          let body, size = rebind_idents 0 fields ids in
-          Llet(pure_module modl, Pgenval, mid,
-               transl_module Tcoerce_none None target_phase modl, body),
-          size
+          if not (contains_phase target_phase item.str_env incl.incl_type) then
+            (* ids should contain only ident_zero *)
+            transl_structure loc (ids @ fields) cc rootpath target_phase
+              item_postproc final_env rem
+          else
+            let modl = incl.incl_mod in
+            let mid = Ident.create "include" in
+            let rec rebind_idents pos newfields = function
+                [] ->
+                  transl_structure loc newfields cc rootpath target_phase
+                    item_postproc final_env rem
+              | id :: ids ->
+                  let body, size =
+                    rebind_idents (pos + 1) (id :: newfields) ids
+                  in
+                  Llet(Alias, Pgenval, id,
+                       Lprim(Pfield pos, [Lvar mid], incl.incl_loc), body),
+                  size
+            in
+            let body, size = rebind_idents 0 fields ids in
+            Llet(pure_module modl, Pgenval, mid,
+                 transl_module Tcoerce_none None target_phase modl, body),
+            size
       | Tstr_modtype _
       | Tstr_open _
       | Tstr_class_type _
@@ -1323,19 +1353,23 @@ let transl_store_structure target_phase glob map prims str =
             let ids = bound_value_identifiers target_phase item.str_env
               incl.incl_type
             in
-            let modl = incl.incl_mod in
-            let mid = Ident.create "include" in
-            let loc = incl.incl_loc in
-            let rec store_idents pos = function
-                [] -> transl_store rootpath (add_idents true ids subst) rem
-              | id :: idl ->
-                  Llet(Alias, Pgenval, id, Lprim(Pfield pos, [Lvar mid], loc),
-                       Lsequence(store_ident loc id,
-                                 store_idents (pos + 1) idl))
-            in
-            Llet(Strict, Pgenval, mid,
-                 subst_lambda subst (transl_module Tcoerce_none None Nonstatic modl),
-                 store_idents 0 ids)
+            if not (contains_phase target_phase item.str_env incl.incl_type) then
+              (* ids should only contain ident_zero *)
+              transl_store rootpath (add_idents true ids subst) rem
+            else
+              let modl = incl.incl_mod in
+              let mid = Ident.create "include" in
+              let loc = incl.incl_loc in
+              let rec store_idents pos = function
+                  [] -> transl_store rootpath (add_idents true ids subst) rem
+                | id :: idl ->
+                    Llet(Alias, Pgenval, id, Lprim(Pfield pos, [Lvar mid], loc),
+                         Lsequence(store_ident loc id,
+                                   store_idents (pos + 1) idl))
+              in
+              Llet(Strict, Pgenval, mid,
+                   subst_lambda subst (transl_module Tcoerce_none None Nonstatic modl),
+                   store_idents 0 ids)
         | Tstr_modtype _
         | Tstr_open _
         | Tstr_class_type _
@@ -1594,21 +1628,24 @@ let transl_toplevel_item target_phase item =
         end
         else lambda_unit
     | Tstr_include incl ->
-        let ids = bound_value_identifiers target_phase item.str_env 
-          incl.incl_type in
-        let modl = incl.incl_mod in
-        let mid = Ident.create "include" in
-        let rec set_idents pos = function
-          [] ->
-            lambda_unit
-        | id :: ids ->
-            Lsequence(
-              toploop_setvalue target_phase id
-                (Lprim(Pfield pos, [Lvar mid], Location.none)),
-              set_idents (pos + 1) ids)
-        in
-        Llet(Strict, Pgenval, mid,
-             transl_module Tcoerce_none None target_phase modl, set_idents 0 ids)
+        if not (contains_phase target_phase item.str_env incl.incl_type) then
+          lambda_unit
+        else
+          let ids = bound_value_identifiers target_phase item.str_env 
+            incl.incl_type in
+          let modl = incl.incl_mod in
+          let mid = Ident.create "include" in
+          let rec set_idents pos = function
+            [] ->
+              lambda_unit
+          | id :: ids ->
+              Lsequence(
+                toploop_setvalue target_phase id
+                  (Lprim(Pfield pos, [Lvar mid], Location.none)),
+                set_idents (pos + 1) ids)
+          in
+          Llet(Strict, Pgenval, mid,
+               transl_module Tcoerce_none None target_phase modl, set_idents 0 ids)
     | Tstr_modtype _
     | Tstr_open _
     | Tstr_primitive _
