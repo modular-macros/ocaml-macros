@@ -572,7 +572,8 @@ let rec contains_phase phase env = function
   | [] -> false
   | Sig_value (_, sf, {val_kind = Val_reg}) :: rem ->
       phase = sf || contains_phase phase env rem
-  | Sig_value (_, _, {val_kind = Val_macro}) :: _ ->
+  | Sig_value (_id, _, {val_kind = Val_macro}) :: _ ->
+      Printf.eprintf "contains_phase saw macro: %s\n%!" (Ident.name _id);
       true
   | Sig_typext _ :: _ -> true
   | Sig_module (_, decl, sf, _) :: rem ->
@@ -705,22 +706,36 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
       let body, size =
         match cc with
           Tcoerce_none ->
+            Printf.eprintf "END OF TRANSL_STRUCTURE TCOERCE_NONE\n%!";
             Lprim(Pmakeblock(0, Immutable, None),
                   List.map (fun id -> Lvar id)
-                    (List.filter (fun id -> Ident.compare id ident_zero <> 0)
+                    (List.filter (fun id -> let b = Ident.compare id ident_zero
+                    <> 0 in Printf.eprintf "tstruct case none id %s %B\n%!"
+                    (Ident.name id) b; b)
                       (List.rev fields)),
                   loc),
               List.length fields
         | Tcoerce_structure (pos_cc_list, id_pos_list) ->
+            Printf.eprintf "END of transl_structure with Tcoerce_structure\n%!";
                 (* Do not ignore id_pos_list ! *)
             (*Format.eprintf "%a@.@[" Includemod.print_coercion cc;
             List.iter (fun l -> Format.eprintf "%a@ " Ident.print l)
               fields;
             Format.eprintf "@]@.";*)
+            let fields = List.rev fields in
+            Printf.eprintf "pos_cc_list BEFORE filter:\n";
+            List.iter (fun (pos, _) -> Printf.eprintf "  %d\n%!" pos)
+            pos_cc_list;
             let (pos_cc_list, id_pos_list, fields) =
               filter_coercion fields pos_cc_list id_pos_list
             in
-            let v = Array.of_list (List.rev fields) in
+            Printf.eprintf "fields after filter:\n";
+            List.iter (fun id -> Printf.eprintf "  %s\n%!" (Ident.unique_name
+              id)) fields;
+            Printf.eprintf "pos_cc_list:\n";
+            List.iter (fun (pos, _) -> Printf.eprintf "  %d\n%!" pos)
+            pos_cc_list;
+            let v = Array.of_list fields in
             let get_field pos =
               let id = v.(pos) in
               Lvar id
@@ -793,11 +808,18 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
               List.map (fun _ -> ident_zero) @@
                 rev_let_bound_idents pat_expr_list
             in
-            transl_structure loc (placeholders @ fields)
-              cc rootpath target_phase item_postproc final_env rem
+            let ext_fields = placeholders @ fields in
+            Printf.eprintf "Tstr_value with ext_fields:\n%!";
+            List.iter (fun id -> Printf.eprintf "  %s\n%!" (Ident.unique_name id))
+              ext_fields;
+            transl_structure loc ext_fields cc rootpath target_phase
+              item_postproc final_env rem
       end
       | Tstr_macro(rec_flag, pat_expr_list) ->
           let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
+          Printf.eprintf "Tstr_macro with ext_fields:\n%!";
+          List.iter (fun id -> Printf.eprintf "  %s\n%!" (Ident.unique_name id))
+            ext_fields;
           let body, size =
             transl_structure loc ext_fields cc rootpath target_phase
               item_postproc final_env rem
@@ -844,6 +866,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
               final_env rem
           else
             let id = mb.mb_id in
+            Printf.eprintf "transl Tstr_module %s\n%!" (Ident.unique_name id);
             let body, size =
               transl_structure loc (id :: fields) cc rootpath target_phase
                 item_postproc final_env rem
