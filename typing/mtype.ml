@@ -51,7 +51,7 @@ and strengthen_sig ~aliasable env sg p pos_s pos_rt =
   | item :: rem ->
     begin
       let (pos, nextpos_s, nextpos_rt) =
-        Env.advance_pos sf item pos_s pos_rt
+        Env.advance_pos sf item pos_s pos_rt env
       in
       match sg with
       | [] -> assert false (* unused *)
@@ -233,7 +233,7 @@ and type_paths_sig env p (pos_s, pos_rt) sg =
     begin
       let (pos, nextpos_s, nextpos_rt) =
         Env.advance_pos (if Env.cur_phase env > 0 then Static else Nonstatic)
-          item pos_s pos_rt
+          item pos_s pos_rt env
       in
       let pos' = (nextpos_s, nextpos_rt)
       in

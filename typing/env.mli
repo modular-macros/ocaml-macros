@@ -358,8 +358,13 @@ val fold_cltypes:
 (** Utilities *)
 val scrape_alias: t -> module_type -> module_type
 val check_value_name: string -> Location.t -> unit
+
+(** [advance_pos sf item pos_stat pos_rt env] returns a triplet [pos, nextpos_s,
+    nextpos_rt], where [pos] is the position (with phase information) of [item]
+    in a module block, in function of [pos_stat] and [pos_rt]; and [nextpos_s]
+    and [nextpos_rt] are the input of the next iteration. *)
 val advance_pos:
-  Asttypes.static_flag -> signature_item -> int -> int ->
+  Asttypes.static_flag -> signature_item -> int -> int -> t ->
   Path.pos * int * int
 
 module Persistent_signature : sig

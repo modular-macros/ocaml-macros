@@ -153,16 +153,6 @@ let item_ident_name = function
   | Sig_class(id, d, _) -> (id, d.cty_loc, Field_class(Ident.name id))
   | Sig_class_type(id, d, _) -> (id, d.clty_loc, Field_classtype(Ident.name id))
 
-let is_runtime_component = function
-  | Sig_value(_,_,{val_kind = Val_prim _})
-  | Sig_type(_,_,_)
-  | Sig_modtype(_,_)
-  | Sig_class_type(_,_,_) -> false
-  | Sig_value(_,_,_)
-  | Sig_typext(_,_,_)
-  | Sig_module(_,_,_,_)
-  | Sig_class(_, _,_) -> true
-
 (* Print a coercion *)
 
 let rec print_list pr ppf = function
@@ -178,7 +168,6 @@ let print_sf ppf =
   | Nonstatic -> Format.pp_print_string ppf "Nonstatic"
   | Static -> Format.pp_print_string ppf "Static"
 let print_pos ppf = function
-  | Nopos -> Format.pp_print_string ppf "Nopos"
   | Uniphase (sf, i) ->
       Format.fprintf ppf "Uniphase (%a, %d)" print_sf sf i
   | Biphase (i, j) ->
@@ -209,6 +198,12 @@ and print_coercion3 ppf (i, pos, c) =
   Format.fprintf ppf "@[%s, %a,@ %a@]"
     (Ident.unique_name i) print_pos pos print_coercion c
 
+(* Convert a [Path.pos] into a [coercion_pos] *)
+let coercion_pos = function
+  | Path.Nopos -> assert false
+  | Path.Uniphase (sf,i) -> Uniphase (sf, i)
+  | Path.Biphase (i, j) -> Biphase (i, j)
+
 (* Simplify a structure coercion *)
 
 let simplify_structure_coercion cc id_pos_list =
@@ -218,7 +213,6 @@ let simplify_structure_coercion cc id_pos_list =
   | (p, c) :: rem ->
     begin
       match p with
-      | Nopos -> assert false
       | Uniphase (sf, i) when sf = phase ->
           i = pos && c = Tcoerce_none &&
           is_identity_coercion phase (pos + 1) rem
@@ -340,28 +334,38 @@ and signatures env cxt subst sig1 sig2 =
   let new_env =
     Env.add_signature sig1 (Env.in_signature true env) in
   (* Keep ids for module aliases *)
-  let (id_pos_list,_) =
+  let (id_pos_list,_,_) =
     List.fold_left
-      (fun (l,pos) -> function
-          Sig_module (id, _, sf, _) ->
-            ((sf,id,pos,Tcoerce_none)::l , pos+1)
-        | item -> (l, if is_runtime_component item then pos+1 else pos))
-      ([], 0) sig1 in
+      (fun (l,pos_s,pos_r) item ->
+        let (pos_p,npos_s,npos_r) =
+          Env.advance_pos Nonstatic item pos_s pos_r env
+        in
+        let pos = coercion_pos pos_p in
+        match item with
+        | Sig_module (id, _, _, _) ->
+            ((id,pos,Tcoerce_none)::l , npos_s, npos_r)
+        | _ -> (l, npos_s, npos_r))
+      ([], 0, 0) sig1
+  in
   (* Build a table of the components of sig1, along with their positions.
      The table is indexed by kind and name of component *)
-  let rec build_component_table pos tbl = function
-      [] -> pos, tbl
+  let rec build_component_table (pos_s, pos_r) tbl = function
+      [] -> pos_s, pos_r, tbl
     | item :: rem ->
         let (id, _loc, name) = item_ident_name item in
-        let nextpos = if is_runtime_component item then pos + 1 else pos in
-        build_component_table nextpos
-                              (Tbl.add name (id, item, pos) tbl) rem in
-  let len1, comps1 =
-    build_component_table 0 Tbl.empty sig1 in
-  let len2 =
+        let (pos,npos_s,npos_r) =
+          Env.advance_pos Nonstatic item pos_s pos_r env
+        in
+        build_component_table (npos_s, npos_r)
+          (Tbl.add name (id, item, coercion_pos pos) tbl) rem in
+  let len1_s, len1_r, comps1 =
+    build_component_table (0, 0) Tbl.empty sig1 in
+  let len2_s, len2_r =
     List.fold_left
-      (fun n i -> if is_runtime_component i then n + 1 else n)
-      0
+      (fun (pos_s, pos_r) i ->
+        let (_,a,b) = Env.advance_pos Nonstatic i pos_s pos_r env in
+        (a, b))
+      (0, 0)
       sig2
   in
   (* Pair each component of sig2 with a component of sig1,
@@ -376,7 +380,7 @@ and signatures env cxt subst sig1 sig2 =
               let cc =
                 signature_components env new_env cxt subst (List.rev paired)
               in
-              if len1 = len2 then (* see PR#5098 *)
+              if len1_s = len2_s && len1_r = len2_r then (* see PR#5098 *)
                 simplify_structure_coercion cc id_pos_list
               else
                 Tcoerce_structure (cc, id_pos_list)

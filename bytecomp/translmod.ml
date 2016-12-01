@@ -254,7 +254,15 @@ let rec apply_coercion loc static_flag strict restr arg =
       arg
   | Tcoerce_structure(pos_cc_list, id_pos_list) ->
       name_lambda strict arg (fun id ->
-        let get_field pos = Lprim(Pfield pos,[Lvar id], loc) in
+        let get_field pos =
+          let i = match pos with
+          | Uniphase (sf, i) ->
+              assert (sf = static_flag); i
+          | Biphase (i, j) ->
+              if static_flag = Static then i else j
+          in
+          Lprim(Pfield i,[Lvar id], loc)
+        in
         let lam =
           Lprim(Pmakeblock(0, Immutable, None),
                 List.map
@@ -567,37 +575,6 @@ let compile_recmodule phase compile_rhs bindings cont =
    "Value" identifiers are identifiers for signature components that
    correspond to a run-time value: values, extensions, modules, classes.
    Note: manifest primitives do not correspond to a run-time value! *)
-
-let rec contains_phase phase env = function
-  | [] -> false
-  | Sig_value (_, sf, {val_kind = Val_reg}) :: rem ->
-      phase = sf || contains_phase phase env rem
-  | Sig_value (_id, _, {val_kind = Val_macro}) :: _ ->
-      Printf.eprintf "contains_phase saw macro: %s\n%!" (Ident.name _id);
-      true
-  | Sig_typext _ :: _ -> true
-  | Sig_module (_, decl, sf, _) :: rem ->
-      if phase = Nonstatic && sf = Static then
-        contains_phase phase env rem
-      else
-        contains_phase_mty phase env decl.md_type ||
-        contains_phase phase env rem
-  | Sig_class _ :: rem ->
-      phase = Nonstatic || contains_phase phase env rem
-  | _ :: rem -> contains_phase phase env rem
-
-and contains_phase_mty phase env = function
-  | Mty_ident path ->
-      contains_phase_mty phase env
-        (Env.find_modtype_expansion path env)
-  | Mty_signature sg ->
-      contains_phase phase env sg
-  | Mty_functor (_, _, ty_res) ->
-      contains_phase_mty phase env ty_res
-  | Mty_alias (_, path) ->
-      contains_phase_mty phase env
-        (Env.find_module (Env.normalize_path None env path)
-          env).md_type
 
 
 let rec bound_value_identifiers phase env = function
