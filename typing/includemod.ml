@@ -19,6 +19,7 @@ open Misc
 open Path
 open Typedtree
 open Types
+open Asttypes
 
 type symptom =
     Missing_field of Ident.t * Location.t * string (* kind *)
@@ -171,6 +172,18 @@ let rec print_list pr ppf = function
 let print_list pr ppf l =
   Format.fprintf ppf "[@[%a@]]" (print_list pr) l
 
+let print_sf ppf =
+  let open Asttypes in
+  function
+  | Nonstatic -> Format.pp_print_string ppf "Nonstatic"
+  | Static -> Format.pp_print_string ppf "Static"
+let print_pos ppf = function
+  | Nopos -> Format.pp_print_string ppf "Nopos"
+  | Uniphase (sf, i) ->
+      Format.fprintf ppf "Uniphase (%a, %d)" print_sf sf i
+  | Biphase (i, j) ->
+      Format.fprintf ppf "Biphase (%d, %d)" i j
+
 let rec print_coercion ppf c =
   let pr fmt = Format.fprintf ppf fmt in
   match c with
@@ -190,21 +203,38 @@ let rec print_coercion ppf c =
       pr "@[<2>alias %a@ (%a)@]"
         Printtyp.path p
         print_coercion c
-and print_coercion2 ppf (n, c) =
-  Format.fprintf ppf "@[%d,@ %a@]" n print_coercion c
-and print_coercion3 ppf (i, n, c) =
-  Format.fprintf ppf "@[%s, %d,@ %a@]"
-    (Ident.unique_name i) n print_coercion c
+and print_coercion2 ppf (pos, c) =
+  Format.fprintf ppf "@[%a,@ %a@]" print_pos pos print_coercion c
+and print_coercion3 ppf (i, pos, c) =
+  Format.fprintf ppf "@[%s, %a,@ %a@]"
+    (Ident.unique_name i) print_pos pos print_coercion c
 
 (* Simplify a structure coercion *)
 
 let simplify_structure_coercion cc id_pos_list =
-  let rec is_identity_coercion pos = function
+  let rec is_identity_coercion phase pos = function
   | [] ->
       true
-  | (n, c) :: rem ->
-      n = pos && c = Tcoerce_none && is_identity_coercion (pos + 1) rem in
-  if is_identity_coercion 0 cc
+  | (p, c) :: rem ->
+    begin
+      match p with
+      | Nopos -> assert false
+      | Uniphase (sf, i) when sf = phase ->
+          i = pos && c = Tcoerce_none &&
+          is_identity_coercion phase (pos + 1) rem
+      | Uniphase _ (* sf <> phase *) ->
+          is_identity_coercion phase pos rem
+      | Biphase (i, _) when phase = Static ->
+          i = pos && c = Tcoerce_none &&
+          is_identity_coercion phase (pos + 1) rem
+      | Biphase (_, i) when phase = Nonstatic ->
+          i = pos && c = Tcoerce_none &&
+          is_identity_coercion phase (pos + 1) rem
+      | _ (* unused *) -> assert false
+    end
+  in
+  if is_identity_coercion Static 0 cc &&
+    is_identity_coercion Nonstatic 0 cc
   then Tcoerce_none
   else Tcoerce_structure (cc, id_pos_list)
 
@@ -313,8 +343,8 @@ and signatures env cxt subst sig1 sig2 =
   let (id_pos_list,_) =
     List.fold_left
       (fun (l,pos) -> function
-          Sig_module (id, _, _, _) ->
-            ((id,pos,Tcoerce_none)::l , pos+1)
+          Sig_module (id, _, sf, _) ->
+            ((sf,id,pos,Tcoerce_none)::l , pos+1)
         | item -> (l, if is_runtime_component item then pos+1 else pos))
       ([], 0) sig1 in
   (* Build a table of the components of sig1, along with their positions.
