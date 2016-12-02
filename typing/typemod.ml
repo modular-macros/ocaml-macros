@@ -1709,7 +1709,6 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
       let coercion =
         Includemod.compunit initial_env sourcefile sg intf_file dclsig
       in
-      Includemod.print_coercion Format.err_formatter coercion;
       Typecore.force_delayed_checks ();
       (* It is important to run these checks after the inclusion test above,
          so that value declarations which are not used internally but exported
