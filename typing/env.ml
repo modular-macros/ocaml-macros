@@ -1437,7 +1437,7 @@ let scrape_alias env mty = scrape_alias env mty
 
 let rec contains_phase phase env = function
   | [] -> false
-  | Sig_value (_, sf, {val_kind = Val_reg}) :: rem ->
+  | Sig_value (_, sf, {val_kind = Val_reg | Val_prim _}) :: rem ->
       phase = sf || contains_phase phase env rem
   | Sig_value (_id, _, {val_kind = Val_macro}) :: _ ->
       true
@@ -1454,16 +1454,35 @@ let rec contains_phase phase env = function
 
 and contains_phase_mty phase env = function
   | Mty_ident path ->
-      contains_phase_mty phase env
-        (find_modtype_expansion path env)
+    begin try
+        contains_phase_mty phase env
+          (find_modtype_expansion path env)
+      with Not_found ->
+        try
+          contains_phase_mty phase env
+            (find_module (normalize_path None env path) env).md_type
+        with Not_found ->
+          (* Module type is abstract or unavailable: we assume it contains only
+           * run-time components *)
+          phase = Nonstatic
+    end
   | Mty_signature sg ->
       contains_phase phase env sg
   | Mty_functor (_, _, ty_res) ->
       contains_phase_mty phase env ty_res
   | Mty_alias (_, path) ->
-      contains_phase_mty phase env
-        (find_module (normalize_path None env path)
-          env).md_type
+    begin try
+        contains_phase_mty phase env
+          (find_modtype_expansion path env)
+      with Not_found ->
+        try
+          contains_phase_mty phase env
+            (find_module (normalize_path None env path) env).md_type
+        with Not_found ->
+          (* Module type is abstract or unavailable: we assume it contains only
+           * run-time components *)
+          phase = Nonstatic
+    end
 
 let advance_pos static_flag item pos_stat pos_rt env =
   let add sf sf' =

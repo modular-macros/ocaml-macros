@@ -358,6 +358,8 @@ val fold_cltypes:
 (** Utilities *)
 val scrape_alias: t -> module_type -> module_type
 val check_value_name: string -> Location.t -> unit
+val contains_phase: Asttypes.static_flag -> t -> signature -> bool
+val contains_phase_mty: Asttypes.static_flag -> t -> module_type -> bool
 
 (** [advance_pos sf item pos_stat pos_rt env] returns a triplet [pos, nextpos_s,
     nextpos_rt], where [pos] is the position (with phase information) of [item]

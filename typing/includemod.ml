@@ -340,10 +340,9 @@ and signatures env cxt subst sig1 sig2 =
         let (pos_p,npos_s,npos_r) =
           Env.advance_pos Nonstatic item pos_s pos_r env
         in
-        let pos = coercion_pos pos_p in
         match item with
         | Sig_module (id, _, _, _) ->
-            ((id,pos,Tcoerce_none)::l , npos_s, npos_r)
+            ((id,coercion_pos pos_p,Tcoerce_none)::l , npos_s, npos_r)
         | _ -> (l, npos_s, npos_r))
       ([], 0, 0) sig1
   in
@@ -356,8 +355,13 @@ and signatures env cxt subst sig1 sig2 =
         let (pos,npos_s,npos_r) =
           Env.advance_pos Nonstatic item pos_s pos_r env
         in
+        let pos =
+          if pos = Path.Nopos
+          then Biphase (pos_s, pos_r) (* value irrelevant *)
+          else coercion_pos pos
+        in
         build_component_table (npos_s, npos_r)
-          (Tbl.add name (id, item, coercion_pos pos) tbl) rem in
+          (Tbl.add name (id, item, pos) tbl) rem in
   let len1_s, len1_r, comps1 =
     build_component_table (0, 0) Tbl.empty sig1 in
   let len2_s, len2_r =
