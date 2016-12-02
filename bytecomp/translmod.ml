@@ -607,65 +607,68 @@ let rec transl_module cc rootpath target_phase mexp =
       mexp.mod_attributes
   ;
   let loc = mexp.mod_loc in
-  match mexp.mod_type with
-    Mty_alias _ -> apply_coercion loc target_phase Alias cc lambda_unit
-  | _ ->
-      match mexp.mod_desc with
-        Tmod_ident (path,_) ->
-          apply_coercion loc target_phase Strict cc
-            (transl_path ~loc mexp.mod_env path)
-      | Tmod_structure str ->
-          fst (transl_struct loc [] cc rootpath target_phase str)
-      | Tmod_functor(param, _, _, body) ->
-          let bodypath = functor_path rootpath param in
-          let inline_attribute =
-            Translattribute.get_inline_attribute mexp.mod_attributes
-          in
-          oo_wrap mexp.mod_env true
-            (function
-              | Tcoerce_none ->
-                  Lfunction{kind = Curried; params = [param];
-                            attr = { inline = inline_attribute;
-                                     specialise = Default_specialise;
-                                     is_a_functor = true };
-                            loc = loc;
-                            body = transl_module Tcoerce_none bodypath
-                              target_phase body}
-              | Tcoerce_functor(ccarg, ccres) ->
-                  let param' = Ident.create "funarg" in
-                  Lfunction{kind = Curried; params = [param'];
-                            attr = { inline = inline_attribute;
-                                     specialise = Default_specialise;
-                                     is_a_functor = true };
-                            loc = loc;
-                            body = Llet(Alias, Pgenval, param,
-                                        apply_coercion loc target_phase Alias
-                                          ccarg (Lvar param'),
-                                        transl_module ccres bodypath
-                                          target_phase body)}
-              | _ ->
-                  fatal_error "Translmod.transl_module")
-            cc
-      | Tmod_apply(funct, arg, ccarg) ->
-          let inlined_attribute, funct =
-            Translattribute.get_and_remove_inlined_attribute_on_module funct
-          in
-          oo_wrap mexp.mod_env true
-            (apply_coercion loc target_phase Strict cc)
-            (Lapply{ap_should_be_tailcall=false;
-                    ap_loc=loc;
-                    ap_func=transl_module Tcoerce_none None
-                      target_phase funct;
-                    ap_args=[transl_module ccarg None target_phase arg];
-                    ap_inlined=inlined_attribute;
-                    ap_specialised=Default_specialise})
-      | Tmod_constraint(arg, _, _, ccarg) ->
-          transl_module (compose_coercions target_phase cc ccarg)
-            rootpath target_phase arg
-      | Tmod_unpack(arg, _) ->
-          if target_phase <> Static then
-            apply_coercion loc target_phase Strict cc (Translcore.transl_exp arg)
-          else zero_lam
+  if Env.contains_phase_mty target_phase mexp.mod_env mexp.mod_type then
+    match mexp.mod_type with
+      Mty_alias _ -> apply_coercion loc target_phase Alias cc lambda_unit
+    | _ ->
+        match mexp.mod_desc with
+          Tmod_ident (path,_) ->
+            apply_coercion loc target_phase Strict cc
+              (transl_path ~loc mexp.mod_env path)
+        | Tmod_structure str ->
+            fst (transl_struct loc [] cc rootpath target_phase str)
+        | Tmod_functor(param, _, _, body) ->
+            let bodypath = functor_path rootpath param in
+            let inline_attribute =
+              Translattribute.get_inline_attribute mexp.mod_attributes
+            in
+            oo_wrap mexp.mod_env true
+              (function
+                | Tcoerce_none ->
+                    Lfunction{kind = Curried; params = [param];
+                              attr = { inline = inline_attribute;
+                                       specialise = Default_specialise;
+                                       is_a_functor = true };
+                              loc = loc;
+                              body = transl_module Tcoerce_none bodypath
+                                target_phase body}
+                | Tcoerce_functor(ccarg, ccres) ->
+                    let param' = Ident.create "funarg" in
+                    Lfunction{kind = Curried; params = [param'];
+                              attr = { inline = inline_attribute;
+                                       specialise = Default_specialise;
+                                       is_a_functor = true };
+                              loc = loc;
+                              body = Llet(Alias, Pgenval, param,
+                                          apply_coercion loc target_phase Alias
+                                            ccarg (Lvar param'),
+                                          transl_module ccres bodypath
+                                            target_phase body)}
+                | _ ->
+                    fatal_error "Translmod.transl_module")
+              cc
+        | Tmod_apply(funct, arg, ccarg) ->
+            let inlined_attribute, funct =
+              Translattribute.get_and_remove_inlined_attribute_on_module funct
+            in
+            oo_wrap mexp.mod_env true
+              (apply_coercion loc target_phase Strict cc)
+              (Lapply{ap_should_be_tailcall=false;
+                      ap_loc=loc;
+                      ap_func=transl_module Tcoerce_none None
+                        target_phase funct;
+                      ap_args=[transl_module ccarg None target_phase arg];
+                      ap_inlined=inlined_attribute;
+                      ap_specialised=Default_specialise})
+        | Tmod_constraint(arg, _, _, ccarg) ->
+            transl_module (compose_coercions target_phase cc ccarg)
+              rootpath target_phase arg
+        | Tmod_unpack(arg, _) ->
+            if target_phase <> Static then
+              apply_coercion loc target_phase Strict cc (Translcore.transl_exp arg)
+            else zero_lam
+  else
+    Lprim(Pmakeblock (0,Immutable,None), [], loc)
 
 and transl_struct loc fields cc rootpath static_flag str =
   transl_structure loc fields cc rootpath static_flag
@@ -809,16 +812,12 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
                 item_postproc final_env rem
             in
             let module_body =
-              if Env.contains_phase_mty target_phase item.str_env
-                  mb.mb_expr.mod_type then
-                (if target_phase = Static then
-                  Translattribute.add_inline_attribute
-                else fun lam _ _ -> lam)
-                  (transl_module Tcoerce_none (field_path rootpath id)
-                    target_phase mb.mb_expr)
-                  mb.mb_loc mb.mb_attributes
-              else
-                Lprim(Pmakeblock (0,Immutable,None), [], loc)
+              (if target_phase = Static then
+                Translattribute.add_inline_attribute
+              else fun lam _ _ -> lam)
+                (transl_module Tcoerce_none (field_path rootpath id)
+                  target_phase mb.mb_expr)
+                mb.mb_loc mb.mb_attributes
             in
             Llet(pure_module mb.mb_expr, Pgenval, id,
                  module_body,
@@ -836,16 +835,11 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
                 item_postproc final_env rem
             in
             let lam =
-              if List.exists (fun mb ->
-                Env.contains_phase_mty target_phase item.str_env
-                  mb.mb_expr.mod_type) bindings then
-                compile_recmodule target_phase
-                  (fun id modl ->
-                     transl_module Tcoerce_none (field_path rootpath id) target_phase modl)
-                  bindings
-                  body
-              else
-                Lprim(Pmakeblock (0,Immutable,None), [], loc)
+              compile_recmodule target_phase
+                (fun id modl ->
+                   transl_module Tcoerce_none (field_path rootpath id) target_phase modl)
+                bindings
+                body
             in
             lam, size
       | Tstr_class cl_list ->
