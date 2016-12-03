@@ -61,7 +61,14 @@ module EvalPath =
         let v = eval_path env root in
         if not (Debugcom.Remote_value.is_block v)
         then raise Error
-        else Debugcom.Remote_value.field v pos
+        else begin
+          match pos with
+          | Uniphase (Asttypes.Nonstatic, i) ->
+              Debugcom.Remote_value.field v i
+          | Biphase (_, i) ->
+              Debugcom.Remote_value.field v i
+          | _ -> raise Error
+        end
     | Papply _ ->
         raise Error
     let same_value = Debugcom.Remote_value.same
