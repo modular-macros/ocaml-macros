@@ -811,12 +811,17 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
               transl_structure loc (id :: fields) cc rootpath target_phase
                 item_postproc final_env rem
             in
+            let mod_expr =
+              if sf = Static then
+                {mb.mb_expr with mod_env = Env.with_phase 1 mb.mb_expr.mod_env}
+              else mb.mb_expr
+            in
             let module_body =
               (if target_phase = Static then
                 Translattribute.add_inline_attribute
               else fun lam _ _ -> lam)
                 (transl_module Tcoerce_none (field_path rootpath id)
-                  target_phase mb.mb_expr)
+                  target_phase mod_expr)
                 mb.mb_loc mb.mb_attributes
             in
             Llet(pure_module mb.mb_expr, Pgenval, id,
@@ -837,6 +842,11 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
             let lam =
               compile_recmodule target_phase
                 (fun id modl ->
+                   let modl =
+                     if sf = Static then
+                       {modl with mod_env = Env.with_phase 1 modl.mod_env}
+                     else modl
+                   in
                    transl_module Tcoerce_none (field_path rootpath id) target_phase modl)
                 bindings
                 body
@@ -1257,6 +1267,11 @@ let transl_store_structure target_phase glob map prims str =
             if sf = Static && target_phase = Nonstatic then
               transl_store rootpath subst rem
             else
+              let modl =
+                if sf = Static then
+                  {modl with mod_env = Env.with_phase 1 modl.mod_env}
+                else modl
+              in
               let lam =
                 (if target_phase = Static then
                   Translattribute.add_inline_attribute
@@ -1280,6 +1295,11 @@ let transl_store_structure target_phase glob map prims str =
               let ids = List.map (fun mb -> mb.mb_id) bindings in
               compile_recmodule target_phase
                 (fun id modl ->
+                   let modl =
+                     if sf = Static then
+                       {modl with mod_env = Env.with_phase 1 modl.mod_env}
+                     else modl
+                   in
                    subst_lambda subst
                      (transl_module Tcoerce_none
                         (field_path rootpath id) target_phase modl))

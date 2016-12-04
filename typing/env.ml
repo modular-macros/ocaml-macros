@@ -1438,7 +1438,8 @@ let scrape_alias env mty = scrape_alias env mty
 let rec contains_phase phase env = function
   | [] -> false
   | Sig_value (_, sf, {val_kind = Val_reg | Val_prim _}) :: rem ->
-      phase = sf || contains_phase phase env rem
+      phase = sf_of_phase (cur_phase env + phase_of_sf sf) ||
+      contains_phase phase env rem
   | Sig_value (_id, _, {val_kind = Val_macro}) :: _ ->
       true
   | Sig_typext _ :: _ -> true

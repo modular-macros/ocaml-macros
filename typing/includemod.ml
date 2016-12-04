@@ -24,7 +24,7 @@ open Asttypes
 type symptom =
     Missing_field of Ident.t * Location.t * string (* kind *)
   | Value_descriptions of Ident.t * Asttypes.static_flag * value_description *
-    Asttypes.static_flag * value_description
+      Asttypes.static_flag * value_description
   | Type_declarations of Ident.t * type_declaration
         * type_declaration * Includecore.type_mismatch list
   | Extension_constructors of
@@ -39,6 +39,7 @@ type symptom =
   | Class_declarations of
       Ident.t * class_declaration * class_declaration *
       Ctype.class_match_failure list
+  | Static_flags of Asttypes.static_flag * Asttypes.static_flag
   | Unbound_modtype_path of Path.t
   | Unbound_module_path of Path.t
   | Invalid_module_alias of Path.t
@@ -56,11 +57,13 @@ exception Error of error list
 (* Inclusion between value descriptions *)
 
 let value_descriptions env cxt subst id sf1 vd1 sf2 vd2 =
+  if sf1 <> sf2 then
+    raise (Error [cxt, env, Static_flags (sf1, sf2)]);
   Cmt_format.record_value_dependency vd1 vd2;
   Env.mark_value_used env (Ident.name id) vd1;
   let vd2 = Subst.value_description subst vd2 in
   try
-    Includecore.value_descriptions env sf1 vd1 sf2 vd2
+    Includecore.value_descriptions env vd1 vd2
   with Includecore.Dont_match ->
     raise(Error[cxt, env, Value_descriptions(id, sf1, vd1, sf2, vd2)])
 
@@ -333,12 +336,13 @@ and signatures env cxt subst sig1 sig2 =
   (* Environment used to check inclusion of components *)
   let new_env =
     Env.add_signature sig1 (Env.in_signature true env) in
+  let sf = Env.sf_of_phase (Env.cur_phase env) in
   (* Keep ids for module aliases *)
   let (id_pos_list,_,_) =
     List.fold_left
       (fun (l,pos_s,pos_r) item ->
         let (pos_p,npos_s,npos_r) =
-          Env.advance_pos Nonstatic item pos_s pos_r env
+          Env.advance_pos sf item pos_s pos_r env
         in
         match item with
         | Sig_module (id, _, _, _) ->
@@ -353,7 +357,7 @@ and signatures env cxt subst sig1 sig2 =
     | item :: rem ->
         let (id, _loc, name) = item_ident_name item in
         let (pos,npos_s,npos_r) =
-          Env.advance_pos Nonstatic item pos_s pos_r env
+          Env.advance_pos sf item pos_s pos_r env
         in
         let pos =
           if pos = Path.Nopos
@@ -367,7 +371,7 @@ and signatures env cxt subst sig1 sig2 =
   let len2_s, len2_r =
     List.fold_left
       (fun (pos_s, pos_r) i ->
-        let (_,a,b) = Env.advance_pos Nonstatic i pos_s pos_r env in
+        let (_,a,b) = Env.advance_pos sf i pos_s pos_r env in
         (a, b))
       (0, 0)
       sig2
@@ -448,8 +452,12 @@ and signature_components old_env env cxt subst paired =
     :: rem ->
       extension_constructors env cxt subst id1 ext1 ext2;
       (pos, Tcoerce_none) :: comps_rec rem
-  | (Sig_module(id1, mty1, _, _), Sig_module(_id2, mty2, _, _), pos) :: rem ->
+  | (Sig_module(id1, mty1, sf1, _), Sig_module(_id2, mty2, sf2, _), pos) ::
+        rem ->
+      if sf1 <> sf2 then
+        raise (Error [cxt, env, Static_flags (sf1, sf2)]);
       let p1 = Pident id1 in
+      let env = Env.with_phase (Env.cur_phase env + Env.phase_of_sf sf1) env in
       Env.mark_module_used env (Ident.name id1) mty1.md_loc;
       let cc =
         modtypes env (Module id1::cxt) subst
@@ -556,6 +564,10 @@ let show_locs ppf (loc1, loc2) =
   show_loc "Expected declaration" ppf loc2;
   show_loc "Actual declaration" ppf loc1
 
+let static_flag ppf = function
+  | Asttypes.Nonstatic -> pp_print_string ppf "<no flag>"
+  | Asttypes.Static -> pp_print_string ppf "static"
+
 let include_err ppf = function
   | Missing_field (id, loc, kind) ->
       fprintf ppf "The %s `%a' is required but not provided" kind ident id;
@@ -613,6 +625,11 @@ let include_err ppf = function
       (Printtyp.class_declaration id) d1
       (Printtyp.class_declaration id) d2
       Includeclass.report_error reason
+  | Static_flags (sf1, sf2) ->
+      fprintf ppf
+        "@[<hv2>Static flags do not match:@ \
+        %a@;<1 -2>does not match@ %a@]"
+        static_flag sf1 static_flag sf2
   | Unbound_modtype_path path ->
       fprintf ppf "Unbound module type %a" Printtyp.path path
   | Unbound_module_path path ->
