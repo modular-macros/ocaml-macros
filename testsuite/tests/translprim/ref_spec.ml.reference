@@ -1,5 +1,4 @@
-(seq (setglobal Ref_spec! (makeblock 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
-  (makearray[addr]))
+(seq (setglobal Ref_spec! (makeblock 0)) (makearray[addr]))
 (setglobal Ref_spec!
   (let
     (int_ref = (makemutable 0 (int) 1)
