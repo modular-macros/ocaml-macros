@@ -435,7 +435,8 @@ let init_shape target_phase modl =
   and init_shape_struct env sg =
     match sg with
       [] -> []
-    | Sig_value(_id, Nonstatic, {val_kind=Val_reg; val_type=ty}) :: rem ->
+    | Sig_value(_id, sf, {val_kind=Val_reg; val_type=ty}) :: rem 
+          when sf = target_phase ->
         let init_v =
           match Ctype.expand_head env ty with
             {desc = Tarrow(_,_,_,_)} ->
@@ -444,9 +445,7 @@ let init_shape target_phase modl =
               Const_pointer 1 (* camlinternalMod.Lazy *)
           | _ -> raise Not_found in
         init_v :: init_shape_struct env rem
-    | Sig_value(_, Nonstatic, {val_kind=Val_prim _}) :: rem ->
-        init_shape_struct env rem
-    | Sig_value(_, Static, _) :: rem ->
+    | Sig_value(_, _, {val_kind=Val_prim _ | Val_reg}) :: rem ->
         init_shape_struct env rem
     | Sig_value _ :: _rem ->
         assert false
@@ -457,9 +456,12 @@ let init_shape target_phase modl =
     | Sig_module(id, md, sf, _) :: rem ->
         let phase = Env.cur_phase env + Env.phase_of_sf sf in
         if phase > 1 then assert false;
-        init_shape_mod env md.md_type ::
-        init_shape_struct
-          (Env.add_module_declaration ~check:false phase id md env) rem
+        if Env.contains_phase_mty target_phase env md.md_type then
+          init_shape_mod env md.md_type ::
+          init_shape_struct
+            (Env.add_module_declaration ~check:false phase id md env) rem
+        else
+          init_shape_struct env rem
     | Sig_modtype(id, minfo) :: rem ->
         init_shape_struct (Env.add_modtype id minfo env) rem
     | Sig_class _ :: rem ->
