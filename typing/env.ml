@@ -1468,11 +1468,13 @@ and contains_phase_mty phase env =
         with Not_found ->
           try
             contains_phase_mty phase env
-              (find_module (normalize_path None env path) env).md_type
-          with Not_found ->
-            (* Module type is abstract or unavailable: we assume it contains
-             * both phases *)
-            true
+              (find_module path env).md_type
+          with
+          | Not_found
+          | Cmi_format.Error _ ->
+              (* Module type is abstract or unavailable: we assume it contains
+               * both phases *)
+              true
       end
     | Mty_signature sg ->
         contains_phase phase env sg
@@ -1485,11 +1487,13 @@ and contains_phase_mty phase env =
         with Not_found ->
           try
             contains_phase_mty phase env
-              (find_module (normalize_path None env path) env).md_type
-          with Not_found ->
-            (* Module type is abstract or unavailable: we assume it contains
-             * both phases *)
-            true
+              (find_module path env).md_type
+          with
+          | Not_found
+          | Cmi_format.Error _ ->
+              (* Module type is abstract or unavailable: we assume it contains
+               * both phases *)
+              true
       end
 
 let advance_pos static_flag item pos_stat pos_rt env =
