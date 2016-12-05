@@ -1435,55 +1435,62 @@ let rec scrape_alias env ?path mty =
 
 let scrape_alias env mty = scrape_alias env mty
 
-let rec contains_phase phase env = function
-  | [] -> false
-  | Sig_value (_, sf, {val_kind = Val_reg | Val_prim _}) :: rem ->
-      phase = sf_of_phase (cur_phase env + phase_of_sf sf) ||
-      contains_phase phase env rem
-  | Sig_value (_id, _, {val_kind = Val_macro}) :: _ ->
-      true
-  | Sig_typext _ :: _ -> true
-  | Sig_module (_, decl, sf, _) :: rem ->
-      if phase = Nonstatic && sf = Static then
+let rec contains_phase phase env =
+  (* To keep existing linking behaviour *)
+  if phase = Nonstatic then (fun _ -> true)
+  else
+    function
+    | [] -> false
+    | Sig_value (_, sf, {val_kind = Val_reg | Val_prim _}) :: rem ->
+        phase = sf_of_phase (cur_phase env + phase_of_sf sf) ||
         contains_phase phase env rem
-      else
-        contains_phase_mty phase env decl.md_type ||
-        contains_phase phase env rem
-  | Sig_class _ :: rem ->
-      phase = Nonstatic || contains_phase phase env rem
-  | _ :: rem -> contains_phase phase env rem
+    | Sig_value (_id, _, {val_kind = Val_macro}) :: _ ->
+        true
+    | Sig_typext _ :: _ -> true
+    | Sig_module (_, decl, sf, _) :: rem ->
+        if phase = Nonstatic && sf = Static then
+          contains_phase phase env rem
+        else
+          contains_phase_mty phase env decl.md_type ||
+          contains_phase phase env rem
+    | Sig_class _ :: rem ->
+        phase = Nonstatic || contains_phase phase env rem
+    | _ :: rem -> contains_phase phase env rem
 
-and contains_phase_mty phase env = function
-  | Mty_ident path ->
-    begin try
-        contains_phase_mty phase env
-          (find_modtype_expansion path env)
-      with Not_found ->
-        try
+and contains_phase_mty phase env =
+  if phase = Nonstatic then (fun _ -> true)
+  else
+    function
+    | Mty_ident path ->
+      begin try
           contains_phase_mty phase env
-            (find_module (normalize_path None env path) env).md_type
+            (find_modtype_expansion path env)
         with Not_found ->
-          (* Module type is abstract or unavailable: we assume it contains only
-           * run-time components *)
-          phase = Nonstatic
-    end
-  | Mty_signature sg ->
-      contains_phase phase env sg
-  | Mty_functor (_, _, ty_res) ->
-      contains_phase_mty phase env ty_res
-  | Mty_alias (_, path) ->
-    begin try
-        contains_phase_mty phase env
-          (find_modtype_expansion path env)
-      with Not_found ->
-        try
+          try
+            contains_phase_mty phase env
+              (find_module (normalize_path None env path) env).md_type
+          with Not_found ->
+            (* Module type is abstract or unavailable: we assume it contains
+             * both phases *)
+            true
+      end
+    | Mty_signature sg ->
+        contains_phase phase env sg
+    | Mty_functor (_, _, ty_res) ->
+        contains_phase_mty phase env ty_res
+    | Mty_alias (_, path) ->
+      begin try
           contains_phase_mty phase env
-            (find_module (normalize_path None env path) env).md_type
+            (find_modtype_expansion path env)
         with Not_found ->
-          (* Module type is abstract or unavailable: we assume it contains only
-           * run-time components *)
-          phase = Nonstatic
-    end
+          try
+            contains_phase_mty phase env
+              (find_module (normalize_path None env path) env).md_type
+          with Not_found ->
+            (* Module type is abstract or unavailable: we assume it contains
+             * both phases *)
+            true
+      end
 
 let advance_pos static_flag item pos_stat pos_rt env =
   let add sf sf' =
