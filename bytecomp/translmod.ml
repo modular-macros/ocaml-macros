@@ -602,12 +602,10 @@ let transl_class_bindings cl_list =
 (* Compile a module expression *)
 
 let rec transl_module cc rootpath target_phase mexp =
-  if target_phase = Static then (* Avoid checking attributes twice *)
-    List.iter (Translattribute.check_attribute_on_module mexp)
-      mexp.mod_attributes
-  ;
   let loc = mexp.mod_loc in
-  if Env.contains_phase_mty target_phase mexp.mod_env mexp.mod_type then
+  if Env.contains_phase_mty target_phase mexp.mod_env mexp.mod_type then begin
+    List.iter (Translattribute.check_attribute_on_module mexp)
+      mexp.mod_attributes;
     match mexp.mod_type with
       Mty_alias _ -> apply_coercion loc target_phase Alias cc lambda_unit
     | _ ->
@@ -667,7 +665,7 @@ let rec transl_module cc rootpath target_phase mexp =
             if target_phase <> Static then
               apply_coercion loc target_phase Strict cc (Translcore.transl_exp arg)
             else zero_lam
-  else
+  end else
     Lprim(Pmakeblock (0,Immutable,None), [], loc)
 
 and transl_struct loc fields cc rootpath static_flag str =
@@ -817,12 +815,14 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
               else mb.mb_expr
             in
             let module_body =
-              (if target_phase = Static then
+              (* avoid checking inline attributes twice *)
+              (if target_phase = Nonstatic || sf = Static then
                 Translattribute.add_inline_attribute
-              else fun lam _ _ -> lam)
-                (transl_module Tcoerce_none (field_path rootpath id)
-                  target_phase mod_expr)
-                mb.mb_loc mb.mb_attributes
+              else
+                fun lam _ _ -> lam)
+                  (transl_module Tcoerce_none (field_path rootpath id)
+                    target_phase mod_expr)
+                  mb.mb_loc mb.mb_attributes
             in
             Llet(pure_module mb.mb_expr, Pgenval, id,
                  module_body,
@@ -1197,10 +1197,8 @@ let transl_store_structure target_phase glob map prims str =
         | Tstr_module (sf, {mb_id=id;mb_loc=loc;
                             mb_expr={mod_desc = Tmod_structure str} as mexp;
                             mb_attributes}) ->
-            if sf = Static then (* Avoid doing these checks twice *)
-              List.iter (Translattribute.check_attribute_on_module mexp)
-                mb_attributes
-            ;
+            List.iter (Translattribute.check_attribute_on_module mexp)
+              mb_attributes;
             if sf = Static && target_phase = Nonstatic then
               transl_store rootpath subst rem
             else begin
@@ -1229,10 +1227,8 @@ let transl_store_structure target_phase glob map prims str =
                   (Tcoerce_structure (map, _) as _cc))};
             mb_attributes
           }) ->
-            if sf = Static then (* Avoid doing these checks twice *)
-              List.iter (Translattribute.check_attribute_on_module mexp)
-                mb_attributes
-            ;
+            List.iter (Translattribute.check_attribute_on_module mexp)
+              mb_attributes;
             if sf = Static && target_phase = Nonstatic then
               transl_store rootpath subst rem
             else begin
@@ -1273,11 +1269,14 @@ let transl_store_structure target_phase glob map prims str =
                 else modl
               in
               let lam =
-                (if target_phase = Static then
+                (* avoid checking inline attributes twice *)
+                (if target_phase = Nonstatic || sf = Static then
                   Translattribute.add_inline_attribute
-                else fun lam _ _ -> lam)
-                  (transl_module Tcoerce_none (field_path rootpath id) target_phase modl)
-                  loc mb_attributes
+                else
+                  fun lam _ _ -> lam)
+                    (transl_module Tcoerce_none (field_path rootpath id)
+                      target_phase modl)
+                    loc mb_attributes
               in
               (* Careful: the module value stored in the global may be different
                  from the local module value, in case a coercion is applied.
