@@ -435,8 +435,9 @@ let init_shape target_phase modl =
   and init_shape_struct env sg =
     match sg with
       [] -> []
-    | Sig_value(_id, sf, {val_kind=Val_reg; val_type=ty}) :: rem 
-          when sf = target_phase ->
+    | Sig_value(_id, sf, {val_kind; val_type=ty}) :: rem 
+          when val_kind = Val_macro ||
+            (val_kind = Val_reg && sf = target_phase) ->
         let init_v =
           match Ctype.expand_head env ty with
             {desc = Tarrow(_,_,_,_)} ->
@@ -455,7 +456,6 @@ let init_shape target_phase modl =
         raise Not_found
     | Sig_module(id, md, sf, _) :: rem ->
         let phase = Env.cur_phase env + Env.phase_of_sf sf in
-        if phase > 1 then assert false;
         if Env.contains_phase_mty target_phase env md.md_type then
           init_shape_mod env md.md_type ::
           init_shape_struct
@@ -614,7 +614,9 @@ let rec transl_module cc rootpath target_phase mexp =
         match mexp.mod_desc with
           Tmod_ident (path,_) ->
             apply_coercion loc target_phase Strict cc
-              (transl_path ~loc mexp.mod_env path)
+              (transl_path ~loc
+                (Env.with_phase (Env.phase_of_sf target_phase) mexp.mod_env)
+                path)
         | Tmod_structure str ->
             fst (transl_struct loc [] cc rootpath target_phase str)
         | Tmod_functor(param, _, _, body) ->
