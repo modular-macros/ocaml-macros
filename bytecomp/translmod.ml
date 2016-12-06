@@ -176,19 +176,22 @@ let wrap_marshal lam =
   let lam_id = Ident.create "let" in
   let channel_id = Ident.create "channel" in
   let marshal_to_channel =
-    Lprim (Pfield 0, (* ^Marshal.to_channel *)
-      [Lprim (Pgetglobal (Ident.create_persistent "^Marshal"), [], Location.none)],
+    Lprim (Pfield 0, (* ~Marshal.to_channel *)
+      [Lprim (Pgetglobal (Ident.create_persistent
+        (Ident.lift_string "Marshal")), [], Location.none)],
       Location.none)
   in
   let get_filename =
-    (* ^Sys.argv.[1] *)
+    (* ~Sys.argv.[1] *)
     Lprim (
       Pccall (
         Primitive.simple
           ~name:"caml_array_get" ~arity:2 ~alloc:true (* ? *)),
       [Lprim
-        (Pfield 0, (* ^Sys.argv *)
-          [Lprim (Pgetglobal (Ident.create_persistent "^Sys"), [], Location.none)],
+        (Pfield 0, (* ~Sys.argv *)
+          [Lprim
+            (Pgetglobal (Ident.create_persistent (Ident.lift_string "Sys")),
+            [], Location.none)],
         Location.none);
         (* 1 *)
         Lconst (Const_base (Const_int 1))
@@ -197,8 +200,9 @@ let wrap_marshal lam =
   in
   let open_channel =
     apply
-      (Lprim (Pfield 43, (* ^Pervasives.open_out_bin *)
-        [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [], Location.none)],
+      (Lprim (Pfield 43, (* ~Pervasives.open_out_bin *)
+        [Lprim (Pgetglobal (Ident.create_persistent 
+          (Ident.lift_string "Pervasives")), [], Location.none)],
         Location.none))
       [get_filename]
   in
@@ -209,8 +213,9 @@ let wrap_marshal lam =
           marshal_to_channel
           [Lvar channel_id; Lvar lam_id; Lconst (Const_pointer 0)],
         apply
-          (Lprim (Pfield 58, (* ^Pervasives.close_out *)
-            [Lprim (Pgetglobal (Ident.create_persistent "^Pervasives"), [], Location.none)],
+          (Lprim (Pfield 58, (* ~Pervasives.close_out *)
+            [Lprim (Pgetglobal (Ident.create_persistent
+              (Ident.lift_string "Pervasives")), [], Location.none)],
             Location.none))
           [Lvar channel_id]
       )
