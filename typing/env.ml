@@ -1435,11 +1435,17 @@ let rec scrape_alias env ?path mty =
 
 let scrape_alias env mty = scrape_alias env mty
 
-let rec contains_phase phase env =
+let add_sg : (signature -> t -> t) ref = ref (fun _ _ -> assert false)
+  (* Forward declaration *)
+
+let rec contains_phase phase env sg =
   (* To keep existing linking behaviour *)
-  if phase = Nonstatic then (fun _ -> true)
+  if phase = Nonstatic then true
   else
-    function
+    let env =
+      !add_sg sg (in_signature true env)
+    in
+    match sg with
     | [] -> false
     | Sig_value (_, sf, {val_kind = Val_reg | Val_prim _}) :: rem ->
         phase = sf_of_phase (cur_phase env + phase_of_sf sf) ||
@@ -2102,6 +2108,8 @@ let rec add_signature sg env =
   match sg with
     [] -> env
   | comp :: rem -> add_signature rem (add_item comp env)
+
+let () = add_sg := add_signature
 
 (* Open a signature path *)
 
