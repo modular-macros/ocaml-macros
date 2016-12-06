@@ -1,5 +1,5 @@
-open ^CamlinternalQuote
-open ^Pervasives
+open ~CamlinternalQuote
+open ~Pervasives
 
 macro of_bool =
   function

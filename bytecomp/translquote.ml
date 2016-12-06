@@ -4,7 +4,7 @@ open Types
 open Typedtree
 open Lambda
 
-let stdmod_path = "^CamlinternalQuote"
+let stdmod_path = Ident.lift_string "CamlinternalQuote"
 
 let camlinternalQuote =
   lazy

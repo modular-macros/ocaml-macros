@@ -352,7 +352,7 @@ rule token = parse
         with Not_found -> LIDENT s }
   | lowercase_latin1 identchar_latin1 *
       { warn_latin1 lexbuf; LIDENT (Lexing.lexeme lexbuf) }
-  | "^" ? uppercase identchar *
+  | "~" ? uppercase identchar *
       { UIDENT(Lexing.lexeme lexbuf) }       (* No capitalized keywords *)
   | uppercase_latin1 identchar_latin1 *
       { warn_latin1 lexbuf; UIDENT(Lexing.lexeme lexbuf) }

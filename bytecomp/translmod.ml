@@ -404,7 +404,7 @@ let record_primitive = function
 
 let mod_prim phase name =
   let mod_name =
-    if phase = Static then "^CamlinternalMod"
+    if phase = Static then Ident.lift_string "CamlinternalMod"
     else "CamlinternalMod"
   in
   try
