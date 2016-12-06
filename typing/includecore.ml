@@ -24,9 +24,8 @@ open Typedtree
 
 exception Dont_match
 
-let value_descriptions env sf1 vd1 sf2 vd2 =
+let value_descriptions env vd1 vd2 =
   if Ctype.moregeneral env true vd1.val_type vd2.val_type then begin
-    begin if sf1 <> sf2 then raise Dont_match end;
     match (vd1.val_kind, vd2.val_kind) with
         (Val_prim p1, Val_prim p2) ->
           if p1 = p2 then Tcoerce_none else raise Dont_match

@@ -23,7 +23,7 @@ static module M = F(S) (* Error wrong phase *)
 ;;
 
 static module F (X : St) = struct
-  let y = ^Pervasives.succ X.x
+  let y = ~Pervasives.succ X.x
 end
 ;;
 
@@ -39,7 +39,7 @@ end
 ;;
 
 (* Lifting of external module *)
-static module N = G(^Pervasives);;
+static module N = G(~Pervasives);;
 
 let () = Printf.printf "%d\n" $(Expr.of_int N.x)
 ;;

@@ -26,6 +26,10 @@ type partial = Partial | Total
 type attribute = Parsetree.attribute
 type attributes = attribute list
 
+type coercion_pos =
+  | Uniphase of static_flag * int
+  | Biphase of int * int
+
 type pattern =
   { pat_desc: pattern_desc;
     pat_loc: Location.t;
@@ -256,8 +260,8 @@ and value_binding =
 
 and module_coercion =
     Tcoerce_none
-  | Tcoerce_structure of (int * module_coercion) list *
-                         (Ident.t * int * module_coercion) list
+  | Tcoerce_structure of (coercion_pos * module_coercion) list *
+                         (Ident.t * coercion_pos * module_coercion) list
   | Tcoerce_functor of module_coercion * module_coercion
   | Tcoerce_primitive of primitive_coercion
   | Tcoerce_alias of Path.t * module_coercion

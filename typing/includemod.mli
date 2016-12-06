@@ -45,6 +45,7 @@ type symptom =
   | Class_declarations of
       Ident.t * class_declaration * class_declaration *
       Ctype.class_match_failure list
+  | Static_flags of Asttypes.static_flag * Asttypes.static_flag
   | Unbound_modtype_path of Path.t
   | Unbound_module_path of Path.t
   | Invalid_module_alias of Path.t

@@ -4,7 +4,7 @@ open Types
 open Typedtree
 open Lambda
 
-let stdmod_path = "^CamlinternalQuote"
+let stdmod_path = Ident.lift_string "CamlinternalQuote"
 
 let camlinternalQuote =
   lazy
@@ -14,14 +14,20 @@ let camlinternalQuote =
          fatal_error @@ "Module " ^ stdmod_path ^ " unavailable."
      | env -> env)
 
+let static_pos =
+  function
+  | Path.Uniphase (Static, i) -> i
+  | Path.Biphase (i, _) -> i
+  | _ -> fatal_error (stdmod_path ^ " primitive at unexpected position.")
+
 let combinator modname field =
   lazy
     (let env = Lazy.force camlinternalQuote in
      let lid = Longident.Ldot(Longident.Lident modname, field) in
      match Env.lookup_value lid env with
      | (Path.Pdot(Path.Pdot(Path.Pident ident, _, pos1), _, pos2), _) ->
-         Lprim(Pfield pos2,
-               [Lprim(Pfield pos1,
+         Lprim(Pfield (static_pos pos2),
+               [Lprim(Pfield (static_pos pos1),
                      [Lprim(Pgetglobal ident, [], Location.none)],
                       Location.none)],
                Location.none)

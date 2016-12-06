@@ -2032,7 +2032,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
     let ty_exp = expand_head env ty_expected in
     let fmt6_path =
       Path.(Pdot (Pident (Ident.create_persistent "CamlinternalFormatBasics"),
-                  "format6", 0)) in
+                  "format6", Biphase (0, 0))) in
     let is_format = match ty_exp.desc with
       | Tconstr(path, _, _) when Path.same path fmt6_path ->
         if !Clflags.principal && ty_exp.level <> generic_level then

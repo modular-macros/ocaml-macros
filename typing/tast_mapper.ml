@@ -443,9 +443,9 @@ let module_coercion sub = function
   | Tcoerce_alias (p, c1) ->
       Tcoerce_alias (p, sub.module_coercion sub c1)
   | Tcoerce_structure (l1, l2) ->
-      let l1' = List.map (fun (i,c) -> i, sub.module_coercion sub c) l1 in
+      let l1' = List.map (fun (p,c) -> p, sub.module_coercion sub c) l1 in
       let l2' =
-        List.map (fun (id,i,c) -> id, i, sub.module_coercion sub c) l2
+        List.map (fun (id,p,c) -> id, p, sub.module_coercion sub c) l2
       in
       Tcoerce_structure (l1', l2')
   | Tcoerce_primitive pc ->

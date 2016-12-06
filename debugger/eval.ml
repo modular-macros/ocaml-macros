@@ -65,7 +65,13 @@ let rec path event = function
       let v = path event root in
       if not (Debugcom.Remote_value.is_block v) then
         raise(Error(Not_initialized_yet root));
-      Debugcom.Remote_value.field v pos
+      begin match pos with
+      | Uniphase (Asttypes.Nonstatic, i) ->
+          Debugcom.Remote_value.field v i
+      | Biphase (_, i) ->
+          Debugcom.Remote_value.field v i
+      | _ -> assert false
+      end
   | Papply _ ->
       fatal_error "Eval.path: Papply"
 

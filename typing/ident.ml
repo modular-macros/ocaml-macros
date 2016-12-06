@@ -249,11 +249,11 @@ end)
 let equal = original_equal
 
 let lifted_string str =
-  String.length str > 0 && str.[0] = '^'
+  String.length str > 0 && str.[0] = '~'
 
 let lift_string str =
   if lifted_string str then str
-  else "^" ^ str
+  else "~" ^ str
 
 let unlift_string str =
   if lifted_string str then String.sub str 1 (String.length str - 1)

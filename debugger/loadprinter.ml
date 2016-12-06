@@ -94,7 +94,12 @@ let loadfile ppf name =
 
 let rec eval_path = function
     Pident id -> Symtable.get_global_value (0,id)
-  | Pdot(p, _, pos) -> Obj.field (eval_path p) pos
+  | Pdot(p, _, pos) ->
+    begin match pos with
+    | Uniphase (Asttypes.Nonstatic, i) | Biphase (_, i) ->
+        Obj.field (eval_path p) i
+    | _ -> assert false
+    end
   | Papply _ -> fatal_error "Loadprinter.eval_path"
 
 (* Install, remove a printer (as in toplevel/topdirs) *)

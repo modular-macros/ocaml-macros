@@ -36,7 +36,7 @@ let freshen mty =
 let rec strengthen ~aliasable env mty p =
   match scrape env mty with
     Mty_signature sg ->
-      Mty_signature(strengthen_sig ~aliasable env sg p 0)
+      Mty_signature(strengthen_sig ~aliasable env sg p 0 0)
   | Mty_functor(param, arg, res)
     when !Clflags.applicative_functors && Ident.name param <> "*" ->
       Mty_functor(param, arg,
@@ -44,62 +44,71 @@ let rec strengthen ~aliasable env mty p =
   | mty ->
       mty
 
-and strengthen_sig ~aliasable env sg p pos =
+and strengthen_sig ~aliasable env sg p pos_s pos_rt =
+  let sf = if Env.cur_phase env > 0 then Static else Nonstatic in
   match sg with
     [] -> []
-  | (Sig_value(_, _, desc) as sigelt) :: rem ->
-      let nextpos =
-        match desc.val_kind with
-        | Val_prim _ -> pos
-        | _ -> pos+1
+  | item :: rem ->
+    begin
+      let (pos, nextpos_s, nextpos_rt) =
+        Env.advance_pos sf item pos_s pos_rt env
       in
-      sigelt :: strengthen_sig ~aliasable env rem p nextpos
-  | Sig_type(id, {type_kind=Type_abstract}, _) ::
-    (Sig_type(id', {type_private=Private}, _) :: _ as rem)
-    when Ident.name id = Ident.name id' ^ "#row" ->
-      strengthen_sig ~aliasable env rem p pos
-  | Sig_type(id, decl, rs) :: rem ->
-      let newdecl =
-        match decl.type_manifest, decl.type_private, decl.type_kind with
-          Some _, Public, _ -> decl
-        | Some _, Private, (Type_record _ | Type_variant _) -> decl
-        | _ ->
-            let manif =
-              Some(Btype.newgenty(Tconstr(Pdot(p, Ident.name id, nopos),
-                                          decl.type_params, ref Mnil))) in
-            if decl.type_kind = Type_abstract then
-              { decl with type_private = Public; type_manifest = manif }
-            else
-              { decl with type_manifest = manif }
-      in
-      Sig_type(id, newdecl, rs) :: strengthen_sig ~aliasable env rem p pos
-  | (Sig_typext _ as sigelt) :: rem ->
-      sigelt :: strengthen_sig ~aliasable env rem p (pos+1)
-  | Sig_module(id, md, sf, rs) :: rem ->
-      let str =
-        strengthen_decl ~aliasable env md (Pdot(p, Ident.name id, pos))
-      in
-      Sig_module(id, str, sf, rs)
-      :: strengthen_sig ~aliasable
-          (Env.add_module_declaration ~check:false (Env.phase_of_sf sf)
-            id md env)
-          rem p (pos+1)
-      (* Need to add the module in case it defines manifest module types *)
-  | Sig_modtype(id, decl) :: rem ->
-      let newdecl =
-        match decl.mtd_type with
-          None ->
-            {decl with mtd_type = Some(Mty_ident(Pdot(p,Ident.name id,nopos)))}
-        | Some _ ->
-            decl
-      in
-      Sig_modtype(id, newdecl) ::
-      strengthen_sig ~aliasable (Env.add_modtype id decl env) rem p pos
-      (* Need to add the module type in case it is manifest *)
-  | (Sig_class _ as sigelt) :: rem ->
-      sigelt :: strengthen_sig ~aliasable env rem p (pos+1)
-  | (Sig_class_type _ as sigelt) :: rem ->
-      sigelt :: strengthen_sig ~aliasable env rem p pos
+      match sg with
+      | [] -> assert false (* unused *)
+      | (Sig_value(_, _, _) as sigelt) :: _ ->
+          sigelt :: strengthen_sig ~aliasable env rem p nextpos_s nextpos_rt
+      | Sig_type(id, {type_kind=Type_abstract}, _) ::
+        (Sig_type(id', {type_private=Private}, _) :: _ as rem)
+        when Ident.name id = Ident.name id' ^ "#row" ->
+          strengthen_sig ~aliasable env rem p nextpos_s nextpos_rt
+      | Sig_type(id, decl, rs) :: _ ->
+          let newdecl =
+            match decl.type_manifest, decl.type_private, decl.type_kind with
+              Some _, Public, _ -> decl
+            | Some _, Private, (Type_record _ | Type_variant _) -> decl
+            | _ ->
+                let manif =
+                  Some(Btype.newgenty(Tconstr(Pdot(p, Ident.name id, nopos),
+                                              decl.type_params, ref Mnil))) in
+                if decl.type_kind = Type_abstract then
+                  { decl with type_private = Public; type_manifest = manif }
+                else
+                  { decl with type_manifest = manif }
+          in
+          Sig_type(id, newdecl, rs) :: strengthen_sig ~aliasable env rem p
+            nextpos_s nextpos_rt
+      | (Sig_typext _ as sigelt) :: _ ->
+          sigelt :: strengthen_sig ~aliasable env rem p
+            nextpos_s nextpos_rt
+      | Sig_module(id, md, sf, rs) :: _ ->
+          let str =
+            strengthen_decl ~aliasable env md (Pdot(p, Ident.name id, pos))
+          in
+          Sig_module(id, str, sf, rs)
+          :: strengthen_sig ~aliasable
+              (Env.add_module_declaration ~check:false (Env.phase_of_sf sf)
+                id md env)
+              rem p nextpos_s nextpos_rt
+          (* Need to add the module in case it defines manifest module types *)
+      | Sig_modtype(id, decl) :: _ ->
+          let newdecl =
+            match decl.mtd_type with
+              None ->
+                {decl with mtd_type = Some(Mty_ident(Pdot(p,Ident.name id,nopos)))}
+            | Some _ ->
+                decl
+          in
+          Sig_modtype(id, newdecl) ::
+          strengthen_sig ~aliasable (Env.add_modtype id decl env) rem p
+            nextpos_s nextpos_rt
+          (* Need to add the module type in case it is manifest *)
+      | (Sig_class _ as sigelt) :: _ ->
+          sigelt :: strengthen_sig ~aliasable env rem p
+            nextpos_s nextpos_rt
+      | (Sig_class_type _ as sigelt) :: _ ->
+          sigelt :: strengthen_sig ~aliasable env rem p
+            nextpos_s nextpos_rt
+    end
 
 and strengthen_decl ~aliasable env md p =
   match md.md_type with
@@ -214,28 +223,37 @@ let rec type_paths env p mty =
   match scrape env mty with
     Mty_ident _ -> []
   | Mty_alias _ -> []
-  | Mty_signature sg -> type_paths_sig env p 0 sg
+  | Mty_signature sg -> type_paths_sig env p (0, 0) sg
   | Mty_functor _ -> []
 
-and type_paths_sig env p pos sg =
+and type_paths_sig env p (pos_s, pos_rt) sg =
   match sg with
     [] -> []
-  | Sig_value(_id, _sf, decl) :: rem ->
-      let pos' = match decl.val_kind with Val_prim _ -> pos | _ -> pos + 1 in
-      type_paths_sig env p pos' rem
-  | Sig_type(id, _decl, _) :: rem ->
-      Pdot(p, Ident.name id, nopos) :: type_paths_sig env p pos rem
-  | Sig_module(id, md, sf, _) :: rem ->
-      type_paths env (Pdot(p, Ident.name id, pos)) md.md_type @
-      type_paths_sig
-        (Env.add_module_declaration ~check:false (Env.phase_of_sf sf) id md env)
-        p (pos+1) rem
-  | Sig_modtype(id, decl) :: rem ->
-      type_paths_sig (Env.add_modtype id decl env) p pos rem
-  | (Sig_typext _ | Sig_class _) :: rem ->
-      type_paths_sig env p (pos+1) rem
-  | (Sig_class_type _) :: rem ->
-      type_paths_sig env p pos rem
+  | item :: rem ->
+    begin
+      let (pos, nextpos_s, nextpos_rt) =
+        Env.advance_pos (if Env.cur_phase env > 0 then Static else Nonstatic)
+          item pos_s pos_rt env
+      in
+      let pos' = (nextpos_s, nextpos_rt)
+      in
+      match item with
+      | Sig_value(_id, _sf, _decl) ->
+          type_paths_sig env p pos' rem
+      | Sig_type(id, _decl, _) ->
+          Pdot(p, Ident.name id, pos) :: type_paths_sig env p pos' rem
+      | Sig_module(id, md, sf, _) ->
+          type_paths env (Pdot(p, Ident.name id, pos)) md.md_type @
+          type_paths_sig
+            (Env.add_module_declaration ~check:false (Env.phase_of_sf sf) id md env)
+            p pos' rem
+      | Sig_modtype(id, decl) ->
+          type_paths_sig (Env.add_modtype id decl env) p pos' rem
+      | (Sig_typext _ | Sig_class _) ->
+          type_paths_sig env p pos' rem
+      | (Sig_class_type _) ->
+          type_paths_sig env p pos' rem
+    end
 
 let rec no_code_needed env mty =
   match scrape env mty with
@@ -363,7 +381,7 @@ let collect_arg_paths mty =
         List.iter
           (function Sig_module (id', _, _, _) ->
               subst :=
-                PathMap.add (Pdot (Pident id, Ident.name id', -1)) id' !subst
+                PathMap.add (Pdot (Pident id, Ident.name id', nopos)) id' !subst
             | _ -> ())
           sg
     | _ -> ()

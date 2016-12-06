@@ -1,10 +1,4 @@
-(seq
-  (setglobal Comparison_table!
-    (makeblock 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-      0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-      0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-      0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
-  (makearray[addr]))
+(seq (setglobal Comparison_table! (makeblock 0)) (makearray[addr]))
 (setglobal Comparison_table!
   (let
     (gen_cmp = (function x y (caml_compare x y))

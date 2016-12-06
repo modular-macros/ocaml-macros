@@ -63,7 +63,7 @@ let fst3 (x,_,_) = x
 
 let rec path_concat head p =
   match p with
-    Pident tail -> Pdot (Pident head, Ident.name tail, 0)
+    Pident tail -> Pdot (Pident head, Ident.name tail, Biphase (0, 0))
   | Pdot (pre, s, pos) -> Pdot (path_concat head pre, s, pos)
   | Papply _ -> assert false
 
