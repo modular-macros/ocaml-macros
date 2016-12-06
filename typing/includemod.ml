@@ -209,12 +209,17 @@ let coercion_pos = function
 
 (* Simplify a structure coercion *)
 
-let simplify_structure_coercion cc id_pos_list =
+let rec simplify_structure_coercion cc id_pos_list =
   let rec is_identity_coercion phase pos = function
   | [] ->
       true
   | (p, c) :: rem ->
     begin
+      let c = match c with
+      | Tcoerce_structure (pcc, ip) ->
+          simplify_structure_coercion pcc ip
+      | _ -> c
+      in
       match p with
       | Uniphase (sf, i) when sf = phase ->
           i = pos && c = Tcoerce_none &&
@@ -500,8 +505,9 @@ and check_modtype_equiv env cxt mty1 mty2 =
   with
     (Tcoerce_none, Tcoerce_none) -> ()
   | (_c1, _c2) ->
-      (* Format.eprintf "@[c1 = %a@ c2 = %a@]@."
-        print_coercion _c1 print_coercion _c2; *)
+        Format.eprintf "@[c1 = %a@ c2 = %a@]@."
+        print_coercion _c1 print_coercion _c2;
+        Format.eprintf "\n%!";
       raise(Error [cxt, env, Modtype_permutation])
 
 (* Simplified inclusion check between module types (for Env) *)
