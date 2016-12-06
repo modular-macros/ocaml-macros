@@ -465,12 +465,13 @@ let init_shape target_phase modl =
     | Sig_modtype(id, minfo) :: rem ->
         init_shape_struct (Env.add_modtype id minfo env) rem
     | Sig_class _ :: rem ->
-        let x =
-          if target_phase = Static then
-            Const_block(1, [Const_base (Const_int 0)])
-          else Const_pointer 2 (* camlinternalMod.Class *)
-        in
-        x :: init_shape_struct env rem
+        if target_phase = Static then
+          init_shape_struct env rem
+        else
+          let x =
+            Const_pointer 2 (* camlinternalMod.Class *)
+          in
+          x :: init_shape_struct env rem
     | Sig_class_type _ :: rem ->
         init_shape_struct env rem
   in
