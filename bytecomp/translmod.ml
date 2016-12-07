@@ -248,12 +248,6 @@ let transl_type_extension env rootpath tyext body =
     tyext.tyext_constructors
     body
 
-let get_field sf = function
-  | Uniphase (sf', i) ->
-      assert (sf = sf'); i
-  | Biphase (i, j) ->
-      if sf = Static then i else j
-
 (* Compile a coercion *)
 
 let zero_lam =
@@ -360,22 +354,31 @@ let rec compose_coercions phase c1 c2 =
     (Tcoerce_none, c2) -> c2
   | (c1, Tcoerce_none) -> c1
   | (Tcoerce_structure (pc1, ids1), Tcoerce_structure (pc2, ids2)) ->
+      let pc1 = filter_pos_cc phase pc1
+      and ids1 = filter_id_pos phase ids1
+      and pc2 = filter_pos_cc phase pc2
+      and ids2 = filter_id_pos phase ids2
+      in
       let v2 = Array.of_list pc2 in
       let ids1 =
         List.map (fun (id,pos1,c1) ->
-            let (pos2,c2) = v2.(get_field phase pos1) in
+            let (pos2,c2) = v2.(pos1) in
             (id, pos2, compose_coercions phase c1 c2))
           ids1
       in
       Tcoerce_structure
         (List.map
-          (function (p1, Tcoerce_primitive p) ->
-                      (p1, Tcoerce_primitive p)
-                  | (p1, c1) ->
-                      let (p2, c2) = v2.(get_field phase p1) in
-                      (p2, compose_coercions phase c1 c2))
-             pc1,
-         ids1 @ ids2)
+          (function
+          | (p1, Tcoerce_primitive p) ->
+              (Uniphase (phase, p1), Tcoerce_primitive p)
+          | (p1, c1) ->
+              let (p2, c2) = v2.(p1) in
+              (Uniphase (phase, p2), compose_coercions phase c1 c2))
+          pc1,
+        List.map
+          (fun (id, i, cc) ->
+            (id, Uniphase (phase, i), cc))
+          (ids1 @ ids2))
   | (Tcoerce_functor(arg1, res1), Tcoerce_functor(arg2, res2)) ->
       Tcoerce_functor(compose_coercions phase arg2 arg1,
                       compose_coercions phase res1 res2)
