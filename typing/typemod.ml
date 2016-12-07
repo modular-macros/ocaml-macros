@@ -1301,7 +1301,9 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         let phase = old_phase + 1 in
         if phase = 1 then
           let (defs, newenv) =
-            Typecore.type_binding (Env.with_phase phase env) rec_flag
+            Typecore.type_binding
+              (Env.with_phase phase (Env.in_macro true env))
+              rec_flag
               sdefs scope Val_macro
           in
           (* Purity check *)

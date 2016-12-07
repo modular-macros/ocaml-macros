@@ -285,8 +285,8 @@ let execute_phrase print_outcome ppf phr =
   | Ptop_stat_eval exp ->
       Typecore.reset_delayed_checks ();
       let tmp_env =
-        (* We tl_splice to true to allow macro application *)
-        Env.with_tl_splice true (Env.with_phase 1 !toplevel_env)
+        (* We say we are in a toplevel splice to allow macro application *)
+        Env.in_toplevel_splice true (Env.with_phase 1 !toplevel_env)
       in
       let exp =
         Typecore.type_expression tmp_env exp

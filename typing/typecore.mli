@@ -125,6 +125,7 @@ type error =
   | Unknown_literal of string * char
   | Phase of Path.t * int * int
   | Staging of Path.t * int * int
+  | Illegal_quoting
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

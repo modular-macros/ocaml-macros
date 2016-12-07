@@ -177,6 +177,8 @@ type type_descriptions =
 
 let in_signature_flag = 0x01
 let implicit_coercion_flag = 0x02
+let in_toplevel_splice_flag = 0x04
+let in_macro_flag = 0x08
 
 type stage = int
 
@@ -199,7 +201,6 @@ type t = {
   flags: int;
   cur_env_phase: phase;
   cur_env_stage: stage;
-  cur_env_toplevel_splice: bool;
 }
 
 and module_components =
@@ -266,8 +267,20 @@ let with_stage_up env =
 let with_stage_down env =
   with_stage (cur_stage env - 1) env
 
-let toplevel_splice env = env.cur_env_toplevel_splice
-let with_tl_splice tl env = { env with cur_env_toplevel_splice = tl }
+let is_in_toplevel_splice env = env.flags land in_toplevel_splice_flag <> 0
+let in_toplevel_splice b env =
+  let flags =
+    if b then env.flags lor in_toplevel_splice_flag
+    else env.flags land (lnot in_toplevel_splice_flag)
+  in
+  {env with flags}
+let is_in_macro env = env.flags land in_macro_flag <> 0
+let in_macro b env =
+  let flags =
+    if b then env.flags lor in_macro_flag
+    else env.flags land (lnot in_macro_flag)
+  in
+  {env with flags}
 
 let same_constr = ref (fun _ _ _ -> assert false)
 
@@ -309,7 +322,6 @@ let empty = {
   flags = 0;
   functor_args = Ident.empty;
   cur_env_phase = 0; cur_env_stage = 0;
-  cur_env_toplevel_splice = false;
  }
 
 let in_signature b env =

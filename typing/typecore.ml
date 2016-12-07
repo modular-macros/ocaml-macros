@@ -79,6 +79,7 @@ type error =
   | Unknown_literal of string * char
   | Phase of Path.t * int * int
   | Staging of Path.t * int * int
+  | Illegal_quoting
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -2864,6 +2865,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_env = env;
       }
   | Pexp_quote sbody ->
+      if not (Env.is_in_toplevel_splice env || Env.is_in_macro env) then
+        raise (Error (loc, env, Illegal_quoting));
       let ty = newgenvar() in
       let to_unify = Predef.type_expr ty in
       unify_exp_types loc env to_unify ty_expected;
@@ -2881,7 +2884,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let body =
         type_expect
         (let env = Env.with_phase_up env in
-          if Env.cur_stage env = 0 then Env.with_tl_splice true env
+          if Env.cur_stage env = 0 then Env.in_toplevel_splice true env
           else Env.with_stage_down env)
         sbody (Predef.type_expr ty_expected)
       in
@@ -4481,6 +4484,9 @@ let report_error env ppf = function
   | Staging (p, stage, expect_stage) ->
       fprintf ppf "Attempt to use value %a of stage %d in an \
                    environment of stage %d" path p stage expect_stage
+  | Illegal_quoting ->
+      fprintf ppf
+        "Quoting is only allowed in macros and under `$'"
 
 
 let report_error env ppf err =
