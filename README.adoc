@@ -30,12 +30,15 @@ Some packages are known to be broken with macros:
 * camlp4: In addition to requiring fixes to the syntax tree model, the code of
   camlp4 triggers what seems to be a bug in the `macro` version of the compiler.
   I'm working on a fix.
+* menhir: wrong dependency tree.
 
 Most packages should compile fine, but other causes that may break your packages
 include:
 
 * a use of the reserved words `static` or `macro` as an identifier;
 * a use of `$` as a regular operator.
+* a wrong dependency tree. The constraint of generating static code modifies the
+  dependency tree and `ocamldep` is not yet modified to take that into account.
 
 == Contributing
 
