@@ -1537,7 +1537,7 @@ let advance_pos static_flag item pos_stat pos_rt env =
   | Sig_type _ ->
       (nopos, pos_stat, pos_rt)
   | Sig_typext _ ->
-      (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
+      (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
   | Sig_module (_, decl, sf, _) ->
       let sf = add static_flag sf in
       if sf = Static then

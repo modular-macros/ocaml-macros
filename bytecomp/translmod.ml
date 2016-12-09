@@ -587,7 +587,11 @@ let rec bound_value_identifiers phase env = function
         bound_value_identifiers phase env rem
   | Sig_value(id, _, {val_kind = Val_macro}) :: rem ->
       id :: bound_value_identifiers phase env rem
-  | Sig_typext(id, _, _) :: rem -> id :: bound_value_identifiers phase env rem
+  | Sig_typext(id, _, _) :: rem ->
+      if phase = Static then
+        bound_value_identifiers phase env rem
+      else
+        id :: bound_value_identifiers phase env rem
   | Sig_module(id, _, sf, _) :: rem ->
       if phase = Nonstatic && sf = Static then
         bound_value_identifiers phase env rem
@@ -796,12 +800,17 @@ and transl_structure loc fields cc rootpath target_phase item_postproc final_env
           transl_structure loc fields cc rootpath target_phase
             item_postproc final_env rem
       | Tstr_typext(tyext) ->
-          let ids = List.map (fun ext -> ext.ext_id) tyext.tyext_constructors in
-          let body, size =
-            transl_structure loc (List.rev_append ids fields)
-              cc rootpath target_phase item_postproc final_env rem
-          in
-          transl_type_extension item.str_env rootpath tyext body, size
+          if target_phase = Nonstatic then
+            let ids = List.map (fun ext -> ext.ext_id) tyext.tyext_constructors 
+            in
+            let body, size =
+              transl_structure loc (List.rev_append ids fields)
+                cc rootpath target_phase item_postproc final_env rem
+            in
+            transl_type_extension item.str_env rootpath tyext body, size
+          else
+            transl_structure loc fields cc rootpath target_phase item_postproc
+              final_env rem
       | Tstr_exception ext ->
           let id = ext.ext_id in
           let path = field_path rootpath id in
