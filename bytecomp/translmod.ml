@@ -580,29 +580,22 @@ let compile_recmodule phase compile_rhs bindings cont =
 
 let rec bound_value_identifiers phase env = function
     [] -> []
-  | Sig_value(id, sf, {val_kind = Val_reg}) :: rem ->
-      if phase = sf then
-        id :: bound_value_identifiers phase env rem
-      else
-        bound_value_identifiers phase env rem
-  | Sig_value(id, _, {val_kind = Val_macro}) :: rem ->
-      id :: bound_value_identifiers phase env rem
-  | Sig_typext(id, _, _) :: rem ->
-      if phase = Static then
-        bound_value_identifiers phase env rem
-      else
-        id :: bound_value_identifiers phase env rem
-  | Sig_module(id, _, sf, _) :: rem ->
-      if phase = Nonstatic && sf = Static then
-        bound_value_identifiers phase env rem
-      else
-        id :: bound_value_identifiers phase env rem
-  | Sig_class(id, _, _) :: rem ->
-      if phase = Static then
-        bound_value_identifiers phase env rem
-      else
-        id :: bound_value_identifiers phase env rem
-  | _ :: rem -> bound_value_identifiers phase env rem
+  | item :: rem ->
+    begin match item with
+    | Sig_value(id, _, _)
+    | Sig_typext(id, _, _)
+    | Sig_module(id, _, _, _)
+    | Sig_class(id, _, _) ->
+      begin match Env.advance_pos item 0 0 env with
+      | (Path.Uniphase (sf, _), _, _) when sf = phase ->
+          id :: bound_value_identifiers phase env rem
+      | (Path.Biphase _, _, _) ->
+          id :: bound_value_identifiers phase env rem
+      | _ ->
+          bound_value_identifiers phase env rem
+      end
+    | _ -> bound_value_identifiers phase env rem
+    end
 
 (* Code to translate class entries in a structure *)
 
@@ -691,6 +684,8 @@ and transl_struct loc fields cc rootpath static_flag str =
 
 and transl_structure loc fields cc rootpath target_phase item_postproc
       final_env =
+  Includemod.print_coercion Format.err_formatter cc;
+  Format.eprintf "\n%!";
   function
     [] ->
       let body, size =
@@ -892,6 +887,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
           let ids = bound_value_identifiers target_phase item.str_env
             incl.incl_type
           in
+          List.iter (fun id->Printf.eprintf "%s\n%!" (Ident.unique_name id)) ids;
           let modl = incl.incl_mod in
           let mid = Ident.create "include" in
           let rec rebind_idents pos newfields = function

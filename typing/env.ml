@@ -1514,7 +1514,7 @@ and contains_phase_mty phase env =
               true
       end
 
-let advance_pos static_flag item pos_stat pos_rt env =
+let advance_pos item pos_stat pos_rt env =
   let add sf sf' =
     match (sf, sf') with
     | (Nonstatic, sf) | (sf, Nonstatic) -> sf
@@ -1523,7 +1523,9 @@ let advance_pos static_flag item pos_stat pos_rt env =
   let pos = function Static -> pos_stat | Nonstatic -> pos_rt in
   match item with
   | Sig_value (_id, sf, decl) ->
-      let sf = add static_flag sf in
+      Printf.eprintf "%s %d %d\n%!" (Ident.unique_name _id)
+        (cur_phase env) (phase_of_sf sf);
+      let sf = add (sf_of_phase (cur_phase env)) sf in
       begin match decl.val_kind with
       | Val_macro ->
         (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
@@ -1539,11 +1541,12 @@ let advance_pos static_flag item pos_stat pos_rt env =
   | Sig_typext _ ->
       (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
   | Sig_module (_, decl, sf, _) ->
-      let sf = add static_flag sf in
+      let sf = add (sf_of_phase (cur_phase env)) sf in
       if sf = Static then
         (Uniphase (Static, pos_stat), pos_stat+1, pos_rt)
       else if contains_phase_mty Static env decl.md_type then
-        (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
+        begin Printf.eprintf "contains static\n%!";
+        (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1) end
       else
         (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
   | Sig_modtype _ ->
@@ -1556,59 +1559,61 @@ let advance_pos static_flag item pos_stat pos_rt env =
 (* Given a signature and a root path, prefix all idents in the signature
    by the root path and build the corresponding substitution. *)
 
-let rec prefix_idents root static_flag pos_stat pos_rt sub env =
+let rec prefix_idents root pos_stat pos_rt sub env =
   function
     [] -> ([], sub)
   | item :: rem ->
     begin
-      let static_flag =
-        if Path.lifted root then Static else static_flag
+      let env =
+        if Path.lifted root then
+          with_phase 1 env
+        else env
       in
       let (pos, nextpos_s, nextpos_rt) =
-        advance_pos static_flag item pos_stat pos_rt env
+        advance_pos item pos_stat pos_rt env
       in
       match item with
       | Sig_value(id, _, _) ->
           let p = Pdot(root, Ident.name id, pos) in
           let (pl, final_sub) =
-            prefix_idents root static_flag nextpos_s nextpos_rt sub env rem in
+            prefix_idents root nextpos_s nextpos_rt sub env rem in
           (p::pl, final_sub)
       | Sig_type(id, _, _) ->
           let p = Pdot(root, Ident.name id, nopos) in
           let (pl, final_sub) =
-            prefix_idents root static_flag nextpos_s nextpos_rt
+            prefix_idents root nextpos_s nextpos_rt
               (Subst.add_type id p sub) env rem in
           (p::pl, final_sub)
       | Sig_typext(id, _, _) ->
           let p = Pdot(root, Ident.name id, pos) in
           (* we extend the substitution in case of an inlined record *)
           let (pl, final_sub) =
-            prefix_idents root static_flag nextpos_s nextpos_rt
+            prefix_idents root nextpos_s nextpos_rt
               (Subst.add_type id p sub) env rem in
           (p::pl, final_sub)
       | Sig_module(id, _, _, _) ->
           let p = Pdot(root, Ident.name id, pos) in
           let (pl, final_sub) =
-            prefix_idents root static_flag nextpos_s nextpos_rt
+            prefix_idents root nextpos_s nextpos_rt
               (Subst.add_module id p sub) env rem in
           (p::pl, final_sub)
       | Sig_modtype(id, _) ->
           let p = Pdot(root, Ident.name id, pos) in
           let (pl, final_sub) =
-            prefix_idents root static_flag nextpos_s nextpos_rt
+            prefix_idents root nextpos_s nextpos_rt
               (Subst.add_modtype id (Mty_ident p) sub) env rem in
           (p::pl, final_sub)
       | Sig_class(id, _, _) ->
           (* pretend this is a type, cf. PR#6650 *)
           let p = Pdot(root, Ident.name id, pos) in
           let (pl, final_sub) =
-            prefix_idents root static_flag nextpos_s nextpos_rt
+            prefix_idents root nextpos_s nextpos_rt
               (Subst.add_type id p sub) env rem in
           (p::pl, final_sub)
       | Sig_class_type(id, _, _) ->
           let p = Pdot(root, Ident.name id, pos) in
           let (pl, final_sub) =
-            prefix_idents root static_flag nextpos_s nextpos_rt
+            prefix_idents root nextpos_s nextpos_rt
               (Subst.add_type id p sub) env rem in
           (p::pl, final_sub)
     end
@@ -1635,14 +1640,14 @@ let subst_signature sub sg =
     sg
 
 
-let prefix_idents_and_subst root static_flag sub env sg =
-  let (pl, sub) = prefix_idents root static_flag 0 0 sub env sg in
+let prefix_idents_and_subst root sub env sg =
+  let (pl, sub) = prefix_idents root 0 0 sub env sg in
   pl, sub, lazy (subst_signature sub sg)
 
 let set_nongen_level sub path =
   Subst.set_nongen_level sub (Path.binding_time path - 1)
 
-let prefix_idents_and_subst root static_flag sub env sg =
+let prefix_idents_and_subst root sub env sg =
   let sub = set_nongen_level sub root in
   if sub = set_nongen_level Subst.identity root then
     let sgs =
@@ -1656,11 +1661,11 @@ let prefix_idents_and_subst root static_flag sub env sg =
     try
       List.assq sg !sgs
     with Not_found ->
-      let r = prefix_idents_and_subst root static_flag sub env sg in
+      let r = prefix_idents_and_subst root sub env sg in
       sgs := (sg, r) :: !sgs;
       r
   else
-    prefix_idents_and_subst root static_flag sub env sg
+    prefix_idents_and_subst root sub env sg
 
 (* Compute structure descriptions *)
 
@@ -1693,16 +1698,13 @@ and components_of_module_maker (env, sub, path, mty) =
           comp_components = Tbl.empty; comp_classes = Tbl.empty;
           comp_cltypes = Tbl.empty } in
       let pl, sub, _ =
-        prefix_idents_and_subst path
-          (if phase > 0 then Static else Nonstatic)
-          sub env sg in
+        prefix_idents_and_subst path sub env sg in
       let env = ref env in
       let pos_stat = ref 0 in
       let pos_rt = ref 0 in
       List.iter2 (fun item path ->
         let (pos, nextpos_s, nextpos_rt) =
-          advance_pos (if phase > 0 then Static else Nonstatic)
-            item !pos_stat !pos_rt !env
+          advance_pos item !pos_stat !pos_rt !env
         in
         begin match item with
           Sig_value(id, sf, decl) ->
@@ -2127,9 +2129,8 @@ let () = add_sg := add_signature
 
 let open_signature slot root sg env0 =
   (* First build the paths and substitution *)
-  let sf = if cur_phase env0 > 0 then Static else Nonstatic in
   let (pl, _sub, sg) =
-    prefix_idents_and_subst root sf Subst.identity env0 sg in
+    prefix_idents_and_subst root Subst.identity env0 sg in
   let sg = Lazy.force sg in
 
   (* Then enter the components in the environment after substitution *)
