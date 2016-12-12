@@ -45,13 +45,12 @@ let rec strengthen ~aliasable env mty p =
       mty
 
 and strengthen_sig ~aliasable env sg p pos_s pos_rt =
-  let sf = if Env.cur_phase env > 0 then Static else Nonstatic in
   match sg with
     [] -> []
   | item :: rem ->
     begin
       let (pos, nextpos_s, nextpos_rt) =
-        Env.advance_pos sf item pos_s pos_rt env
+        Env.advance_pos item pos_s pos_rt env
       in
       match sg with
       | [] -> assert false (* unused *)
@@ -232,8 +231,7 @@ and type_paths_sig env p (pos_s, pos_rt) sg =
   | item :: rem ->
     begin
       let (pos, nextpos_s, nextpos_rt) =
-        Env.advance_pos (if Env.cur_phase env > 0 then Static else Nonstatic)
-          item pos_s pos_rt env
+        Env.advance_pos item pos_s pos_rt env
       in
       let pos' = (nextpos_s, nextpos_rt)
       in

@@ -363,14 +363,12 @@ val check_value_name: string -> Location.t -> unit
 val contains_phase: Asttypes.static_flag -> t -> signature -> bool
 val contains_phase_mty: Asttypes.static_flag -> t -> module_type -> bool
 
-(** [advance_pos sf item pos_stat pos_rt env] returns a triplet [pos, nextpos_s,
+(** [advance_pos item pos_stat pos_rt env] returns a triplet [pos, nextpos_s,
     nextpos_rt], where [pos] is the position (with phase information) of [item]
     in a module block, in function of [pos_stat] and [pos_rt]; and [nextpos_s]
-    and [nextpos_rt] are the input of the next iteration. [sf] should be the
-    phase of the environment of [item]. *)
+  and [nextpos_rt] are the input of the next iteration. *)
 val advance_pos:
-  Asttypes.static_flag -> signature_item -> int -> int -> t ->
-  Path.pos * int * int
+  signature_item -> int -> int -> t -> Path.pos * int * int
 
 module Persistent_signature : sig
   type t =
