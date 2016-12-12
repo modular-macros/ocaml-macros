@@ -51,7 +51,7 @@ Found a bug and know how to fix it? We certainly appreciate pull requests.
 If you plan on making big changes, please file an issue first to discuss why
 theses changes are needed.
 
-=== Limitations / To Do
+== Limitations / To Do
 
 Things to be done sorted by descending priority:
 
