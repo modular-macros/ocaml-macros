@@ -689,7 +689,9 @@ and transl_struct loc fields cc rootpath static_flag str =
   transl_structure loc fields cc rootpath static_flag
   (fun _ lam -> lam) str.str_final_env str.str_items
 
-and transl_structure loc fields cc rootpath target_phase item_postproc final_env = function
+and transl_structure loc fields cc rootpath target_phase item_postproc
+      final_env =
+  function
     [] ->
       let body, size =
         match cc with
