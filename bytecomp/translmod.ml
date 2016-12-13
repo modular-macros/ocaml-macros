@@ -582,7 +582,7 @@ let rec bound_value_identifiers phase env = function
     [] -> []
   | item :: rem ->
     begin match item with
-    | Sig_value(id, _, _)
+    | Sig_value(id, _, {val_kind = Val_reg | Val_macro}) (* exclude prims *)
     | Sig_typext(id, _, _)
     | Sig_module(id, _, _, _)
     | Sig_class(id, _, _) ->
