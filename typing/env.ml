@@ -1547,7 +1547,8 @@ let advance_pos item pos_stat pos_rt env =
       if sf = Static then
         (Uniphase (Static, pos_stat), pos_stat+1, pos_rt)
       else if contains_phase_mty Static env decl.md_type then
-        (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
+        begin Printf.eprintf "contains static\n%!";
+        (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1) end
       else
         (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
   | Sig_modtype _ ->

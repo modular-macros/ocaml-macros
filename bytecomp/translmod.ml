@@ -684,6 +684,8 @@ and transl_struct loc fields cc rootpath static_flag str =
 
 and transl_structure loc fields cc rootpath target_phase item_postproc
       final_env =
+  Includemod.print_coercion Format.err_formatter cc;
+  Format.eprintf "\n%!";
   function
     [] ->
       let body, size =
@@ -885,6 +887,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
           let ids = bound_value_identifiers target_phase item.str_env
             incl.incl_type
           in
+          List.iter (fun id->Printf.eprintf "%s\n%!" (Ident.unique_name id)) ids;
           let modl = incl.incl_mod in
           let mid = Ident.create "include" in
           let rec rebind_idents pos newfields = function
