@@ -96,67 +96,76 @@ module TranslSplicesIterator = struct
   open TypedtreeIter
   include DefaultIteratorArgument
 
-  let depth = ref 0
+  let quote_depth = ref 0
+  let str_depth = ref 0
 
   let enter_expression expr =
     match expr.exp_desc with
     | Texp_escape e ->
-        if !depth = 0 then
+        if !quote_depth = 0 && !str_depth = 0 then
           let body = transl_toplevel_splice e in
           item_splices := !item_splices @ [body];
         else
           ()
     | Texp_quote _ ->
-        incr depth
+        incr quote_depth
     | _ -> ()
 
   let leave_expression expr =
     match expr.exp_desc with
     | Texp_quote _ ->
-        decr depth
+        decr quote_depth
     | _ -> ()
+
+  (* Do not inspect nested structures *)
+  let enter_structure _ =
+    incr str_depth
+
+  let leave_structure _ =
+    decr str_depth
 end
 
 module TranslSplices = TypedtreeIter.MakeIterator(TranslSplicesIterator)
 
-let splice_ids = ref ([] : Ident.t list)
+let nb_splices = ref 0
 
 let transl_item_splices item item_lam =
   (* Find splices in current structure item *)
   TranslSplices.iter_structure_item item;
-  let item_splices_with_ids =
-    List.map (fun l -> (Ident.create "*splice*", l)) !item_splices
-  in
   (* Add the code for running splices *)
-  let wrap_let str_lam (splice_id, splice_lam) =
-    Llet(Strict, Pgenval, splice_id, splice_lam, str_lam)
+  let wrap_seq str_lam (idx, splice_lam) =
+    Lsequence (
+      Lprim (Psetfield (idx, Pointer, Assignment),
+        [Lvar (Ident.create_persistent "*splicearray*");
+          splice_lam], Location.none),
+      str_lam)
   in
-  let lam = List.fold_left wrap_let item_lam item_splices_with_ids in
+  let indexed_splices = List.mapi (fun i spl -> (i, spl)) !item_splices in
+  let lam = List.fold_left wrap_seq item_lam indexed_splices in
   item_splices := [];
-  splice_ids := !splice_ids @ List.map fst item_splices_with_ids;
+  nb_splices := !nb_splices + List.length indexed_splices;
   lam
+
+let rec repeat n x =
+  if n <= 0 then []
+  else x :: repeat (pred n) x
 
 (* Wrap a module construction lambda inside a lambda that declares the module
    global (as a side effect), constructs an array with all splices encountered
-   in this module and returns it. [splice_ids] should refer to these splices.
+   in this module and returns it.
    *)
-let rec insert_splice_array module_id splice_ids = function
-  | Llet (a,b,c,lam,rem) ->
-      Llet (a, b, c, lam, insert_splice_array module_id splice_ids rem)
-  | Lletrec (vbs, rem) ->
-      Lletrec (vbs, insert_splice_array module_id splice_ids rem)
-  | block ->
-      let splice_body =
-        Lprim (Pmakearray (Paddrarray, Mutable),
-          List.map
-            (fun id ->
-              Translquote.transl_close_expression Location.none (Lvar id))
-            splice_ids,
-          Location.none)
-      in
-      Lsequence (
-        Lprim (Psetglobal module_id, [block], Location.none),
-        splice_body)
+let insert_splice_array module_id nb_splices str_lam =
+  let splice_arr =
+    Lprim (Pmakearray (Paddrarray, Mutable),
+      repeat nb_splices (Lconst (Const_pointer 0)),
+      Location.none)
+  in
+  let id = Ident.create_persistent "*splicearray*" in
+  Llet (Strict, Pgenval, id,
+    splice_arr,
+    Lsequence (
+      Lprim (Psetglobal module_id, [str_lam], Location.none),
+      Lvar id))
 
 (* Wrap a piece of lambda code so that, if the original code returned a value,
  * the result of this function will execute the original code, marshal the
@@ -609,7 +618,7 @@ let transl_class_bindings cl_list =
 
 (* Compile a module expression *)
 
-let rec transl_module cc rootpath target_phase mexp =
+let rec transl_module cc rootpath target_phase item_postproc mexp =
   let loc = mexp.mod_loc in
   if Env.contains_phase_mty target_phase mexp.mod_env mexp.mod_type then begin
     List.iter (Translattribute.check_attribute_on_module mexp)
@@ -624,7 +633,7 @@ let rec transl_module cc rootpath target_phase mexp =
                 (Env.with_phase (Env.phase_of_sf target_phase) mexp.mod_env)
                 path)
         | Tmod_structure str ->
-            fst (transl_struct loc [] cc rootpath target_phase str)
+            fst (transl_struct loc [] cc rootpath target_phase item_postproc str)
         | Tmod_functor(param, _, _, body) ->
             let bodypath = functor_path rootpath param in
             let inline_attribute =
@@ -639,7 +648,7 @@ let rec transl_module cc rootpath target_phase mexp =
                                        is_a_functor = true };
                               loc = loc;
                               body = transl_module Tcoerce_none bodypath
-                                target_phase body}
+                                target_phase item_postproc body}
                 | Tcoerce_functor(ccarg, ccres) ->
                     let param' = Ident.create "funarg" in
                     Lfunction{kind = Curried; params = [param'];
@@ -651,7 +660,7 @@ let rec transl_module cc rootpath target_phase mexp =
                                           apply_coercion loc target_phase Alias
                                             ccarg (Lvar param'),
                                           transl_module ccres bodypath
-                                            target_phase body)}
+                                            target_phase item_postproc body)}
                 | _ ->
                     fatal_error "Translmod.transl_module")
               cc
@@ -664,13 +673,14 @@ let rec transl_module cc rootpath target_phase mexp =
               (Lapply{ap_should_be_tailcall=false;
                       ap_loc=loc;
                       ap_func=transl_module Tcoerce_none None
-                        target_phase funct;
-                      ap_args=[transl_module ccarg None target_phase arg];
+                        target_phase item_postproc funct;
+                      ap_args=[transl_module ccarg None target_phase
+                        item_postproc arg];
                       ap_inlined=inlined_attribute;
                       ap_specialised=Default_specialise})
         | Tmod_constraint(arg, _, _, ccarg) ->
             transl_module (compose_coercions target_phase cc ccarg)
-              rootpath target_phase arg
+              rootpath target_phase item_postproc arg
         | Tmod_unpack(arg, _) ->
             if target_phase <> Static then
               apply_coercion loc target_phase Strict cc (Translcore.transl_exp arg)
@@ -678,9 +688,9 @@ let rec transl_module cc rootpath target_phase mexp =
   end else
     Lprim(Pmakeblock (0,Immutable,None), [], loc)
 
-and transl_struct loc fields cc rootpath static_flag str =
-  transl_structure loc fields cc rootpath static_flag
-  (fun _ lam -> lam) str.str_final_env str.str_items
+and transl_struct loc fields cc rootpath static_flag item_postproc str =
+  transl_structure loc fields cc rootpath static_flag item_postproc
+    str.str_final_env str.str_items
 
 and transl_structure loc fields cc rootpath target_phase item_postproc
       final_env =
@@ -838,7 +848,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
               else
                 fun lam _ _ -> lam)
                   (transl_module Tcoerce_none (field_path rootpath id)
-                    target_phase mod_expr)
+                    target_phase item_postproc mod_expr)
                   mb.mb_loc mb.mb_attributes
             in
             Llet(pure_module mb.mb_expr, Pgenval, id,
@@ -864,7 +874,8 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
                        {modl with mod_env = Env.with_phase 1 modl.mod_env}
                      else modl
                    in
-                   transl_module Tcoerce_none (field_path rootpath id) target_phase modl)
+                   transl_module Tcoerce_none (field_path rootpath id)
+                     target_phase item_postproc modl)
                 bindings
                 body
             in
@@ -901,7 +912,8 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
           in
           let body, size = rebind_idents 0 fields ids in
           Llet(pure_module modl, Pgenval, mid,
-               transl_module Tcoerce_none None target_phase modl, body),
+               transl_module Tcoerce_none None target_phase
+                 item_postproc modl, body),
           size
       | Tstr_modtype _
       | Tstr_open _
@@ -920,7 +932,8 @@ and pure_module m =
 
 (* Update forward declaration in Translcore *)
 let _ =
-  Translcore.transl_module := fun cc rp m -> transl_module cc rp Nonstatic m
+  Translcore.transl_module :=
+    fun cc rp m -> transl_module cc rp Nonstatic (fun _ lam -> lam) m
 
 (* Introduce dependencies on modules referenced only by "external". *)
 
@@ -965,7 +978,7 @@ let transl_implementation_flambda module_name (str, cc) =
   let body, size =
     Translobj.transl_label_init
       (fun () -> transl_struct Location.none [] cc (global_path module_id)
-                   Nonstatic str)
+                   Nonstatic (fun _ lam -> lam) str)
   in
   { module_ident = module_id;
     main_module_block_size = size;
@@ -976,13 +989,13 @@ let transl_implementation module_name target_phase (str, cc) =
   if target_phase = Static then
     let module_id = Ident.create_persistent module_name in
     Translcore.set_transl_splices None;
-    splice_ids := [];
+    nb_splices := 0;
     let (mod_body, size) =
       transl_structure Location.none [] cc (Some (Path.Pident module_id))
         Static transl_item_splices str.str_final_env str.str_items
     in
     let code =
-      insert_splice_array module_id !splice_ids mod_body
+      insert_splice_array module_id !nb_splices mod_body
     in
     { module_ident = module_id;
       main_module_block_size = size;
@@ -1149,7 +1162,7 @@ let nat_toplevel_name id =
   with Not_found ->
     fatal_error("Translmod.nat_toplevel_name: " ^ Ident.unique_name id)
 
-let transl_store_structure target_phase glob map prims str =
+let transl_store_structure target_phase item_postproc glob map prims str =
   let rec transl_store rootpath subst = function
     [] ->
       transl_store_subst := subst;
@@ -1292,7 +1305,7 @@ let transl_store_structure target_phase glob map prims str =
                 else
                   fun lam _ _ -> lam)
                     (transl_module Tcoerce_none (field_path rootpath id)
-                      target_phase modl)
+                      target_phase item_postproc modl)
                     loc mb_attributes
               in
               (* Careful: the module value stored in the global may be different
@@ -1317,8 +1330,8 @@ let transl_store_structure target_phase glob map prims str =
                      else modl
                    in
                    subst_lambda subst
-                     (transl_module Tcoerce_none
-                        (field_path rootpath id) target_phase modl))
+                     (transl_module Tcoerce_none (field_path rootpath id)
+                       target_phase item_postproc modl))
                 bindings
                 (Lsequence(store_idents Location.none ids,
                            transl_store rootpath (add_idents true ids subst) rem))
@@ -1347,7 +1360,8 @@ let transl_store_structure target_phase glob map prims str =
                                  store_idents (pos + 1) idl))
             in
             Llet(Strict, Pgenval, mid,
-                 subst_lambda subst (transl_module Tcoerce_none None Nonstatic modl),
+                 subst_lambda subst (transl_module Tcoerce_none None Nonstatic
+                   item_postproc modl),
                  store_idents 0 ids)
         | Tstr_modtype _
         | Tstr_open _
@@ -1455,7 +1469,10 @@ let transl_store_gen target_phase module_name ({ str_items = str }, restr) topl 
     | [ { str_desc = Tstr_eval (expr, _attrs) } ] when topl ->
         assert (size = 0);
         subst_lambda !transl_store_subst (transl_exp expr)
-    | str -> transl_store_structure target_phase module_id map prims str in
+    | str ->
+        transl_store_structure target_phase (fun _ lam -> lam)
+          module_id map prims str
+  in
   transl_store_label_init module_id size f str
   (*size, transl_label_init (transl_store_structure module_id map prims str)*)
 
@@ -1531,6 +1548,10 @@ let close_toplevel_term target_phase (lam, ()) =
                 (free_variables lam) lam
 
 let transl_toplevel_item target_phase item =
+  let item_postproc =
+    if target_phase = Static then transl_item_splices
+    else fun _ lam -> lam
+  in
   let item_lam =
     match item.str_desc with
       Tstr_eval (expr, _) ->
@@ -1580,7 +1601,8 @@ let transl_toplevel_item target_phase item =
              with "open" (PR#1672) *)
           set_toplevel_unique_name id;
           let lam =
-            transl_module Tcoerce_none (Some(Pident id)) target_phase modl
+            transl_module Tcoerce_none (Some(Pident id)) target_phase
+              item_postproc modl
           in
           toploop_setvalue target_phase id lam
         end
@@ -1591,7 +1613,8 @@ let transl_toplevel_item target_phase item =
           let idents = List.map (fun mb -> mb.mb_id) bindings in
           compile_recmodule target_phase
             (fun id modl ->
-              transl_module Tcoerce_none (Some(Pident id)) target_phase modl)
+              transl_module Tcoerce_none (Some(Pident id)) target_phase
+                item_postproc modl)
             bindings
             (make_sequence (toploop_setvalue_id target_phase) idents)
         end
@@ -1620,7 +1643,9 @@ let transl_toplevel_item target_phase item =
               set_idents (pos + 1) ids)
         in
         Llet(Strict, Pgenval, mid,
-             transl_module Tcoerce_none None target_phase modl, set_idents 0 ids)
+             transl_module Tcoerce_none None target_phase
+               item_postproc modl,
+             set_idents 0 ids)
     | Tstr_modtype _
     | Tstr_open _
     | Tstr_primitive _
@@ -1629,19 +1654,8 @@ let transl_toplevel_item target_phase item =
     | Tstr_attribute _ ->
         lambda_unit
   in
-  if target_phase = Static then begin
-    TranslSplices.iter_structure_item item;
-    let item_splices_with_ids =
-      List.map (fun l -> (Ident.create "*splice*", l)) !item_splices
-    in
-    let wrap_let str_lam (splice_id, splice_lam) =
-      Llet (Strict, Pgenval, splice_id, splice_lam, str_lam)
-    in
-    let lam = List.fold_left wrap_let item_lam item_splices_with_ids in
-    item_splices := [];
-    splice_ids := !splice_ids @ List.map fst item_splices_with_ids;
-    lam
-  end
+  if target_phase = Static then
+    transl_item_splices item item_lam
   else
     item_lam
 
@@ -1649,35 +1663,27 @@ let transl_toplevel_item_and_close target_phase itm =
   close_toplevel_term target_phase
     (transl_label_init (fun () -> transl_toplevel_item target_phase itm, ()))
 
-let rec insert_splice_array_toplevel splice_ids = function
-  | Llet (a,b,c,lam,rem) ->
-      Llet (a,b,c,lam, insert_splice_array_toplevel splice_ids rem)
-  | Lletrec (vbs, rem) ->
-      Lletrec (vbs, insert_splice_array_toplevel splice_ids rem)
-  | other ->
-      let splice_body =
-        Lprim (Pmakearray (Paddrarray, Mutable),
-          List.map
-            (fun id ->
-              Translquote.transl_close_expression Location.none
-              (Lvar id))
-            splice_ids,
-          Location.none)
-      in
-      Lsequence (
-        other,
-        splice_body)
+let insert_splice_array_toplevel nb_splices item_lam =
+  let splice_arr =
+    Lprim (Pmakearray (Paddrarray, Mutable),
+      repeat nb_splices (Lconst (Const_pointer 0)),
+      Location.none)
+  in
+  let id = Ident.create_persistent "*splicearray*" in
+  Llet (Strict, Pgenval, id,
+    splice_arr,
+    Lsequence (item_lam, Lvar id))
 
 let transl_toplevel_definition target_phase str =
   reset_labels ();
   Hashtbl.clear used_primitives;
   if target_phase = Static then begin
     Translcore.set_transl_splices None;
-    splice_ids := [];
+    nb_splices := 0;
     let lam =
       make_sequence (transl_toplevel_item_and_close target_phase) str.str_items
     in
-    insert_splice_array_toplevel !splice_ids lam
+    insert_splice_array_toplevel !nb_splices lam
   end
   else
     make_sequence (transl_toplevel_item_and_close target_phase) str.str_items
