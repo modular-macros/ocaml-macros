@@ -210,7 +210,6 @@ external register_code_fragment: bytes -> int -> string -> unit
                                = "caml_register_code_fragment"
 
 let load_compunit ic file_name file_digest compunit =
-  Printf.eprintf "load_compunit\n%!";
   check_consistency file_name compunit;
   check_unsafe_module compunit;
   seek_in ic compunit.cu_pos;
@@ -251,14 +250,12 @@ let load_compunit ic file_name file_digest compunit =
       [| input_value ic |]
     end in
   Meta.add_debug_info code code_size events;
-  Printf.eprintf "before reify\n%!";
   begin try
     ignore((Meta.reify_bytecode code code_size) ())
   with exn ->
     Symtable.restore_state initial_symtable;
     raise exn
-  end;
-  Printf.eprintf "after reify\n%!"
+  end
 
 let loadfile file_name =
   init();
