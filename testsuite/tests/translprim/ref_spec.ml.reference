@@ -1,4 +1,5 @@
-(seq (setglobal Ref_spec! (makeblock 0)) (makearray[addr]))
+(let (*splicearray*! = (makearray[addr]))
+  (seq (setglobal Ref_spec! (makeblock 0)) *splicearray*!))
 (setglobal Ref_spec!
   (let
     (int_ref = (makemutable 0 (int) 1)

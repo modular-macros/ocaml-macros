@@ -103,7 +103,11 @@ module TranslSplicesIterator = struct
     match expr.exp_desc with
     | Texp_escape e ->
         if !quote_depth = 0 && !str_depth = 0 then
-          let body = transl_toplevel_splice e in
+          let body =
+            Translquote.transl_close_expression
+              Location.none
+              (transl_toplevel_splice e)
+          in
           item_splices := !item_splices @ [body];
         else
           ()
@@ -128,6 +132,7 @@ end
 module TranslSplices = TypedtreeIter.MakeIterator(TranslSplicesIterator)
 
 let nb_splices = ref 0
+let splicearray_id = Ident.create_persistent "*splicearray*"
 
 let transl_item_splices item item_lam =
   (* Find splices in current structure item *)
@@ -136,7 +141,7 @@ let transl_item_splices item item_lam =
   let wrap_seq str_lam (idx, splice_lam) =
     Lsequence (
       Lprim (Psetfield (idx, Pointer, Assignment),
-        [Lvar (Ident.create_persistent "*splicearray*");
+        [Lvar splicearray_id;
           splice_lam], Location.none),
       str_lam)
   in
@@ -160,7 +165,7 @@ let insert_splice_array module_id nb_splices str_lam =
       repeat nb_splices (Lconst (Const_pointer 0)),
       Location.none)
   in
-  let id = Ident.create_persistent "*splicearray*" in
+  let id = splicearray_id in
   Llet (Strict, Pgenval, id,
     splice_arr,
     Lsequence (
@@ -1543,9 +1548,13 @@ let toploop_setvalue phase id lam =
 let toploop_setvalue_id phase id = toploop_setvalue phase id (Lvar id)
 
 let close_toplevel_term target_phase (lam, ()) =
-  IdentSet.fold (fun id l -> Llet(Strict, Pgenval, id,
-                                  toploop_getvalue target_phase id, l))
-                (free_variables lam) lam
+  IdentSet.fold (fun id l ->
+      if Ident.compare id splicearray_id <> 0 then
+        Llet(Strict, Pgenval, id,
+          toploop_getvalue target_phase id, l)
+      else
+        l)
+    (free_variables lam) lam
 
 let transl_toplevel_item target_phase item =
   let item_postproc =
@@ -1669,7 +1678,7 @@ let insert_splice_array_toplevel nb_splices item_lam =
       repeat nb_splices (Lconst (Const_pointer 0)),
       Location.none)
   in
-  let id = Ident.create_persistent "*splicearray*" in
+  let id = splicearray_id in
   Llet (Strict, Pgenval, id,
     splice_arr,
     Lsequence (item_lam, Lvar id))

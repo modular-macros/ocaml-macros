@@ -1,4 +1,5 @@
-(seq (setglobal Comparison_table! (makeblock 0)) (makearray[addr]))
+(let (*splicearray*! = (makearray[addr]))
+  (seq (setglobal Comparison_table! (makeblock 0)) *splicearray*!))
 (setglobal Comparison_table!
   (let
     (gen_cmp = (function x y (caml_compare x y))
