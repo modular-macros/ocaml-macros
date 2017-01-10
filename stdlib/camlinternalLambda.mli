@@ -36,7 +36,7 @@ type lambda =
   | Lapply of lambda_apply
   | Lfunction of lfunction
   | Llet of let_kind * value_kind * Ident.t * lambda * lambda
-  | Lletrec of primitive * lambda list * Location.t
+  | Lletrec of (Ident.t * lambda) list * lambda
   | Lprim of primitive * lambda list * Location.t
   | Lswitch of lambda * lambda_switch
   | Lstringswitch of
