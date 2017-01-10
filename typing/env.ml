@@ -1464,7 +1464,9 @@ let rec contains_phase phase env sg =
         contains_phase phase env rem
     | Sig_value (_id, _, {val_kind = Val_macro}) :: _ ->
         true
-    | Sig_typext _ :: _ -> true
+    | Sig_typext _ :: rem ->
+        phase = sf_of_phase (cur_phase env)
+      || contains_phase phase env rem
     | Sig_module (_, decl, sf, _) :: rem ->
         if phase = Nonstatic && sf = Static then
           contains_phase phase env rem
