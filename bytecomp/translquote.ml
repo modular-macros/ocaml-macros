@@ -5,6 +5,7 @@ open Typedtree
 open Lambda
 
 let stdmod_path = Ident.lift_string "CamlinternalQuote"
+let parsetree_mod = "Parsetree"
 
 let camlinternalQuote =
   lazy
@@ -24,23 +25,36 @@ let combinator modname field =
   lazy
     (let env = Lazy.force camlinternalQuote in
      let lid =
-       Longident.Ldot (Longident.Lident "Parsetree",
-       Longident.Ldot(Longident.Lident modname, field)) in
+       Longident.Ldot(
+         Longident.Ldot (Longident.Lident parsetree_mod, modname),
+         field)
+     in
      match Env.lookup_value lid env with
-     | (Path.Pdot(Path.Pdot(Path.Pident ident, _, pos1), _, pos2), _) ->
-         Lprim(Pfield (static_pos pos2),
-               [Lprim(Pfield (static_pos pos1),
-                     [Lprim(Pgetglobal ident, [], Location.none)],
-                      Location.none)],
-               Location.none)
+     | (Path.Pdot (
+          Path.Pdot (
+            Path.Pdot (
+              Path.Pident ident, (* ~CamlinternalQuote *)
+              _, (* Parsetree *)
+              pos1),
+            _, (* modname *)
+            pos2),
+          _, (* field *)
+          pos3), _ (* value_description *)) ->
+         Lprim(Pfield (static_pos pos3),
+           [Lprim(Pfield (static_pos pos2),
+                 [Lprim(Pfield (static_pos pos1),
+                       [Lprim(Pgetglobal ident, [], Location.none)],
+                        Location.none)],
+                 Location.none)],
+           Location.none)
      | _ ->
          fatal_error @@
-           "Primitive " ^ stdmod_path ^ "." ^ modname ^ "." ^ field
-           ^ " not found."
+           "Primitive " ^ stdmod_path ^ "." ^ parsetree_mod ^ "." ^ modname
+           ^ "." ^ field ^ " not found."
      | exception Not_found ->
         fatal_error @@
-          "Primitive " ^ stdmod_path ^ "." ^ modname ^ "." ^ field
-          ^" not found.")
+          "Primitive " ^ stdmod_path ^ "." ^ parsetree_mod ^ "." ^ modname
+          ^ "." ^ field ^" not found.")
 
 module Loc = struct
   let none = combinator "Loc" "none"
