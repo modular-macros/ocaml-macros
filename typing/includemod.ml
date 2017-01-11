@@ -365,7 +365,10 @@ and signatures env cxt subst sig1 sig2 =
         in
         let pos =
           if pos = Path.Nopos
-          then Biphase (pos_s, pos_r) (* value irrelevant *)
+          then begin
+            Printf.eprintf "nopos %s\n%!" (Ident.unique_name id);
+            Biphase (pos_s, pos_r)
+          end(* value irrelevant *)
           else coercion_pos pos
         in
         build_component_table (npos_s, npos_r)
@@ -534,7 +537,12 @@ let _ = Env.check_modtype_inclusion := check_modtype_inclusion
 
 let compunit env impl_name impl_sig intf_name intf_sig =
   try
-    signatures env [] Subst.identity impl_sig intf_sig
+    let cc =
+      signatures env [] Subst.identity impl_sig intf_sig
+    in
+    print_coercion Format.err_formatter cc;
+    Format.pp_print_newline Format.err_formatter ();
+    cc
   with Error reasons ->
     raise(Error(([], Env.empty,Interface_mismatch(impl_name, intf_name))
                 :: reasons))

@@ -622,6 +622,7 @@ let get_unit_name () =
 (* Lookup by identifier *)
 
 let rec find_module_descr path env =
+  Printf.eprintf "find_module_descr %s\n" (Path.name path);
   match path with
     Pident id ->
       begin try
@@ -745,6 +746,7 @@ let find_module ~alias path env =
   | Pdot(p, s, _pos) ->
       begin match get_components (find_module_descr p env) with
         Structure_comps c ->
+          Printf.eprintf "found struct. comps for %s\n" (Path.name p);
           let (data, _pos) = Tbl.find s c.comp_modules in
           md (EnvLazy.force subst_modtype_maker data)
       | Functor_comps _ ->
@@ -1457,16 +1459,23 @@ let rec contains_phase phase env sg =
     let env =
       !add_sg sg (in_signature true env)
     in
+    let print_static = Printf.eprintf "see %s\n%!" in
     match sg with
     | [] -> false
     | Sig_value (_, sf, {val_kind = Val_reg | Val_prim _}) :: rem ->
+        let b = phase = sf_of_phase (cur_phase env + phase_of_sf sf) in
+        if b then print_static "static val";
         phase = sf_of_phase (cur_phase env + phase_of_sf sf) ||
         contains_phase phase env rem
     | Sig_value (_id, _, {val_kind = Val_macro}) :: _ ->
+        print_static "macro";
         true
-    | Sig_typext _ :: rem ->
-        phase = sf_of_phase (cur_phase env)
-      || contains_phase phase env rem
+    | Sig_typext (id,_,_) :: rem ->
+        let b = phase = sf_of_phase (cur_phase env)
+        in
+        if b then Printf.eprintf "typext %s\n%!" (Ident.unique_name id);
+        b
+        || contains_phase phase env rem
     | Sig_module (_, decl, sf, _) :: rem ->
         if phase = Nonstatic && sf = Static then
           contains_phase phase env rem
@@ -1482,41 +1491,39 @@ and contains_phase_mty phase env =
   else
     function
     | Mty_ident path ->
+      Printf.eprintf "Mty_ident %s\n" (Path.name path);
       begin try
           contains_phase_mty phase env
             (find_modtype_expansion path env)
-        with Not_found ->
-          try
-            contains_phase_mty phase env
-              (find_module path env).md_type
-          with
-          | Not_found
-          | Cmi_format.Error _ ->
-              (* Module type is abstract or unavailable: we assume it contains
-               * both phases *)
-              true
+      with
+      | Not_found
+      | Cmi_format.Error _ ->
+          (* Module type is abstract or unavailable: we assume it contains
+           * both phases *)
+          Printf.eprintf "modtype not found\n(path = %s)\n%!"
+            (Path.name path);
+          true
       end
     | Mty_signature sg ->
         contains_phase phase env sg
     | Mty_functor (_, _, ty_res) ->
         contains_phase_mty phase env ty_res
     | Mty_alias (_, path) ->
+      Printf.eprintf "Mty_alias %s\n" (Path.name path);
       begin try
-          contains_phase_mty phase env
-            (find_modtype_expansion path env)
-        with Not_found ->
-          try
-            contains_phase_mty phase env
-              (find_module path env).md_type
-          with
-          | Not_found
-          | Cmi_format.Error _ ->
-              (* Module type is abstract or unavailable: we assume it contains
-               * both phases *)
-              true
+        contains_phase_mty phase env (find_module path env).md_type
+      with
+      | Not_found
+      | Cmi_format.Error _ ->
+          (* Module type is abstract or unavailable: we assume it contains
+           * both phases *)
+          Printf.eprintf "module not found\n(path = %s)\n%!"
+            (Path.name path);
+          true
       end
 
 let advance_pos item pos_stat pos_rt env =
+  let print_static = Printf.eprintf "see %s\n%!" in
   let add sf sf' =
     match (sf, sf') with
     | (Nonstatic, sf) | (sf, Nonstatic) -> sf
@@ -1528,10 +1535,12 @@ let advance_pos item pos_stat pos_rt env =
       let sf = add (sf_of_phase (cur_phase env)) sf in
       begin match decl.val_kind with
       | Val_macro ->
+          print_static "macro";
         (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
       | Val_prim _ ->
         (Uniphase (sf, pos sf), pos_stat, pos_rt)
       | _ when sf = Static ->
+          print_static "static val";
         (Uniphase (Static, pos_stat), pos_stat+1, pos_rt)
       | _ ->
         (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
@@ -1541,15 +1550,19 @@ let advance_pos item pos_stat pos_rt env =
   | Sig_typext _ ->
       let sf = sf_of_phase (cur_phase env) in
       if sf = Static then
-        (Uniphase (Static, pos_stat), pos_stat+1, pos_rt)
+          (print_static "typext";
+        (Uniphase (Static, pos_stat), pos_stat+1, pos_rt))
       else
         (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
-  | Sig_module (_, decl, sf, _) ->
+  | Sig_module (id, decl, sf, _) ->
+      Printf.eprintf "test module %s\n" (Ident.unique_name id);
       let sf = add (sf_of_phase (cur_phase env)) sf in
       if sf = Static then
-        (Uniphase (Static, pos_stat), pos_stat+1, pos_rt)
+        (print_static "static module";
+        (Uniphase (Static, pos_stat), pos_stat+1, pos_rt))
       else if contains_phase_mty Static env decl.md_type then
-        (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
+        (print_static @@ "module " ^ (Ident.unique_name id) ^ " cont. static";
+        (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1))
       else
         (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
   | Sig_modtype _ ->
@@ -1557,7 +1570,8 @@ let advance_pos item pos_stat pos_rt env =
   | Sig_class _ ->
       let sf = sf_of_phase (cur_phase env) in
       if sf = Static then
-        (Uniphase (Static, pos_stat), pos_stat+1, pos_rt)
+        (print_static "static class";
+        (Uniphase (Static, pos_stat), pos_stat+1, pos_rt))
       else
         (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
   | Sig_class_type _ ->
