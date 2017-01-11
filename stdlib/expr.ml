@@ -1,4 +1,4 @@
-open ~CamlinternalQuote
+open ~CamlinternalQuote.Parsetree
 open ~Pervasives
 
 macro of_bool =

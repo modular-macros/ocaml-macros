@@ -23,7 +23,9 @@ let static_pos =
 let combinator modname field =
   lazy
     (let env = Lazy.force camlinternalQuote in
-     let lid = Longident.Ldot(Longident.Lident modname, field) in
+     let lid =
+       Longident.Ldot (Longident.Lident "Parsetree",
+       Longident.Ldot(Longident.Lident modname, field)) in
      match Env.lookup_value lid env with
      | (Path.Pdot(Path.Pdot(Path.Pident ident, _, pos1), _, pos2), _) ->
          Lprim(Pfield (static_pos pos2),

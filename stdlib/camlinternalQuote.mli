@@ -235,8 +235,6 @@ module Lambda : sig
 
     type t
 
-    val none : t
-
     val unmarshal : string -> t
 
   end
@@ -253,7 +251,7 @@ module Lambda : sig
 
     type t
 
-    val mk : string -> Loc.t -> t
+    val mk : string -> t
 
     val unmarshal : string -> t
 
@@ -273,7 +271,7 @@ module Lambda : sig
 
     val let_ : let_kind -> value_kind -> Name.t -> t -> t -> t
 
-    val letrec : Loc.t -> (Name.t * t) list -> t
+    val letrec : (Name.t * t) list -> t -> t
 
     val primitive : Loc.t -> primitive -> t list -> t
 

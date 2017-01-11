@@ -1123,10 +1123,16 @@ end
 
 module Lambda = struct
 
-  open CamlinternalAST
   open CamlinternalLambda
 
-  module Loc = Parsetree.Loc
+  module Loc = struct
+
+    type t = Location.t
+
+    let unmarshal s : t =
+      Marshal.from_string s 0
+
+  end
 
   module Constant = struct
 
@@ -1138,9 +1144,9 @@ module Lambda = struct
 
   module Name = struct
 
-    type t = string loc
+    type t = string
 
-    let mk txt loc = { txt; loc }
+    let mk txt = txt
 
     let unmarshal s : t =
       Marshal.from_string s 0
@@ -1177,8 +1183,8 @@ module Lambda = struct
     let let_ let_kind value_kind name value body =
       Llet (let_kind, value_kind, name, value, body)
 
-    let letrec loc bindings body =
-      Lletrec (bindings, body, loc)
+    let letrec bindings body =
+      Lletrec (bindings, body)
 
     let primitive loc prim args =
       Lprim (prim, args, loc)

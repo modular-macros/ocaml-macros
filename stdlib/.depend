@@ -30,6 +30,7 @@ camlinternalFormat.cmi : camlinternalFormatBasics.cmi buffer.cmi
 camlinternalFormatBasics.cmo : camlinternalFormatBasics.cmi
 camlinternalFormatBasics.cmx : camlinternalFormatBasics.cmi
 camlinternalFormatBasics.cmi :
+camlinternalLambda.cmi :
 camlinternalLazy.cmo : obj.cmi camlinternalLazy.cmi
 camlinternalLazy.cmx : obj.cmx camlinternalLazy.cmi
 camlinternalLazy.cmi :
@@ -44,10 +45,10 @@ camlinternalOO.cmx : sys.cmx string.cmx obj.cmx map.cmx list.cmx char.cmx \
     array.cmx camlinternalOO.cmi
 camlinternalOO.cmi : obj.cmi
 camlinternalQuote.cmo : marshal.cmi map.cmi list.cmi lexing.cmi format.cmi \
-    camlinternalAST.cmi camlinternalQuote.cmi
+    camlinternalLambda.cmi camlinternalAST.cmi camlinternalQuote.cmi
 camlinternalQuote.cmx : marshal.cmx map.cmx list.cmx lexing.cmx format.cmx \
-    camlinternalAST.cmi camlinternalQuote.cmi
-camlinternalQuote.cmi :
+    camlinternalLambda.cmi camlinternalAST.cmi camlinternalQuote.cmi
+camlinternalQuote.cmi : camlinternalLambda.cmi
 char.cmo : char.cmi
 char.cmx : char.cmi
 char.cmi :
@@ -226,9 +227,9 @@ camlinternalOO.cmo : sys.cmi string.cmi obj.cmi map.cmi list.cmi char.cmi \
 camlinternalOO.p.cmx : sys.cmx string.cmx obj.cmx map.cmx list.cmx char.cmx \
     array.cmx camlinternalOO.cmi
 camlinternalQuote.cmo : marshal.cmi map.cmi list.cmi lexing.cmi format.cmi \
-    camlinternalAST.cmi camlinternalQuote.cmi
+    camlinternalLambda.cmi camlinternalAST.cmi camlinternalQuote.cmi
 camlinternalQuote.p.cmx : marshal.cmx map.cmx list.cmx lexing.cmx format.cmx \
-    camlinternalAST.cmi camlinternalQuote.cmi
+    camlinternalLambda.cmi camlinternalAST.cmi camlinternalQuote.cmi
 char.cmo : char.cmi
 char.p.cmx : char.cmi
 complex.cmo : complex.cmi
