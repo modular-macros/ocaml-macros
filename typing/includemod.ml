@@ -339,7 +339,6 @@ and try_modtypes2 env cxt mty1 mty2 =
 
 and signatures env cxt subst sig1 sig2 =
   (* Environment used to check inclusion of components *)
-  Printtyp.signature Format.err_formatter sig1;
   let new_env =
     Env.add_signature sig1 (Env.in_signature true env) in
   (* Keep ids for module aliases *)
@@ -366,10 +365,7 @@ and signatures env cxt subst sig1 sig2 =
         in
         let pos =
           if pos = Path.Nopos
-          then begin
-            Printf.eprintf "nopos %s\n%!" (Ident.unique_name id);
-            Biphase (pos_s, pos_r)
-          end(* value irrelevant *)
+          then Biphase (pos_s, pos_r) (* value irrelevant *)
           else coercion_pos pos
         in
         build_component_table (npos_s, npos_r)
@@ -538,12 +534,7 @@ let _ = Env.check_modtype_inclusion := check_modtype_inclusion
 
 let compunit env impl_name impl_sig intf_name intf_sig =
   try
-    let cc =
-      signatures env [] Subst.identity impl_sig intf_sig
-    in
-    print_coercion Format.err_formatter cc;
-    Format.pp_print_newline Format.err_formatter ();
-    cc
+    signatures env [] Subst.identity impl_sig intf_sig
   with Error reasons ->
     raise(Error(([], Env.empty,Interface_mismatch(impl_name, intf_name))
                 :: reasons))

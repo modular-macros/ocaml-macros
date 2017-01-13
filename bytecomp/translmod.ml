@@ -625,7 +625,6 @@ let transl_class_bindings cl_list =
 (* Compile a module expression *)
 
 let rec transl_module cc rootpath target_phase item_postproc mexp =
-  Printf.eprintf "transl_module\n%!";
   let loc = mexp.mod_loc in
   if Env.contains_phase_mty target_phase mexp.mod_env mexp.mod_type then begin
     List.iter (Translattribute.check_attribute_on_module mexp)
