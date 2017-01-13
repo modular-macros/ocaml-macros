@@ -339,6 +339,7 @@ and try_modtypes2 env cxt mty1 mty2 =
 
 and signatures env cxt subst sig1 sig2 =
   (* Environment used to check inclusion of components *)
+  Printtyp.signature Format.err_formatter sig1;
   let new_env =
     Env.add_signature sig1 (Env.in_signature true env) in
   (* Keep ids for module aliases *)
@@ -346,7 +347,7 @@ and signatures env cxt subst sig1 sig2 =
     List.fold_left
       (fun (l,pos_s,pos_r) item ->
         let (pos_p,npos_s,npos_r) =
-          Env.advance_pos item pos_s pos_r env
+          Env.advance_pos item pos_s pos_r new_env
         in
         match item with
         | Sig_module (id, _, _, _) ->
@@ -361,7 +362,7 @@ and signatures env cxt subst sig1 sig2 =
     | item :: rem ->
         let (id, _loc, name) = item_ident_name item in
         let (pos,npos_s,npos_r) =
-          Env.advance_pos item pos_s pos_r env
+          Env.advance_pos item pos_s pos_r new_env
         in
         let pos =
           if pos = Path.Nopos
@@ -378,7 +379,7 @@ and signatures env cxt subst sig1 sig2 =
   let len2_s, len2_r =
     List.fold_left
       (fun (pos_s, pos_r) i ->
-        let (_,a,b) = Env.advance_pos i pos_s pos_r env in
+        let (_,a,b) = Env.advance_pos i pos_s pos_r new_env in
         (a, b))
       (0, 0)
       sig2

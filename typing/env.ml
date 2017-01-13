@@ -626,8 +626,11 @@ let rec find_module_descr path env =
   match path with
     Pident id ->
       begin try
+        Printf.eprintf "before find_same\n%!";
         let (_p, desc) = EnvTbl.find_same id env.components
-        in desc
+        in
+        Printf.eprintf "after find_same\n%!";
+        desc
       with Not_found ->
         if Ident.persistent id && not (Ident.name id = !current_unit)
         then (find_pers_struct (Ident.name id)).ps_comps
@@ -1509,10 +1512,10 @@ and contains_phase_mty phase env =
     | Mty_functor (_, _, ty_res) ->
         contains_phase_mty phase env ty_res
     | Mty_alias (_, path) ->
-      Printf.eprintf "Mty_alias %s\n" (Path.name path);
-      begin try
+      Printf.eprintf "contains_phase Mty_alias %s\n" (Path.name path);
+      (*begin try*)
         contains_phase_mty phase env (find_module path env).md_type
-      with
+      (*with
       | Not_found
       | Cmi_format.Error _ ->
           (* Module type is abstract or unavailable: we assume it contains
@@ -1520,9 +1523,10 @@ and contains_phase_mty phase env =
           Printf.eprintf "module not found\n(path = %s)\n%!"
             (Path.name path);
           true
-      end
+      end*)
 
 let advance_pos item pos_stat pos_rt env =
+  Printf.eprintf "advance_pos\n%!";
   let print_static = Printf.eprintf "see %s\n%!" in
   let add sf sf' =
     match (sf, sf') with
@@ -1555,7 +1559,6 @@ let advance_pos item pos_stat pos_rt env =
       else
         (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
   | Sig_module (id, decl, sf, _) ->
-      Printf.eprintf "test module %s\n" (Ident.unique_name id);
       let sf = add (sf_of_phase (cur_phase env)) sf in
       if sf = Static then
         (print_static "static module";
@@ -1973,6 +1976,7 @@ and store_extension ~check slot id path ext env renv =
     summary = Env_extension(env.summary, id, ext) }
 
 and store_module ~check slot phase id path md env renv =
+  Printf.eprintf "store_module %s\n%!" (Path.name path);
   let loc = md.md_loc in
   if check then
     check_usage loc id (fun s -> Warnings.Unused_module s)
@@ -1987,10 +1991,11 @@ and store_module ~check slot phase id path md env renv =
         EnvTbl.add None (fun x -> x) id (path, phase) env.phases
           renv.phases);
     components =
+      (Printf.eprintf "adding component %s\n%!" (Ident.name id);
       EnvTbl.add slot (fun x -> `Component x) id
         (path, components_of_module ~deprecated ~loc:md.md_loc
            env Subst.identity path md.md_type)
-        env.components renv.components;
+        env.components renv.components);
     summary = Env_module(env.summary, phase, id, md) }
 
 and store_modtype slot id path info env renv =

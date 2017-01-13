@@ -444,6 +444,7 @@ let undefined_location loc =
                       Const_base(Const_int char)]))
 
 let init_shape target_phase modl =
+  Printf.eprintf "init_shape\n%!";
   let rec init_shape_mod env mty =
     match Mtype.scrape env mty with
       Mty_ident _ ->
@@ -624,6 +625,7 @@ let transl_class_bindings cl_list =
 (* Compile a module expression *)
 
 let rec transl_module cc rootpath target_phase item_postproc mexp =
+  Printf.eprintf "transl_module\n%!";
   let loc = mexp.mod_loc in
   if Env.contains_phase_mty target_phase mexp.mod_env mexp.mod_type then begin
     List.iter (Translattribute.check_attribute_on_module mexp)
