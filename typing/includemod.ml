@@ -503,10 +503,16 @@ and check_modtype_equiv env cxt mty1 mty2 =
      modtypes env cxt Subst.identity mty2 mty1)
   with
     (Tcoerce_none, Tcoerce_none) -> ()
+  | (Tcoerce_structure (pos_cc, id_pos),
+     Tcoerce_structure (pos_cc', id_pos'))
+    when simplify_structure_coercion pos_cc id_pos = Tcoerce_none
+      && simplify_structure_coercion pos_cc' id_pos' = Tcoerce_none -> ()
   | (_c1, _c2) ->
-        Format.eprintf "@[c1 = %a@ c2 = %a@]@."
-        print_coercion _c1 print_coercion _c2;
-        Format.eprintf "\n%!";
+      (*
+      Format.eprintf "@[c1 = %a@ c2 = %a@]@."
+      print_coercion _c1 print_coercion _c2;
+      Format.eprintf "\n%!";
+      *)
       raise(Error [cxt, env, Modtype_permutation])
 
 (* Simplified inclusion check between module types (for Env) *)
