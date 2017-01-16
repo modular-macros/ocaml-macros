@@ -31,9 +31,10 @@ include:
 * a use of the reserved words `static` or `macro` as an identifier;
 * a use of `$` as a regular operator.
 
-camlp4 is known to be broken with this switch. In addition to requiring fixes to
-the syntax tree model, the code of camlp4 triggers what seems to be a bug in the
-`macro` version of the compiler.  I'm working on a fix.
+If you need to install Camlp4, you will have to pin it to
+https://github.com/OlivierNicole/camlp4[this repository]. Please be aware that
+this version of Camlp4 is only provided for backward-compatibility and can only
+generate "pre-macro" OCaml, i.e. it cannot generate any of the macro constructs.
 
 == Contributing
 
