@@ -444,7 +444,6 @@ let undefined_location loc =
                       Const_base(Const_int char)]))
 
 let init_shape target_phase modl =
-  Printf.eprintf "init_shape\n%!";
   let rec init_shape_mod env mty =
     match Mtype.scrape env mty with
       Mty_ident _ ->
