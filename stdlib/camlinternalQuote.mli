@@ -257,9 +257,35 @@ module Lambda : sig
 
   end
 
-  module Lambda : sig
+  module Attribute : sig
+
+    val unmarshal_inline_attr : string -> inline_attribute
+
+    val unmarshal_specialise_attr : string -> specialise_attribute
+
+    val unmarshal_function_kind : string -> function_kind
+
+    val unmarshal_function_attr : string -> function_attribute
+
+    val unmarshal_let_kind : string -> let_kind
+
+    val unmarshal_value_kind : string -> value_kind
+
+    val unmarshal_direction_flag : string -> direction_flag
+
+  end
+
+  module Primitive : sig
+
+    val unmarshal : string -> primitive
+
+  end
+
+  module Exp : sig
 
     type t
+
+    val var : Name.t -> t
 
     val constant : Constant.t -> t
 

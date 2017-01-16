@@ -4,6 +4,53 @@ open Types
 open Typedtree
 open Lambda
 
+let use comb =
+  Lazy.force comb
+
+let lambda_unit =
+  Lconst (Const_pointer 0)
+
+let string s =
+  Lconst (Const_base (Const_string(s, None)))
+
+let int i =
+  Lconst (Const_base (Const_int i))
+
+let marshal_loc (x : Location.t) =
+  let s = Marshal.to_string x [] in
+    string s
+
+let true_ = Lconst(Const_pointer 1)
+
+let false_ = Lconst(Const_pointer 0)
+
+let quote_bool b =
+  if b then true_ else false_
+
+let none =  Lconst(Const_pointer 0)
+
+let some x = Lprim(Pmakeblock(0, Immutable, None), [x], Location.none)
+
+let option opt =
+  match opt with
+  | None -> none
+  | Some x -> some x
+
+let nil = Lconst(Const_pointer 0)
+
+let cons hd tl = Lprim(Pmakeblock(0, Immutable, None), [hd; tl], Location.none)
+
+let rec list l =
+  match l with
+  | [] -> nil
+  | hd :: tl -> cons hd (list tl)
+
+let pair (x, y) =
+  Lprim(Pmakeblock(0, Immutable, None), [x; y], Location.none)
+
+let triple (x, y, z) =
+  Lprim(Pmakeblock(0, Immutable, None), [x; y; z], Location.none)
+
 module Parsetree = struct
 
   let stdmod_path = Ident.lift_string "CamlinternalQuote"
@@ -57,6 +104,17 @@ module Parsetree = struct
           fatal_error @@
             "Primitive " ^ stdmod_path ^ "." ^ parsetree_mod ^ "." ^ modname
             ^ "." ^ field ^" not found.")
+
+  let apply loc comb args =
+    let comb = Lazy.force comb in
+    Lapply
+    { ap_func = comb;
+      ap_args = args;
+      ap_loc = loc;
+      ap_should_be_tailcall = false;
+      ap_inlined = Default_inline;
+      ap_specialised = Default_specialise;
+    }
 
   module Loc = struct
     let none = combinator "Loc" "none"
@@ -172,27 +230,6 @@ module Parsetree = struct
     let to_closed = combinator "Exp" "to_closed"
   end
 
-  let use comb =
-    Lazy.force comb
-
-  let apply loc comb args =
-    let comb = Lazy.force comb in
-    Lapply
-    { ap_func = comb;
-      ap_args = args;
-      ap_loc = loc;
-      ap_should_be_tailcall = false;
-      ap_inlined = Default_inline;
-      ap_specialised = Default_specialise;
-    }
-
-  let string s =
-    Lconst (Const_base (Const_string(s, None)))
-
-  let marshal_loc (x : Location.t) =
-    let s = Marshal.to_string x [] in
-      string s
-
   let marshal_name (x : string loc) =
     let s = Marshal.to_string x [] in
       string s
@@ -208,34 +245,6 @@ module Parsetree = struct
   let marshal_arg_label (x : Asttypes.arg_label) =
     let s = Marshal.to_string x [] in
       string s
-
-  let true_ = Lconst(Const_pointer 1)
-
-  let false_ = Lconst(Const_pointer 0)
-
-  let none =  Lconst(Const_pointer 0)
-
-  let some x = Lprim(Pmakeblock(0, Immutable, None), [x], Location.none)
-
-  let option opt =
-    match opt with
-    | None -> none
-    | Some x -> some x
-
-  let nil = Lconst(Const_pointer 0)
-
-  let cons hd tl = Lprim(Pmakeblock(0, Immutable, None), [hd; tl], Location.none)
-
-  let rec list l =
-    match l with
-    | [] -> nil
-    | hd :: tl -> cons hd (list tl)
-
-  let pair (x, y) =
-    Lprim(Pmakeblock(0, Immutable, None), [x; y], Location.none)
-
-  let triple (x, y, z) =
-    Lprim(Pmakeblock(0, Immutable, None), [x; y; z], Location.none)
 
   let func id body =
     Lfunction {
@@ -800,6 +809,308 @@ module Parsetree = struct
 
   let transl_close_expression loc lam =
     apply loc Exp.to_closed [lam]
+
+end
+
+module Lam = struct
+
+  let stdmod_path = Ident.lift_string "CamlinternalQuote"
+  let parsetree_mod = "Lambda"
+
+  let camlinternalQuote =
+    lazy
+      (match Env.open_pers_signature
+         stdmod_path Env.initial_safe_string with
+       | exception Not_found ->
+           fatal_error @@ "Module " ^ stdmod_path ^ " unavailable."
+       | env -> env)
+
+  let static_pos =
+    function
+    | Path.Uniphase (Static, i) -> i
+    | Path.Biphase (i, _) -> i
+    | _ -> fatal_error (stdmod_path ^ " primitive at unexpected position.")
+
+  let combinator modname field =
+    lazy
+      (let env = Lazy.force camlinternalQuote in
+       let lid =
+         Longident.Ldot(
+           Longident.Ldot (Longident.Lident parsetree_mod, modname),
+           field)
+       in
+       match Env.lookup_value lid env with
+       | (Path.Pdot (
+            Path.Pdot (
+              Path.Pdot (
+                Path.Pident ident, (* ~CamlinternalQuote *)
+                _, (* Lambda *)
+                pos1),
+              _, (* modname *)
+              pos2),
+            _, (* field *)
+            pos3), _ (* value_description *)) ->
+           Lprim(Pfield (static_pos pos3),
+             [Lprim(Pfield (static_pos pos2),
+                   [Lprim(Pfield (static_pos pos1),
+                         [Lprim(Pgetglobal ident, [], Location.none)],
+                          Location.none)],
+                   Location.none)],
+             Location.none)
+       | _ ->
+           fatal_error @@
+             "Primitive " ^ stdmod_path ^ "." ^ parsetree_mod ^ "." ^ modname
+             ^ "." ^ field ^ " not found."
+       | exception Not_found ->
+          fatal_error @@
+            "Primitive " ^ stdmod_path ^ "." ^ parsetree_mod ^ "." ^ modname
+            ^ "." ^ field ^" not found.")
+
+  let apply comb args =
+    let comb = Lazy.force comb in
+    Lapply
+    { ap_func = comb;
+      ap_args = args;
+      ap_loc = Location.none;
+      ap_should_be_tailcall = false;
+      ap_inlined = Default_inline;
+      ap_specialised = Default_specialise;
+    }
+
+  module Loc = struct
+    let unmarshal = combinator "Loc" "unmarshal"
+  end
+
+  module Constant = struct
+    let unmarshal = combinator "Constant" "unmarshal"
+  end
+
+  module Name = struct
+    let mk = combinator "Name" "mk"
+    (*let unmarshal = combinator "Name" "unmarshal"*)
+  end
+
+  module Attribute = struct
+    let unmarshal_inline_attr =
+      combinator "Attribute" "unmarshal_inline_attr"
+    let unmarshal_specialise_attr =
+      combinator "Attribute" "unmarshal_specialise_attr"
+    let unmarshal_function_kind =
+      combinator "Attribute" "unmarshal_function_kind"
+    let unmarshal_function_attr =
+      combinator "Attribute" "unmarshal_function_attr"
+    let unmarshal_let_kind =
+      combinator "Attribute" "unmarshal_let_kind"
+    let unmarshal_value_kind =
+      combinator "Attribute" "unmarshal_value_kind"
+    let unmarshal_direction_flag =
+      combinator "Attribute" "unmarshal_direction_flag"
+  end
+
+  module Exp = struct
+    let var = combinator "Exp" "var"
+    let constant = combinator "Exp" "constant"
+    let application = combinator "Exp" "application"
+    let function_ = combinator "Exp" "function_"
+    let let_ = combinator "Exp" "let_"
+    let letrec = combinator "Exp" "letrec"
+    let primitive = combinator "Exp" "primitive"
+    let switch = combinator "Exp" "switch"
+    let stringswitch = combinator "Exp" "stringswitch"
+    let staticraise = combinator "Exp" "staticraise"
+    let staticcatch = combinator "Exp" "staticcatch"
+    let trywith = combinator "Exp" "trywith"
+    let ifthenelse = combinator "Exp" "ifthenelse"
+    let sequence = combinator "Exp" "sequence"
+    let while_ = combinator "Exp" "while_"
+    let for_ = combinator "Exp" "for_"
+    let assign = combinator "Exp" "assign"
+  end
+
+  module Primitive = struct
+    let unmarshal = combinator "Primitive" "unmarshal"
+  end
+
+  let marshal_constant (x : Lambda.structured_constant) =
+    let s = Marshal.to_string x [] in
+      string s
+
+  let quote_loc (x : Location.t) =
+    let s = marshal_loc x in
+    apply Loc.unmarshal [s]
+
+  let quote_constant (x : Lambda.structured_constant) =
+    let s = marshal_constant x in
+    apply Constant.unmarshal [s]
+
+  let quote_ident id =
+    let s = string (Ident.name id) in
+    apply Name.mk [s]
+
+  let quote_inline_attr (attr : inline_attribute) =
+    let s = Marshal.to_string attr [] in
+    apply Attribute.unmarshal_inline_attr [string s]
+
+  let quote_specialise_attr (attr : specialise_attribute) =
+    let s = Marshal.to_string attr [] in
+    apply Attribute.unmarshal_specialise_attr [string s]
+
+  let quote_fn_kind (k : function_kind) =
+    let s = Marshal.to_string k [] in
+    apply Attribute.unmarshal_function_kind [string s]
+
+  let quote_fn_attr (attr : function_attribute) =
+    let s = Marshal.to_string attr [] in
+    apply Attribute.unmarshal_function_attr [string s]
+
+  let quote_let_kind (k : let_kind) =
+    let s = Marshal.to_string k [] in
+    apply Attribute.unmarshal_let_kind [string s]
+
+  let quote_value_kind (k : value_kind) =
+    let s = Marshal.to_string k [] in
+    apply Attribute.unmarshal_value_kind [string s]
+
+  let quote_prim (p : primitive) =
+    let s = Marshal.to_string p [] in
+    apply Primitive.unmarshal [string s]
+
+  let quote_direction_flag (f : direction_flag) =
+    let s = Marshal.to_string f [] in
+    apply Attribute.unmarshal_direction_flag [string s]
+
+  let rec lift_lambda =
+    function
+    | Lvar id -> apply Exp.var [quote_ident id]
+    | Lconst cst -> apply Exp.constant [quote_constant cst]
+    | Lapply {
+        ap_func;
+        ap_args;
+        ap_loc;
+        ap_should_be_tailcall;
+        ap_inlined;
+        ap_specialised;
+      } ->
+        apply Exp.application [
+          quote_loc ap_loc;
+          lift_lambda ap_func;
+          list (List.map lift_lambda ap_args);
+          quote_bool ap_should_be_tailcall;
+          quote_inline_attr ap_inlined;
+          quote_specialise_attr ap_specialised;
+        ]
+    | Lfunction {
+        kind;
+        params;
+        body;
+        attr;
+        loc;
+      } ->
+        apply Exp.function_ [
+          quote_loc loc;
+          quote_fn_kind kind;
+          list (List.map quote_ident params);
+          lift_lambda body;
+          quote_fn_attr attr;
+        ]
+    | Llet (lkind, vkind, id, v, body) ->
+        apply Exp.let_ [
+          quote_let_kind lkind;
+          quote_value_kind vkind;
+          quote_ident id;
+          lift_lambda v;
+          lift_lambda body;
+        ]
+    | Lletrec (vbs, body) ->
+        apply Exp.letrec [
+          list (List.map quote_vb vbs);
+          lift_lambda body;
+        ]
+    | Lprim (prim, args, loc) ->
+        apply Exp.primitive [
+          quote_loc loc;
+          quote_prim prim;
+          list (List.map lift_lambda args);
+        ]
+    | Lswitch (lam, {
+        sw_numconsts;
+        sw_consts;
+        sw_numblocks;
+        sw_blocks;
+        sw_failaction;
+      }) ->
+        apply Exp.switch [
+          lift_lambda lam;
+          int sw_numconsts;
+          list (List.map (fun (i, l) ->
+            pair (int i, lift_lambda l))
+            sw_consts);
+          int sw_numblocks;
+          list (List.map (fun (i, l) ->
+            pair (int i, lift_lambda l))
+            sw_blocks);
+          option (Misc.may_map lift_lambda sw_failaction);
+        ]
+    | Lstringswitch (lam, cases, lam_opt, loc) ->
+        apply Exp.stringswitch [
+          quote_loc loc;
+          lift_lambda lam;
+          list (List.map (fun (str, lam) ->
+            pair (string str, lift_lambda lam)) cases);
+          option (Misc.may_map lift_lambda lam_opt);
+        ]
+    | Lstaticraise (i, lams) ->
+        apply Exp.staticraise [
+          int i;
+          list (List.map lift_lambda lams);
+        ]
+    | Lstaticcatch (lam, (i, ids), body) ->
+        apply Exp.staticcatch [
+          lift_lambda lam;
+          pair (int i, list (List.map quote_ident ids));
+          lift_lambda body;
+        ]
+    | Ltrywith (lam, id, body) ->
+        apply Exp.trywith [
+          lift_lambda lam;
+          quote_ident id;
+          lift_lambda body;
+        ]
+    | Lifthenelse (cond, ift, iff) ->
+        apply Exp.ifthenelse [
+          lift_lambda cond;
+          lift_lambda ift;
+          lift_lambda iff;
+        ]
+    | Lsequence (l, l') ->
+        apply Exp.sequence [
+          lift_lambda l;
+          lift_lambda l';
+        ]
+    | Lwhile (cond, body) ->
+        apply Exp.while_ [
+          lift_lambda cond;
+          lift_lambda body;
+        ]
+    | Lfor (id, init, final, direction, body) ->
+        apply Exp.for_ [
+          quote_ident id;
+          lift_lambda init;
+          lift_lambda final;
+          quote_direction_flag direction;
+          lift_lambda body;
+        ]
+    | Lassign (id, lam) ->
+        apply Exp.assign [
+          quote_ident id;
+          lift_lambda lam;
+        ]
+    | _ -> lambda_unit
+
+  and quote_vb (id, lam) =
+    let id = quote_ident id in
+    let lam = lift_lambda lam in
+    pair (id, lam)
 
 end
 

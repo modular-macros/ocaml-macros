@@ -1153,9 +1153,44 @@ module Lambda = struct
 
   end
 
-  module Lambda = struct
+  module Attribute = struct
+
+    let unmarshal_inline_attr s : inline_attribute =
+      Marshal.from_string s 0
+
+    let unmarshal_specialise_attr s : specialise_attribute =
+      Marshal.from_string s 0
+
+    let unmarshal_function_kind s : function_kind =
+      Marshal.from_string s 0
+
+    let unmarshal_function_attr s : function_attribute =
+      Marshal.from_string s 0
+
+    let unmarshal_let_kind s : let_kind =
+      Marshal.from_string s 0
+
+    let unmarshal_value_kind s : value_kind =
+      Marshal.from_string s 0
+
+    let unmarshal_direction_flag s : direction_flag =
+      Marshal.from_string s 0
+
+  end
+
+  module Primitive = struct
+
+    let unmarshal s : primitive =
+      Marshal.from_string s 0
+      
+  end
+
+  module Exp = struct
 
     type t = lambda
+
+    let var name =
+      Lvar name
 
     let constant c =
       Lconst c
