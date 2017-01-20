@@ -1146,21 +1146,26 @@ and transl_exp0 e =
       Translquote.quote_expression transl_exp !path_clos exp
   | Texp_escape e ->
     begin
-      match !splice_array with
-      | Some arr_ref ->
-        let parsetree = Array.get !arr_ref !splice_index in
-        incr splice_index;
-        (* Deactivate all warnings while compiling splices *)
-        let backup = Warnings.backup () in
-        Warnings.deactivate_all ();
-        let lam =
-          transl_exp @@
-          Typecore.type_expression (Env.with_phase_down e.exp_env) parsetree
-        in
-        Warnings.restore backup;
-        lam
-      | None ->
-        lambda_unit
+      (* If toplevel splice *)
+      if Env.cur_stage e.exp_env = 0 then
+        match !splice_array with
+        | Some arr_ref ->
+          let parsetree = Array.get !arr_ref !splice_index in
+          incr splice_index;
+          (* Deactivate all warnings while compiling splices *)
+          let backup = Warnings.backup () in
+          Warnings.deactivate_all ();
+          let lam =
+            transl_exp @@
+            Typecore.type_expression (Env.with_phase_down e.exp_env) parsetree
+          in
+          Warnings.restore backup;
+          lam
+        | None ->
+          lambda_unit
+      else (* else if we are inside a quote *)
+        (* translate and indicate that the result should not be "lifted". *)
+        Lescape (transl_exp e)
     end
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))

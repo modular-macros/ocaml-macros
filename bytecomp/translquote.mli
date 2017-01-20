@@ -11,7 +11,8 @@ val transl_close_expression : Location.t -> lambda -> lambda
 (** Calls [CamlinternalQuote.Exp.local] to bind a fresh name to an identifier *)
 val wrap_local : Location.t -> Ident.t -> string loc -> lambda -> lambda
 
-val path_arg : Location.t -> Path.t -> lambda
+(** Quotes a path. *)
+val path_arg : Location.t -> lambda -> lambda
 
 (** [transl_clos_field id s i] returns the lambda code constructing
     [Lfrommacro (lid, s, i)], where [lid] is the contents of the variable

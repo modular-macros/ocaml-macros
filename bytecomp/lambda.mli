@@ -250,6 +250,9 @@ type lambda =
   | Lsend of meth_kind * lambda * lambda * lambda list * Location.t
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
+  (* Denotes a lambda that should not be lifted in a lambda quote. Should only
+   * exist in the result of [Translcore.transl_exp]. *)
+  | Lescape of lambda
 
 and lfunction =
   { kind: function_kind;

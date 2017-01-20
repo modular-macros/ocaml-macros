@@ -232,6 +232,7 @@ type lambda =
   | Lsend of meth_kind * lambda * lambda * lambda list * Location.t
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
+  | Lescape of lambda
 
 and lfunction =
   { kind: function_kind;
