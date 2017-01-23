@@ -51,6 +51,12 @@ let pair (x, y) =
 let triple (x, y, z) =
   Lprim(Pmakeblock(0, Immutable, None), [x; y; z], Location.none)
 
+let first block =
+  Lprim (Pfield 0, [block], Location.none)
+
+let second block =
+  Lprim (Pfield 1, [block], Location.none)
+
 module Lam = struct
 
   let stdmod_path = Ident.lift_string "CamlinternalQuote"
