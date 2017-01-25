@@ -919,208 +919,200 @@ module Parsetree = struct
     let env = e.exp_env in
     let loc = e.exp_loc in
     match e.exp_desc with
-    | Texp_escape exp ->
-        assert (stage <= 0);
-        transl exp
-    | _ ->
+    | Texp_ident(path, lid, _) ->
       begin
-        (* Expression is not an escape, so translate it to lambda and then lift
-         * that lambda. *)
-        let lam = transl e in
-        let lam_quote = Lam.lift_lambda lam in
-        let parsetree_quote =
-          match e.exp_desc with
-          | Texp_ident(path, lid, _) ->
-            begin
-              let quote_path path =
-                let env = e.exp_env in
-                (* If cross-stage, quote as identifier (should be global).
-                 * Otherwise, quote as var, i.e. bound variable *)
-                if Env.cur_stage env <> Env.find_stage path env then
-                  let lid = lid_of_path path in
-                  let lid = mkloc lid loc in
-                  let lid = apply loc Identifier.unmarshal [marshal_ident lid] in
-                  apply loc Exp.ident [quote_loc loc; lid]
-                else begin
-                  match path with
-                  | Path.Pident id ->
-                      apply loc Exp.var [quote_loc loc; Lvar id]
-                  | _ ->
-                      fatal_error "Cross-stage identifier has compound path"
-                end
-              in
-              match pclos with
-              | None -> quote_path path
-              | Some (path_id, map) ->
-                  try
-                    let field_idx = Env.PathMap.find path map in
-                    let ppf = Format.str_formatter in
-                    let open Parsetree in
-                    Pprintast.expression ppf {
-                      pexp_desc = (Pexp_ident lid);
-                      pexp_loc = Location.none;
-                      pexp_attributes = []; };
-                    let str = Format.flush_str_formatter () in
-                    let lid =
-                      transl_clos_field loc path_id str field_idx
-                    in
-                    apply loc Exp.ident [quote_loc loc; lid]
-                  with Not_found ->
-                    quote_path path
-            end
-          | Texp_constant const ->
-              let const = quote_constant loc const in
-              apply loc Exp.constant [quote_loc loc; const]
-          | Texp_let(rf, vbs, body) -> begin
-              match rf with
-              | Nonrecursive ->
-                  quote_nonrecursive_let transl pclos stage vbs body
-              | Recursive ->
-                  quote_recursive_let transl pclos stage loc vbs body
-            end
-          | Texp_function(label, cases, _) -> begin
-              let cbs = List.map (case_binding false transl pclos stage) cases in
-              match cbs with
-              | [Non_binding(pat, exp)] ->
-                  let label = quote_arg_label loc label in
-                  apply loc Exp.fun_nonbinding [quote_loc loc; label; pat; exp]
-              | [Simple(name, body)] ->
-                  let label = quote_arg_label loc label in
-                  apply loc Exp.fun_simple [quote_loc loc; name; label; none; body]
-              | [Pattern(names, body)] ->
-                  let label = quote_arg_label loc label in
-                  apply loc Exp.fun_pattern [quote_loc loc; names; label; none; body]
-              | cases ->
-                  let cases = List.map (quote_case_binding loc) cases in
-                  apply loc Exp.function_ [quote_loc loc; list cases]
-            end
-          | Texp_apply(fn, args) ->
-              let fn = quote_expression transl pclos stage fn in
-              let args = List.filter (fun (_, exp) -> exp <> None) args in
-              let args =
-                List.map
-                  (fun (lbl, exp) ->
-                     match exp with
-                     | None -> assert false
-                     | Some exp ->
-                         let lbl = quote_arg_label loc lbl in
-                         let exp = quote_expression transl pclos stage exp in
-                           pair (lbl, exp))
-                  args
-              in
-              apply loc Exp.apply [quote_loc loc; fn; list args]
-          | Texp_match(exp, cases, exn_cases, _) ->
-              let exp = quote_expression transl pclos stage exp in
-              let cases = List.map (quote_case false transl pclos stage loc) cases in
-              let exn_cases =
-                List.map (quote_case true transl pclos stage loc) exn_cases
-              in
-              apply loc Exp.match_ [quote_loc loc; exp; list (cases @ exn_cases)]
-          | Texp_try(exp, cases) ->
-              let exp = quote_expression transl pclos stage exp in
-              let cases = List.map (quote_case false transl pclos stage loc) cases in
-              apply loc Exp.try_ [quote_loc loc; exp; list cases]
-          | Texp_tuple exps ->
-              let exps = List.map (quote_expression transl pclos stage) exps in
-              apply loc Exp.tuple [quote_loc loc; list exps]
-          | Texp_construct(lid, constr, args) ->
-              let constr = quote_variant_constructor env lid.loc constr in
-              let args =
-                match args with
-                | [] -> None
-                | [arg] ->
-                    let arg = quote_expression transl pclos stage arg in
-                    Some arg
-                | _ :: _ ->
-                    let args = List.map (quote_expression transl pclos stage) args in
-                    Some (apply loc Exp.tuple [quote_loc loc; list args])
-              in
-              apply loc Exp.construct [quote_loc loc; constr; option args]
-          | Texp_variant(variant, argo) ->
-              let variant = quote_variant loc variant in
-              let argo = Misc.may_map (quote_expression transl pclos stage) argo in
-              apply loc Exp.variant [quote_loc loc; variant; option argo]
-          | Texp_record { fields=fields; extended_expression=base } ->
-              let lbl_exps =
-                List.map
-                  (function
-                   | (lbl, (Overridden (lid, exp))) ->
-                     let lbl = quote_record_label env (lid : Longident.t loc).loc lbl in
-                     let exp = quote_expression transl pclos stage exp in
-                    pair (lbl, exp)
-                   | _ -> assert false (* unused *)
-                  ) @@
-                List.filter
-                  (function
-                   | (_, (Overridden _)) -> true
-                   | _ -> false) @@
-                Array.to_list fields
-              in
-              let base = Misc.may_map (quote_expression transl pclos stage) base in
-              apply loc Exp.record [quote_loc loc; list lbl_exps; option base]
-          | Texp_field(rcd, lid, lbl) ->
-              let rcd = quote_expression transl pclos stage rcd in
-              let lbl = quote_record_label env lid.loc lbl in
-              apply loc Exp.field [quote_loc loc; rcd; lbl]
-          | Texp_setfield(rcd, lid, lbl, exp) ->
-              let rcd = quote_expression transl pclos stage rcd in
-              let lbl = quote_record_label env lid.loc lbl in
-              let exp = quote_expression transl pclos stage exp in
-              apply loc Exp.setfield [quote_loc loc; rcd; lbl; exp]
-          | Texp_array exps ->
-              let exps = List.map (quote_expression transl pclos stage) exps in
-              apply loc Exp.array [quote_loc loc; list exps]
-          | Texp_ifthenelse(cond, then_, else_) ->
-              let cond = quote_expression transl pclos stage cond in
-              let then_ = quote_expression transl pclos stage then_ in
-              let else_ = Misc.may_map (quote_expression transl pclos stage) else_ in
-              apply loc Exp.ifthenelse [quote_loc loc; cond; then_; option else_]
-          | Texp_sequence(exp1, exp2) ->
-              let exp1 = quote_expression transl pclos stage exp1 in
-              let exp2 = quote_expression transl pclos stage exp2 in
-              apply loc Exp.sequence [quote_loc loc; exp1; exp2]
-          | Texp_while(cond, body) ->
-              let cond = quote_expression transl pclos stage cond in
-              let body = quote_expression transl pclos stage body in
-              apply loc Exp.while_ [quote_loc loc; cond; body]
-          | Texp_for(id, pat, low, high, dir, body) ->
-              let low = quote_expression transl pclos stage low in
-              let high = quote_expression transl pclos stage high in
-              let dir =
-                match dir with
-                | Asttypes.Upto -> true_
-                | Asttypes.Downto -> false_
-              in
-              let name =
-                match pat.Parsetree.ppat_desc with
-                | Parsetree.Ppat_var name -> name
-                | Parsetree.Ppat_any ->
-                    Location.mkloc "_" pat.Parsetree.ppat_loc
-                | _ -> assert false
-              in
-              let name = quote_name name.loc name in
-              let body = quote_expression transl pclos stage body in
-              apply loc Exp.for_
-                    [quote_loc loc; name; low; high; dir; func id body]
-          | Texp_send(obj, meth, _) ->
-              let obj = quote_expression transl pclos stage obj in
-              let meth = quote_method loc meth in
-              apply loc Exp.send [quote_loc loc; obj; meth]
-          | Texp_assert exp ->
-              let exp = quote_expression transl pclos stage exp in
-              apply loc Exp.assert_ [quote_loc loc; exp]
-          | Texp_lazy exp ->
-              let exp = quote_expression transl pclos stage exp in
-              apply loc Exp.lazy_ [quote_loc loc; exp]
-          | Texp_quote exp ->
-              let exp = quote_expression transl pclos (stage + 1) exp in
-              apply loc Exp.quote [quote_loc loc; exp]
-          | Texp_new _ | Texp_instvar _ | Texp_setinstvar _ | Texp_override _
-          | Texp_letmodule _ | Texp_object _ | Texp_pack _ | Texp_unreachable
-          | Texp_letexception _ | Texp_extension_constructor _ ->
-              fatal_error "Expression cannot be quoted"
+        let quote_path path =
+          let env = e.exp_env in
+          (* If cross-stage, quote as identifier (should be global).
+           * Otherwise, quote as var, i.e. bound variable *)
+          if Env.cur_stage env <> Env.find_stage path env then
+            let lid = lid_of_path path in
+            let lid = mkloc lid loc in
+            let lid = apply loc Identifier.unmarshal [marshal_ident lid] in
+            apply loc Exp.ident [quote_loc loc; lid]
+          else begin
+            match path with
+            | Path.Pident id ->
+                apply loc Exp.var [quote_loc loc; Lvar id]
+            | _ ->
+                fatal_error "Cross-stage identifier has compound path"
+          end
         in
-        (* Return the 
+        match pclos with
+        | None -> quote_path path
+        | Some (path_id, map) ->
+            try
+              let field_idx = Env.PathMap.find path map in
+              let ppf = Format.str_formatter in
+              let open Parsetree in
+              Pprintast.expression ppf {
+                pexp_desc = (Pexp_ident lid);
+                pexp_loc = Location.none;
+                pexp_attributes = []; };
+              let str = Format.flush_str_formatter () in
+              let lid =
+                transl_clos_field loc path_id str field_idx
+              in
+              apply loc Exp.ident [quote_loc loc; lid]
+            with Not_found ->
+              quote_path path
+      end
+    | Texp_constant const ->
+        let const = quote_constant loc const in
+        apply loc Exp.constant [quote_loc loc; const]
+    | Texp_let(rf, vbs, body) -> begin
+        match rf with
+        | Nonrecursive ->
+            quote_nonrecursive_let transl pclos stage vbs body
+        | Recursive ->
+            quote_recursive_let transl pclos stage loc vbs body
+      end
+    | Texp_function(label, cases, _) -> begin
+        let cbs = List.map (case_binding false transl pclos stage) cases in
+        match cbs with
+        | [Non_binding(pat, exp)] ->
+            let label = quote_arg_label loc label in
+            apply loc Exp.fun_nonbinding [quote_loc loc; label; pat; exp]
+        | [Simple(name, body)] ->
+            let label = quote_arg_label loc label in
+            apply loc Exp.fun_simple [quote_loc loc; name; label; none; body]
+        | [Pattern(names, body)] ->
+            let label = quote_arg_label loc label in
+            apply loc Exp.fun_pattern [quote_loc loc; names; label; none; body]
+        | cases ->
+            let cases = List.map (quote_case_binding loc) cases in
+            apply loc Exp.function_ [quote_loc loc; list cases]
+      end
+    | Texp_apply(fn, args) ->
+        let fn = quote_expression transl pclos stage fn in
+        let args = List.filter (fun (_, exp) -> exp <> None) args in
+        let args =
+          List.map
+            (fun (lbl, exp) ->
+               match exp with
+               | None -> assert false
+               | Some exp ->
+                   let lbl = quote_arg_label loc lbl in
+                   let exp = quote_expression transl pclos stage exp in
+                     pair (lbl, exp))
+            args
+        in
+        apply loc Exp.apply [quote_loc loc; fn; list args]
+    | Texp_match(exp, cases, exn_cases, _) ->
+        let exp = quote_expression transl pclos stage exp in
+        let cases = List.map (quote_case false transl pclos stage loc) cases in
+        let exn_cases =
+          List.map (quote_case true transl pclos stage loc) exn_cases
+        in
+        apply loc Exp.match_ [quote_loc loc; exp; list (cases @ exn_cases)]
+    | Texp_try(exp, cases) ->
+        let exp = quote_expression transl pclos stage exp in
+        let cases = List.map (quote_case false transl pclos stage loc) cases in
+        apply loc Exp.try_ [quote_loc loc; exp; list cases]
+    | Texp_tuple exps ->
+        let exps = List.map (quote_expression transl pclos stage) exps in
+        apply loc Exp.tuple [quote_loc loc; list exps]
+    | Texp_construct(lid, constr, args) ->
+        let constr = quote_variant_constructor env lid.loc constr in
+        let args =
+          match args with
+          | [] -> None
+          | [arg] ->
+              let arg = quote_expression transl pclos stage arg in
+              Some arg
+          | _ :: _ ->
+              let args = List.map (quote_expression transl pclos stage) args in
+              Some (apply loc Exp.tuple [quote_loc loc; list args])
+        in
+        apply loc Exp.construct [quote_loc loc; constr; option args]
+    | Texp_variant(variant, argo) ->
+        let variant = quote_variant loc variant in
+        let argo = Misc.may_map (quote_expression transl pclos stage) argo in
+        apply loc Exp.variant [quote_loc loc; variant; option argo]
+    | Texp_record { fields=fields; extended_expression=base } ->
+        let lbl_exps =
+          List.map
+            (function
+             | (lbl, (Overridden (lid, exp))) ->
+               let lbl = quote_record_label env (lid : Longident.t loc).loc lbl in
+               let exp = quote_expression transl pclos stage exp in
+              pair (lbl, exp)
+             | _ -> assert false (* unused *)
+            ) @@
+          List.filter
+            (function
+             | (_, (Overridden _)) -> true
+             | _ -> false) @@
+          Array.to_list fields
+        in
+        let base = Misc.may_map (quote_expression transl pclos stage) base in
+        apply loc Exp.record [quote_loc loc; list lbl_exps; option base]
+    | Texp_field(rcd, lid, lbl) ->
+        let rcd = quote_expression transl pclos stage rcd in
+        let lbl = quote_record_label env lid.loc lbl in
+        apply loc Exp.field [quote_loc loc; rcd; lbl]
+    | Texp_setfield(rcd, lid, lbl, exp) ->
+        let rcd = quote_expression transl pclos stage rcd in
+        let lbl = quote_record_label env lid.loc lbl in
+        let exp = quote_expression transl pclos stage exp in
+        apply loc Exp.setfield [quote_loc loc; rcd; lbl; exp]
+    | Texp_array exps ->
+        let exps = List.map (quote_expression transl pclos stage) exps in
+        apply loc Exp.array [quote_loc loc; list exps]
+    | Texp_ifthenelse(cond, then_, else_) ->
+        let cond = quote_expression transl pclos stage cond in
+        let then_ = quote_expression transl pclos stage then_ in
+        let else_ = Misc.may_map (quote_expression transl pclos stage) else_ in
+        apply loc Exp.ifthenelse [quote_loc loc; cond; then_; option else_]
+    | Texp_sequence(exp1, exp2) ->
+        let exp1 = quote_expression transl pclos stage exp1 in
+        let exp2 = quote_expression transl pclos stage exp2 in
+        apply loc Exp.sequence [quote_loc loc; exp1; exp2]
+    | Texp_while(cond, body) ->
+        let cond = quote_expression transl pclos stage cond in
+        let body = quote_expression transl pclos stage body in
+        apply loc Exp.while_ [quote_loc loc; cond; body]
+    | Texp_for(id, pat, low, high, dir, body) ->
+        let low = quote_expression transl pclos stage low in
+        let high = quote_expression transl pclos stage high in
+        let dir =
+          match dir with
+          | Asttypes.Upto -> true_
+          | Asttypes.Downto -> false_
+        in
+        let name =
+          match pat.Parsetree.ppat_desc with
+          | Parsetree.Ppat_var name -> name
+          | Parsetree.Ppat_any ->
+              Location.mkloc "_" pat.Parsetree.ppat_loc
+          | _ -> assert false
+        in
+        let name = quote_name name.loc name in
+        let body = quote_expression transl pclos stage body in
+        apply loc Exp.for_
+              [quote_loc loc; name; low; high; dir; func id body]
+    | Texp_send(obj, meth, _) ->
+        let obj = quote_expression transl pclos stage obj in
+        let meth = quote_method loc meth in
+        apply loc Exp.send [quote_loc loc; obj; meth]
+    | Texp_assert exp ->
+        let exp = quote_expression transl pclos stage exp in
+        apply loc Exp.assert_ [quote_loc loc; exp]
+    | Texp_lazy exp ->
+        let exp = quote_expression transl pclos stage exp in
+        apply loc Exp.lazy_ [quote_loc loc; exp]
+    | Texp_quote exp ->
+        let exp = quote_expression transl pclos (stage + 1) exp in
+        apply loc Exp.quote [quote_loc loc; exp]
+    | Texp_escape exp ->
+        if stage > 0 then begin
+          let exp = quote_expression transl pclos (stage - 1) exp in
+          apply loc Exp.escape [quote_loc loc; exp]
+        end else transl exp
+    | Texp_new _ | Texp_instvar _ | Texp_setinstvar _ | Texp_override _
+    | Texp_letmodule _ | Texp_object _ | Texp_pack _ | Texp_unreachable
+    | Texp_letexception _ | Texp_extension_constructor _ ->
+        fatal_error "Expression cannot be quoted"
 
   let quote_expression transl pclos exp =
     quote_expression transl pclos 0 exp
@@ -1130,12 +1122,15 @@ module Parsetree = struct
 
 end
 
-let quote_expression = Parsetree.quote_expression
+let quote_expression transl _pclos e =
+  let lam = transl e in
+  lift_lambda lam
 
-let transl_close_expression = Parsetree.transl_close_expression
+let transl_close_expression _loc e = e
 
-let wrap_local = Parsetree.wrap_local
+let wrap_local _loc _id _name lam = lam
 
-let path_arg = Parsetree.path_arg
+let path_arg _loc path =
+  lift_lambda path
 
 let transl_clos_field = Parsetree.transl_clos_field
