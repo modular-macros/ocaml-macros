@@ -24,7 +24,7 @@ open Lambda
     [Translcore]. If [opt] is [None], then splicings will be ignored (i.e.
     translated as the unit lambda). Otherwise, the splice array in [opt] will be
     used to fill all upcoming splicings, starting from index 0. *)
-val set_transl_splices: Parsetree.expression array ref option -> unit
+val set_transl_splices: lambda array ref option -> unit
 val transl_exp: expression -> lambda
 val transl_apply: ?should_be_tailcall:bool
                   -> ?inlined:inline_attribute

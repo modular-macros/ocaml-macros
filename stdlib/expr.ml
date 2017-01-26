@@ -1,4 +1,7 @@
-open ~CamlinternalQuote.Parsetree
+open ~CamlinternalQuote
+open ~CamlinternalQuote.Lambda
+open CamlinternalAST
+open ~CamlinternalLambda
 open ~Pervasives
 
 macro of_bool =
@@ -7,20 +10,24 @@ macro of_bool =
   | true -> <<true>>
 
 macro of_int i =
-  ast_to_expr @@ Exp.constant (Loc.none) @@
-  Constant.integer i
+  lambda_to_expr @@
+  Exp.constant @@ Constant.unmarshal @@ ~Marshal.to_string
+    (Const_base (Pconst_integer (string_of_int i, None))) []
 
 macro of_float f =
-  ast_to_expr @@ Exp.constant (Loc.none) @@
-  Constant.floating f
+  lambda_to_expr @@
+  Exp.constant @@ Constant.unmarshal @@ ~Marshal.to_string
+    (Const_base (Pconst_float (string_of_float f, None))) []
 
 macro of_char c =
-  ast_to_expr @@ Exp.constant (Loc.none) @@
-  Constant.char c
+  lambda_to_expr @@
+  Exp.constant @@ Constant.unmarshal @@ ~Marshal.to_string
+    (Const_base (Pconst_char c)) []
 
 macro of_string s =
-  ast_to_expr @@ Exp.constant (Loc.none) @@
-  Constant.string s
+  lambda_to_expr @@
+  Exp.constant @@ Constant.unmarshal @@ ~Marshal.to_string
+    (Const_base (Pconst_string (s, None))) []
 
 macro rec of_list f = function
   | [] -> << [] >>

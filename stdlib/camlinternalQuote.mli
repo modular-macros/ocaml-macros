@@ -223,8 +223,6 @@ module Parsetree : sig
 
   end
 
-  val ast_to_expr : Exp.t -> 'a expr
-
 end
 
 module Lambda : sig
@@ -327,3 +325,5 @@ module Lambda : sig
   end
 
 end
+
+val lambda_to_expr : Lambda.Exp.t -> 'a expr

@@ -583,6 +583,8 @@ let rec lam ppf = function
               lam expr
   | Lifused(id, expr) ->
       fprintf ppf "@[<2>(ifused@ %a@ %a)@]" Ident.print id lam expr
+  | Lescape expr ->
+      fprintf ppf "@[<2>(escape@ %a)@]" lam expr
 
 and sequence ppf = function
   | Lsequence(l1, l2) ->

@@ -25,7 +25,7 @@ let run_static ppf lam =
       Symtable.check_global_initialized 1 reloc;
       Symtable.update_global_table ();
       let splices = (Meta.reify_bytecode code code_size) () in
-      let splices : Parsetree.expression array = Obj.obj splices in
+      let splices : Lambda.lambda array = Obj.obj splices in
       splices
     end else if Sys.backend_type = Sys.Native then begin
       let open Filename in
@@ -60,7 +60,7 @@ let run_static ppf lam =
       end;
       Sys.remove execfilename;
       let ic = open_in resultfilename in
-      let splices : Parsetree.expression array = Marshal.from_channel ic in
+      let splices : Lambda.lambda array = Marshal.from_channel ic in
       close_in ic;
       Sys.remove resultfilename;
       splices
@@ -69,18 +69,11 @@ let run_static ppf lam =
   Symtable.reset ();
   Bytelink.reset ();
   let n = Array.length splices in
-  if !Clflags.dump_parsetree then
+  if !Clflags.dump_lambda || !Clflags.dump_rawlambda then
     for i = 0 to n-1 do
       Format.fprintf ppf "splice #%d:\n" (i + 1);
-      Printast.expression 0 ppf splices.(i);
+      Printlambda.lambda ppf splices.(i);
       Format.pp_print_flush ppf ()
-    done
-  ;
-  if !Clflags.dump_source then
-    for i = 0 to n-1 do
-      Format.fprintf ppf "splice #%d:\n" (i + 1);
-      Pprintast.expression ppf splices.(i);
-      Format.pp_print_newline ppf ()
     done
   ;
   splices

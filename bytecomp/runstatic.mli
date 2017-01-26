@@ -23,7 +23,7 @@ open Lambda
 
 (** Run the static code for an implementation and return the array of splices.
     *)
-val run_static : Format.formatter -> lambda -> Parsetree.expression array
+val run_static : Format.formatter -> lambda -> lambda array
 
 val load_static_deps : Format.formatter -> (Cmo_format.reloc_info * int) list
   -> unit

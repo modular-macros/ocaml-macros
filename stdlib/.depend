@@ -30,7 +30,7 @@ camlinternalFormat.cmi : camlinternalFormatBasics.cmi buffer.cmi
 camlinternalFormatBasics.cmo : camlinternalFormatBasics.cmi
 camlinternalFormatBasics.cmx : camlinternalFormatBasics.cmi
 camlinternalFormatBasics.cmi :
-camlinternalLambda.cmi :
+camlinternalLambda.cmi : camlinternalAST.cmi
 camlinternalLazy.cmo : obj.cmi camlinternalLazy.cmi
 camlinternalLazy.cmx : obj.cmx camlinternalLazy.cmi
 camlinternalLazy.cmi :
@@ -63,8 +63,8 @@ ephemeron.cmo : sys.cmi random.cmi obj.cmi lazy.cmi hashtbl.cmi array.cmi \
 ephemeron.cmx : sys.cmx random.cmx obj.cmx lazy.cmx hashtbl.cmx array.cmx \
     ephemeron.cmi
 ephemeron.cmi : hashtbl.cmi
-expr.cmo : expr.cmi
-expr.cmx : expr.cmi
+expr.cmo : camlinternalAST.cmi expr.cmi
+expr.cmx : camlinternalAST.cmi expr.cmi
 expr.cmi :
 filename.cmo : sys.cmi string.cmi random.cmi printf.cmi lazy.cmi buffer.cmi \
     filename.cmi
@@ -240,8 +240,8 @@ ephemeron.cmo : sys.cmi random.cmi obj.cmi lazy.cmi hashtbl.cmi array.cmi \
     ephemeron.cmi
 ephemeron.p.cmx : sys.cmx random.cmx obj.cmx lazy.cmx hashtbl.cmx array.cmx \
     ephemeron.cmi
-expr.cmo : expr.cmi
-expr.p.cmx : expr.cmi
+expr.cmo : camlinternalAST.cmi expr.cmi
+expr.p.cmx : camlinternalAST.cmi expr.cmi
 filename.cmo : sys.cmi string.cmi random.cmi printf.cmi lazy.cmi buffer.cmi \
     filename.cmi
 filename.p.cmx : sys.cmx string.cmx random.cmx printf.cmx lazy.cmx buffer.cmx \

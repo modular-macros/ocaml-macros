@@ -354,7 +354,7 @@ let make_key e =
     | Lfor _ | Lwhile _
 (* Beware: (PR#6412) the event argument to Levent
    may include cyclic structure of type Type.typexpr *)
-    | Levent _  ->
+    | Levent _  | Lescape _ ->
         raise Not_simple
 
   and tr_recs env es = List.map (tr_rec env) es
@@ -440,6 +440,8 @@ let iter f = function
       f lam
   | Lifused (_v, e) ->
       f e
+  | Lescape e ->
+      f e
 
 
 module IdentSet = Set.Make(Ident)
@@ -467,7 +469,7 @@ let free_ids get l =
     | Lvar _ | Lconst _ | Lapply _
     | Lprim _ | Lswitch _ | Lstringswitch _ | Lstaticraise _
     | Lifthenelse _ | Lsequence _ | Lwhile _
-    | Lsend _ | Levent _ | Lifused _ -> ()
+    | Lsend _ | Levent _ | Lifused _ | Lescape _ -> ()
   in free l; !fv
 
 let free_variables l =
@@ -590,6 +592,7 @@ let subst_lambda s lam =
       Lsend (k, subst met, subst obj, List.map subst args, loc)
   | Levent (lam, evt) -> Levent (subst lam, evt)
   | Lifused (v, e) -> Lifused (v, subst e)
+  | Lescape e -> subst e
   and subst_decl (id, exp) = (id, subst exp)
   and subst_case (key, case) = (key, subst case)
   and subst_strcase (key, case) = (key, subst case)
@@ -657,6 +660,8 @@ let rec map f lam =
         Levent (map f l, ev)
     | Lifused (v, e) ->
         Lifused (v, map f e)
+    | Lescape e ->
+        Lescape (map f e)
   in
   f lam
 

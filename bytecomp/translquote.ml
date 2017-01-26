@@ -1,11 +1,15 @@
 open Misc
 open Asttypes
+(*
 open Types
 open Typedtree
+*)
 open Lambda
 
+(*
 let use comb =
   Lazy.force comb
+*)
 
 let lambda_unit =
   Lconst (Const_pointer 0)
@@ -48,19 +52,25 @@ let rec list l =
 let pair (x, y) =
   Lprim(Pmakeblock(0, Immutable, None), [x; y], Location.none)
 
+(*
 let triple (x, y, z) =
   Lprim(Pmakeblock(0, Immutable, None), [x; y; z], Location.none)
+*)
 
+(*
 let first block =
   Lprim (Pfield 0, [block], Location.none)
+*)
 
+(*
 let second block =
   Lprim (Pfield 1, [block], Location.none)
+*)
 
 module Lam = struct
 
   let stdmod_path = Ident.lift_string "CamlinternalQuote"
-  let parsetree_mod = "Lambda"
+  let lambda_mod = "Lambda"
 
   let camlinternalQuote =
     lazy
@@ -81,7 +91,7 @@ module Lam = struct
       (let env = Lazy.force camlinternalQuote in
        let lid =
          Longident.Ldot(
-           Longident.Ldot (Longident.Lident parsetree_mod, modname),
+           Longident.Ldot (Longident.Lident lambda_mod, modname),
            field)
        in
        match Env.lookup_value lid env with
@@ -104,11 +114,11 @@ module Lam = struct
              Location.none)
        | _ ->
            fatal_error @@
-             "Primitive " ^ stdmod_path ^ "." ^ parsetree_mod ^ "." ^ modname
+             "Primitive " ^ stdmod_path ^ "." ^ lambda_mod ^ "." ^ modname
              ^ "." ^ field ^ " not found."
        | exception Not_found ->
           fatal_error @@
-            "Primitive " ^ stdmod_path ^ "." ^ parsetree_mod ^ "." ^ modname
+            "Primitive " ^ stdmod_path ^ "." ^ lambda_mod ^ "." ^ modname
             ^ "." ^ field ^" not found.")
 
   let apply comb args =
@@ -359,8 +369,24 @@ module Lam = struct
     let lam = lift_lambda lam in
     pair (id, lam)
 
+
+  let transl_clos_field loc path_id _name idx =
+    apply Exp.primitive [
+      quote_loc loc;
+      quote_prim (Pfield idx);
+      list [apply Exp.var [quote_ident path_id]];
+    ]
+
+  let quote_expression transl _pclos e =
+    let lam = transl e in
+    lift_lambda lam
+
+  let path_arg _loc path =
+    lift_lambda path
+
 end
 
+(*
 module Parsetree = struct
 
   let stdmod_path = Ident.lift_string "CamlinternalQuote"
@@ -1121,16 +1147,14 @@ module Parsetree = struct
     apply loc Exp.to_closed [lam]
 
 end
+*)
 
-let quote_expression transl _pclos e =
-  let lam = transl e in
-  lift_lambda lam
+let quote_expression = Lam.quote_expression
 
 let transl_close_expression _loc e = e
 
+let path_arg = Lam.path_arg
+
 let wrap_local _loc _id _name lam = lam
 
-let path_arg _loc path =
-  lift_lambda path
-
-let transl_clos_field = Parsetree.transl_clos_field
+let transl_clos_field = Lam.transl_clos_field

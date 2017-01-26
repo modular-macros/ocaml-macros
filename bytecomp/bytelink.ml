@@ -314,6 +314,7 @@ let sort_and_discover phase tolink =
     | Missing -> complete acc rem (* no error thrown here but later, on linking *)
     | Visited -> complete acc rem (* already included in earlier deps *)
     | Being_visited ->
+        Printf.eprintf "Being_visited %s\n%!" (Ident.name id);
         assert false (* cyclical dependency *)
     | x -> begin
       let descr = match x with

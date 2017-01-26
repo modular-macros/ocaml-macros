@@ -702,7 +702,7 @@ let rec cut n l =
 
 let try_ids = Hashtbl.create 8
 
-let splice_array = ref (None : Parsetree.expression array ref option)
+let splice_array = ref (None : Lambda.lambda array ref option)
 let splice_index = ref 0
 
 (** If a macro is being translated, then contains the identifier of the path
@@ -757,28 +757,23 @@ and transl_exp0 e =
         (* not in a macro nor in a splice *)
         raise (Error (e.exp_loc, Illegal_macro_app))
       ;
-      let get_lid () =
-        Translquote.path_arg e.exp_loc path
+      let get_path () =
+        Translquote.path_arg e.exp_loc
+        @@ transl_path ~loc:e.exp_loc e.exp_env path
       in
       let lid = begin
         match !path_clos with
-        | None -> get_lid ()
+        | None -> get_path ()
         | Some (path_id, map) ->
             try
               let field = Env.PathMap.find path map in
               if field = -1 then
                 Lvar path_id
               else
-                let ppf = Format.str_formatter in
-                let open Parsetree in
-                Pprintast.expression ppf {
-                  pexp_desc = (Pexp_ident lid);
-                  pexp_loc = Location.none;
-                  pexp_attributes = []; };
-                let str = Format.flush_str_formatter () in
-                Translquote.transl_clos_field lid.loc path_id str field
+                Translquote.transl_clos_field lid.loc path_id
+                  (Path.name path) field
             with Not_found ->
-              get_lid ()
+              get_path ()
       end in
       Lapply {
         ap_func = transl_path ~loc:e.exp_loc e.exp_env path;
@@ -788,7 +783,21 @@ and transl_exp0 e =
         ap_inlined = Default_inline;
         ap_specialised = Default_specialise; }
   | Texp_ident(path, _, {val_kind = Val_reg | Val_self _}) ->
-      transl_path ~loc:e.exp_loc e.exp_env path
+    begin
+      let get_path () =
+        transl_path ~loc:e.exp_loc e.exp_env path
+      in
+      match !path_clos with
+      | None ->
+          get_path ()
+      | Some (path_id, map) ->
+          try
+            let field_idx = Env.PathMap.find path map in
+            Translquote.transl_clos_field e.exp_loc path_id (Path.name path)
+              field_idx
+          with Not_found ->
+            get_path ()
+    end
   | Texp_ident _ -> fatal_error "Translcore.transl_exp: bad Texp_ident"
   | Texp_constant cst ->
       Lconst(Const_base cst)
@@ -1144,28 +1153,18 @@ and transl_exp0 e =
          }
   | Texp_quote exp ->
       Translquote.quote_expression transl_exp !path_clos exp
-  | Texp_escape e ->
+  | Texp_escape exp ->
     begin
       (* If toplevel splice *)
       if Env.cur_stage e.exp_env = 0 then
         match !splice_array with
         | Some arr_ref ->
-          let parsetree = Array.get !arr_ref !splice_index in
-          incr splice_index;
-          (* Deactivate all warnings while compiling splices *)
-          let backup = Warnings.backup () in
-          Warnings.deactivate_all ();
-          let lam =
-            transl_exp @@
-            Typecore.type_expression (Env.with_phase_down e.exp_env) parsetree
-          in
-          Warnings.restore backup;
-          lam
+            Array.get !arr_ref !splice_index
         | None ->
-          lambda_unit
+            assert false
       else (* else if we are inside a quote *)
         (* translate and indicate that the result should not be "lifted". *)
-        Lescape (transl_exp e)
+        Lescape (transl_exp exp)
     end
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))

@@ -1117,8 +1117,6 @@ module Parsetree = struct
 
   end
 
-  external ast_to_expr : Exp.t -> 'a expr = "%identity"
-
 end
 
 module Lambda = struct
@@ -1264,3 +1262,5 @@ module Lambda = struct
   end
 
 end
+
+external lambda_to_expr : Lambda.Exp.t -> 'a expr = "%identity"
