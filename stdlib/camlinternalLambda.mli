@@ -14,8 +14,17 @@ type value_kind
 
 type direction_flag
 
+type constant =
+    Const_int of int
+  | Const_char of char
+  | Const_string of string * string option
+  | Const_float of string
+  | Const_int32 of int32
+  | Const_int64 of int64
+  | Const_nativeint of nativeint
+
 type structured_constant =
-    Const_base of CamlinternalAST.constant
+    Const_base of constant
   | Const_pointer of int
   | Const_block of int * structured_constant list
   | Const_float_array of string list

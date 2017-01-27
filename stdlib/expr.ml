@@ -1,6 +1,5 @@
 open ~CamlinternalQuote
 open ~CamlinternalQuote.Lambda
-open CamlinternalAST
 open ~CamlinternalLambda
 open ~Pervasives
 
@@ -12,22 +11,22 @@ macro of_bool =
 macro of_int i =
   lambda_to_expr @@
   Exp.constant @@ Constant.unmarshal @@ ~Marshal.to_string
-    (Const_base (Pconst_integer (string_of_int i, None))) []
+    (Const_base (Const_int i)) []
 
 macro of_float f =
   lambda_to_expr @@
   Exp.constant @@ Constant.unmarshal @@ ~Marshal.to_string
-    (Const_base (Pconst_float (string_of_float f, None))) []
+    (Const_base (Const_float (string_of_float f))) []
 
 macro of_char c =
   lambda_to_expr @@
   Exp.constant @@ Constant.unmarshal @@ ~Marshal.to_string
-    (Const_base (Pconst_char c)) []
+    (Const_base (Const_char c)) []
 
 macro of_string s =
   lambda_to_expr @@
   Exp.constant @@ Constant.unmarshal @@ ~Marshal.to_string
-    (Const_base (Pconst_string (s, None))) []
+    (Const_base (Const_string (s, None))) []
 
 macro rec of_list f = function
   | [] -> << [] >>
