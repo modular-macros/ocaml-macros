@@ -1055,7 +1055,7 @@ let rec close fenv cenv = function
       (Uassign(id, ulam), Value_unknown)
   | Levent(lam, _) ->
       close fenv cenv lam
-  | Lifused _ ->
+  | Lifused _ | Lescape _ ->
       assert false
 
 and close_list fenv cenv = function
