@@ -758,8 +758,10 @@ and transl_exp0 e =
         raise (Error (e.exp_loc, Illegal_macro_app))
       ;
       let get_path () =
-        Translquote.path_arg e.exp_loc
-        @@ transl_path ~loc:e.exp_loc e.exp_env path
+        Translquote.path_arg e.exp_loc @@
+        transl_path ~loc:e.exp_loc
+          (Env.with_phase 0 e.exp_env) (* this path is meant for runtime *)
+          path
       in
       let lid = begin
         match !path_clos with
