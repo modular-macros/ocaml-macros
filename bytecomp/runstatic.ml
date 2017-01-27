@@ -73,7 +73,7 @@ let run_static ppf lam =
     for i = 0 to n-1 do
       Format.fprintf ppf "splice #%d:\n" (i + 1);
       Printlambda.lambda ppf splices.(i);
-      Format.pp_print_flush ppf ()
+      Format.pp_print_newline ppf ()
     done
   ;
   splices
