@@ -793,8 +793,9 @@ and transl_exp0 e =
       | Some (path_id, map) ->
           try
             let field_idx = Env.PathMap.find path map in
-            Translquote.transl_clos_field e.exp_loc path_id (Path.name path)
-              field_idx
+            Lescape (* we don't want this to be lifted *)
+              (Translquote.transl_clos_field e.exp_loc path_id (Path.name
+                path) field_idx)
           with Not_found ->
             get_path ()
     end

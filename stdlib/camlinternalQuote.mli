@@ -245,7 +245,7 @@ module Lambda : sig
 
   end
 
-  module Name : sig
+  module Identifier : sig
 
     type t
 
@@ -283,19 +283,19 @@ module Lambda : sig
 
     type t
 
-    val var : Name.t -> t
+    val var : Identifier.t -> t
 
     val constant : Constant.t -> t
 
     val application : Loc.t -> t -> t list -> bool
       -> inline_attribute -> specialise_attribute -> t
 
-    val function_ : Loc.t -> function_kind -> Name.t list ->
+    val function_ : Loc.t -> function_kind -> Identifier.t list ->
       t -> function_attribute -> t
 
-    val let_ : let_kind -> value_kind -> Name.t -> t -> t -> t
+    val let_ : let_kind -> value_kind -> Identifier.t -> t -> t -> t
 
-    val letrec : (Name.t * t) list -> t -> t
+    val letrec : (Identifier.t * t) list -> t -> t
 
     val primitive : Loc.t -> primitive -> t list -> t
 
@@ -308,9 +308,9 @@ module Lambda : sig
 
     val staticraise : int -> t list -> t
 
-    val staticcatch : t -> (int * Name.t list) -> t -> t
+    val staticcatch : t -> (int * Identifier.t list) -> t -> t
 
-    val trywith : t -> Name.t -> t -> t
+    val trywith : t -> Identifier.t -> t -> t
 
     val ifthenelse : t -> t -> t -> t
 
@@ -318,9 +318,9 @@ module Lambda : sig
 
     val while_ : t -> t -> t
 
-    val for_ : Name.t -> t -> t -> direction_flag -> t -> t
+    val for_ : Identifier.t -> t -> t -> direction_flag -> t -> t
 
-    val assign : Name.t -> t -> t
+    val assign : Identifier.t -> t -> t
 
   end
 

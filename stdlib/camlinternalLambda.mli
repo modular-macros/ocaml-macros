@@ -1,7 +1,11 @@
 (** lambda type. Similar to (and trivially transformable into) [Lambda.t]. *)
 
 module Ident : sig
-  type t = string
+  type t = {
+    stamp : int;
+    name : string;
+    mutable flags : int;
+  }
 end
 
 module Location : sig

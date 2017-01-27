@@ -1140,11 +1140,18 @@ module Lambda = struct
 
   end
 
-  module Name = struct
+  module Identifier = struct
 
-    type t = string
+    type t = CamlinternalLambda.Ident.t
 
-    let mk txt = txt
+    let count = ref 0
+
+    let mk txt =
+      let stamp = !count in
+      count := !count + 1;
+      { Ident.stamp = stamp;
+        Ident.name = txt;
+        Ident.flags = 0; }
 
     let unmarshal s : t =
       Marshal.from_string s 0

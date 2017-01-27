@@ -140,9 +140,11 @@ module Lam = struct
     let unmarshal = combinator "Constant" "unmarshal"
   end
 
-  module Name = struct
-    let mk = combinator "Name" "mk"
-    (*let unmarshal = combinator "Name" "unmarshal"*)
+  module Identifier = struct
+    (*
+    let mk = combinator "Identifier" "mk"
+    *)
+    let unmarshal = combinator "Identifier" "unmarshal"
   end
 
   module Attribute = struct
@@ -198,9 +200,9 @@ module Lam = struct
     let s = marshal_constant x in
     apply Constant.unmarshal [s]
 
-  let quote_ident id =
-    let s = string (Ident.name id) in
-    apply Name.mk [s]
+  let quote_ident (id : Ident.t) =
+    let s = string (Marshal.to_string id []) in
+    apply Identifier.unmarshal [s]
 
   let quote_inline_attr (attr : inline_attribute) =
     let s = Marshal.to_string attr [] in
@@ -374,7 +376,7 @@ module Lam = struct
     apply Exp.primitive [
       quote_loc loc;
       quote_prim (Pfield idx);
-      list [apply Exp.var [quote_ident path_id]];
+      list [Lvar path_id];
     ]
 
   let quote_expression transl _pclos e =
@@ -638,7 +640,7 @@ module Parsetree = struct
     apply loc Constant.unmarshal [marshal_constant const]
 
   let quote_name loc (str : string loc) =
-    apply loc Name.unmarshal [marshal_name str]
+    apply loc Ident.unmarshal [marshal_name str]
 
   let quote_variant loc (variant : label) =
     apply loc Variant.of_string [string variant]
