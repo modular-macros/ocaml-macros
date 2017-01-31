@@ -1181,6 +1181,9 @@ module Lambda = struct
     let unmarshal_direction_flag s : direction_flag =
       Marshal.from_string s 0
 
+    let unmarshal_method_kind s : meth_kind =
+      Marshal.from_string s 0
+
   end
 
   module Primitive = struct
@@ -1265,6 +1268,9 @@ module Lambda = struct
 
     let assign name value =
       Lassign (name, value)
+
+    let send meth_kind obj meth args loc =
+      Lsend (meth_kind, obj, meth, args, loc)
 
   end
 

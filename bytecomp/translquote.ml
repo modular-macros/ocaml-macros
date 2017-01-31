@@ -11,9 +11,6 @@ let use comb =
   Lazy.force comb
 *)
 
-let lambda_unit =
-  Lconst (Const_pointer 0)
-
 let string s =
   Lconst (Const_base (Const_string(s, None)))
 
@@ -162,6 +159,8 @@ module Lam = struct
       combinator "Attribute" "unmarshal_value_kind"
     let unmarshal_direction_flag =
       combinator "Attribute" "unmarshal_direction_flag"
+    let unmarshal_method_kind =
+      combinator "Attribute" "unmarshal_method_kind"
   end
 
   module Exp = struct
@@ -182,6 +181,7 @@ module Lam = struct
     let while_ = combinator "Exp" "while_"
     let for_ = combinator "Exp" "for_"
     let assign = combinator "Exp" "assign"
+    let send = combinator "Exp" "send"
   end
 
   module Primitive = struct
@@ -235,6 +235,10 @@ module Lam = struct
   let quote_direction_flag (f : direction_flag) =
     let s = Marshal.to_string f [] in
     apply Attribute.unmarshal_direction_flag [string s]
+
+  let quote_method_kind (k : meth_kind) =
+    let s = Marshal.to_string k [] in
+    apply Attribute.unmarshal_method_kind [string s]
 
   let rec lift_lambda =
     function
@@ -362,9 +366,20 @@ module Lam = struct
           quote_ident id;
           lift_lambda lam;
         ]
+    | Lsend (meth_kind, obj, meth, args, loc) ->
+        apply Exp.send [
+          quote_method_kind meth_kind;
+          lift_lambda obj;
+          lift_lambda meth;
+          list (List.map lift_lambda args);
+          quote_loc loc
+        ]
+    | Levent (e, _) ->
+        lift_lambda e
+    | Lifused (_, e) ->
+        lift_lambda e
     | Lescape lam ->
         lam
-    | _ -> lambda_unit
 
   and quote_vb (id, lam) =
     let id = quote_ident id in

@@ -271,6 +271,8 @@ module Lambda : sig
 
     val unmarshal_direction_flag : string -> direction_flag
 
+    val unmarshal_method_kind : string -> meth_kind
+
   end
 
   module Primitive : sig
@@ -321,6 +323,8 @@ module Lambda : sig
     val for_ : Identifier.t -> t -> t -> direction_flag -> t -> t
 
     val assign : Identifier.t -> t -> t
+
+    val send : meth_kind -> t -> t -> t list -> Loc.t -> t
 
   end
 
