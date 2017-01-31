@@ -47,7 +47,7 @@ type out_value =
   | Oval_stuff of string
   | Oval_tuple of out_value list
   | Oval_variant of string * out_value option
-  | Oval_expr of Parsetree.expression
+  | Oval_expr of CamlinternalLambda.lambda
 
 type out_type =
   | Otyp_abstract

@@ -48,6 +48,7 @@ OTHEROBJS=\
   ../typing/btype.cmo ../typing/primitive.cmo ../typing/typedtree.cmo \
   ../typing/subst.cmo ../typing/predef.cmo \
   ../typing/datarepr.cmo ../typing/cmi_format.cmo ../typing/env.cmo \
+  ../bytecomp/lambda.cmo ../bytecomp/printlambda.cmo \
   ../typing/oprint.cmo \
   ../typing/ctype.cmo ../typing/printtyp.cmo ../typing/mtype.cmo \
   ../typing/envaux.cmo \

@@ -252,12 +252,12 @@ typing/mtype.cmx : typing/types.cmx typing/subst.cmx typing/path.cmx \
     typing/mtype.cmi
 typing/mtype.cmi : typing/types.cmi typing/path.cmi typing/ident.cmi \
     typing/env.cmi
-typing/oprint.cmo : parsing/pprintast.cmi typing/outcometree.cmi \
+typing/oprint.cmo : bytecomp/printlambda.cmi typing/outcometree.cmi \
     parsing/asttypes.cmi typing/oprint.cmi
-typing/oprint.cmx : parsing/pprintast.cmx typing/outcometree.cmi \
+typing/oprint.cmx : bytecomp/printlambda.cmx typing/outcometree.cmi \
     parsing/asttypes.cmi typing/oprint.cmi
 typing/oprint.cmi : typing/outcometree.cmi
-typing/outcometree.cmi : parsing/parsetree.cmi parsing/asttypes.cmi
+typing/outcometree.cmi : parsing/asttypes.cmi
 typing/parmatch.cmo : utils/warnings.cmi typing/untypeast.cmi \
     typing/types.cmi typing/typedtreeIter.cmi typing/typedtree.cmi \
     typing/subst.cmi typing/predef.cmi typing/path.cmi parsing/parsetree.cmi \

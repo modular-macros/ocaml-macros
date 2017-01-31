@@ -317,7 +317,7 @@ module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
               else Oval_stuff "<lazy>"
           | Tconstr (path, [_], _)
             when Path.same path Predef.path_expr ->
-              Oval_expr (O.obj (O.field obj 1))
+              Oval_expr (O.obj obj)
           | Tconstr(path, ty_list, _) -> begin
               try
                 let decl = Env.find_type path env in

@@ -1,7 +1,8 @@
 
 # macro x : int list expr =
-  << List(*global*).map Pervasives(*global*).pred [1; 2; 3] >>
-# macro y : int option expr = << Some 42 >>
+  << (apply (field 12 (global List!)) (function prim/1254 (-1+ prim/1254))
+       [0: 1 [0: 2 [0: 3 0a]]]) >>
+# macro y : int option expr = << [0: 42] >>
 #       module Pervasives : sig val pred : int -> int end
 #         type fake_option = Blah | Some of int
 #   val l : int list = [0; 1; 2]

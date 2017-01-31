@@ -122,7 +122,9 @@ let print_out_value ppf tree =
     | Oval_tuple tree_list ->
         fprintf ppf "@[<1>(%a)@]" (print_tree_list print_tree_1 ",") tree_list
     | Oval_expr exp ->
-        fprintf ppf "@[<1><< %a >>@]" Pprintast.expression exp
+        (* These two type are supposed to be isomorphic *)
+        let lam : Lambda.lambda = Obj.magic exp in
+        fprintf ppf "@[<1><< %a >>@]" Printlambda.lambda lam
     | tree -> fprintf ppf "@[<1>(%a)@]" (cautious print_tree_1) tree
   and print_fields first ppf =
     function
