@@ -62,6 +62,9 @@ EOF
      ./configure --bindir=$PREFIX/bin --libdir=$PREFIX/lib/ocaml \
        --pkgdir=$PREFIX/lib/ocaml && \
       make && make install)
+    git clone -b master https://github.com/OlivierNicole/macros-examples
+    (cd macros-examples &&
+      make && make test)
     # git clone git://github.com/ocaml/opam
     # (cd opam && ./configure --prefix $PREFIX &&\
     #   make lib-ext && make && make install)
