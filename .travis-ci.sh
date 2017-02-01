@@ -36,7 +36,6 @@ EOF
       -with-instrumented-runtime $CONFIG_ARG
     export PATH=$PREFIX/bin:$PATH
     make world.opt
-    make ocamlnat
     make install
     (cd testsuite && make all)
     (cd testsuite && make USE_RUNTIME="d" all)
