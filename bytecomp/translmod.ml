@@ -145,7 +145,10 @@ let transl_item_splices item item_lam =
           splice_lam], Location.none),
       str_lam)
   in
-  let indexed_splices = List.mapi (fun i spl -> (i, spl)) !item_splices in
+  let indexed_splices =
+    List.mapi
+      (fun i spl -> (!nb_splices + i, spl))
+      !item_splices in
   let lam = List.fold_left wrap_seq item_lam indexed_splices in
   item_splices := [];
   nb_splices := !nb_splices + List.length indexed_splices;
