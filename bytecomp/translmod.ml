@@ -121,7 +121,10 @@ module TranslSplicesIterator = struct
         decr quote_depth
     | _ -> ()
 
-  (* Do not inspect nested structures *)
+  (* Do not inspect nested structures. The iterator is supposed to be used
+     by calling [iter_structure_item] exactly once on every [structure_item],
+     so inspecting structures (e.g. when the item is a module binding) would
+     count splices twice. *)
   let enter_structure _ =
     incr str_depth
 
