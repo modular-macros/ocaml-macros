@@ -596,4 +596,11 @@ let structured_constant = struct_const
 
 let lambda = lam
 
+(* Fill forward reference in [Oprint]: *)
+let () =
+  Oprint.out_quote := fun ppf (lam0 : CamlinternalLambda.lambda) ->
+    (* [CamlinternalLambda.lambda] and [Lambda.lambda] should be isomorphic. *)
+    let lam : lambda = Obj.magic lam0 in
+    lambda ppf lam
+
 let program ppf { code } = lambda ppf code

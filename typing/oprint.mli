@@ -26,3 +26,6 @@ val out_type_extension : (formatter -> out_type_extension -> unit) ref
 val out_phrase : (formatter -> out_phrase -> unit) ref
 
 val parenthesized_ident : string -> bool
+
+(* Forward reference to be filled in [Printlambda]. *)
+val out_quote : (formatter -> CamlinternalLambda.lambda -> unit) ref

@@ -78,6 +78,8 @@ let static_flag ppf = function
   | Asttypes.Nonstatic -> ()
   | Asttypes.Static -> fprintf ppf "static "
 
+let out_quote : (formatter -> CamlinternalLambda.lambda -> unit) ref = ref (fun _ _ -> ())
+
 let print_out_value ppf tree =
   let rec print_tree_1 ppf =
     function
@@ -122,9 +124,7 @@ let print_out_value ppf tree =
     | Oval_tuple tree_list ->
         fprintf ppf "@[<1>(%a)@]" (print_tree_list print_tree_1 ",") tree_list
     | Oval_expr exp ->
-        (* These two type are supposed to be isomorphic *)
-        let lam : Lambda.lambda = Obj.magic exp in
-        fprintf ppf "@[<1><< %a >>@]" Printlambda.lambda lam
+        fprintf ppf "@[<1><< %a >>@]" !out_quote exp
     | tree -> fprintf ppf "@[<1>(%a)@]" (cautious print_tree_1) tree
   and print_fields first ppf =
     function
