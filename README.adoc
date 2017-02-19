@@ -1,6 +1,6 @@
 Build status: image:https://api.travis-ci.org/ocamllabs/ocaml-macros.svg?branch=macros_with_lambda_quotes[status,link=https://travis-ci.org/ocamllabs/ocaml-macros].
 
-= About the macros branch =
+= OCaml macros =
 
 https://github.com/OlivierNicole/ocaml/tree/macros_unstable[macros_unstable] is
 merged into https://github.com/OlivierNicole/ocaml/tree/macros[macros] on a
