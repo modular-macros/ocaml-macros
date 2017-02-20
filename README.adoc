@@ -53,17 +53,6 @@ Found a bug and know how to fix it? We certainly appreciate pull requests.
 If you plan on making big changes, please file an issue first to discuss why
 theses changes are needed.
 
-== Limitations / To Do
-
-Things to be done sorted by descending priority:
-
-* Support for declaring static type extensions (including static exceptions)
-* Solve issues of static linking and side effects, possibly by banning the
-  `static` keyword
-* Upgrade of `ocamldep` to take into account the modifications in dependency
-  trees because of the above
-* Fix GADT matching in quotations
-
 == List of Contributors
 
 The implementation of macros is an https://github.com/ocamllabs[OCaml Labs]
