@@ -402,10 +402,10 @@ and expression i ppf x =
       line i ppf "Texp_pack";
       module_expr i ppf me
   | Texp_quote e ->
-      line i ppf "Pexp_quote";
+      line i ppf "Texp_quote";
       expression i ppf e
   | Texp_escape e ->
-      line i ppf "Pexp_escape";
+      line i ppf "Texp_escape";
       expression i ppf e
   | Texp_unreachable ->
       line i ppf "Texp_unreachable"
