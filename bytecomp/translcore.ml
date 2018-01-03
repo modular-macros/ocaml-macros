@@ -702,20 +702,16 @@ let rec cut n l =
 
 let try_ids = Hashtbl.create 8
 
-let splice_array = ref (None : Parsetree.expression array ref option)
-let splice_index = ref 0
-
 (** If a macro is being translated, then contains the identifier of the path
     argument and the mapping from paths to indices in the macro closure.
     Index -1 is associated with the name of the macro being translated (to
     detect recursive calls). *)
 let path_clos = ref (None : (Ident.t * int Env.PathMap.t) option)
 
-let set_transl_splices opt =
-  splice_index := 0;
-  match opt with
-  | None -> splice_array := None
-  | Some a -> splice_array := Some a
+let splice_array = ref (None : Parsetree.expression array option)
+
+let set_splice_array arr =
+  splice_array := arr
 
 let rec transl_exp e =
   List.iter (Translattribute.check_attribute e) e.exp_attributes;
@@ -1144,12 +1140,13 @@ and transl_exp0 e =
          }
   | Texp_quote exp ->
       Translquote.quote_expression transl_exp !path_clos exp
-  | Texp_escape e ->
+  | Texp_escape { esc_index = None } ->
+      assert false
+  | Texp_escape { esc_index = Some idx; esc_exp = e } ->
     begin
       match !splice_array with
-      | Some arr_ref ->
-        let parsetree = Array.get !arr_ref !splice_index in
-        incr splice_index;
+      | Some arr ->
+        let parsetree = Array.get arr idx in
         (* Deactivate all warnings while compiling splices *)
         let backup = Warnings.backup () in
         Warnings.deactivate_all ();
@@ -1160,7 +1157,7 @@ and transl_exp0 e =
         Warnings.restore backup;
         lam
       | None ->
-        lambda_unit
+        assert false
     end
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))

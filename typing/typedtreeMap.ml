@@ -393,7 +393,8 @@ module MakeMap(Map : MapArgument) = struct
         | Texp_pack (mexpr) ->
           Texp_pack (map_module_expr mexpr)
         | Texp_quote exp -> Texp_quote (map_expression exp)
-        | Texp_escape exp -> Texp_escape (map_expression exp)
+        | Texp_escape ({ esc_exp = exp } as desc) ->
+            Texp_escape { desc with esc_exp = (map_expression exp) }
         | Texp_unreachable ->
           Texp_unreachable
         | Texp_extension_constructor _ as e ->

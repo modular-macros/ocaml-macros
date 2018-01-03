@@ -89,31 +89,35 @@ let transl_toplevel_splice exp =
     (Translcore.transl_exp exp)
     cs_glob
 
-(* ordered array of lambda blocks for stage-0 splices *)
-let item_splices = ref ([] : lambda list)
+module TranslSplices = struct
+  (* ordered array of (lambda, index in the splice array) pair for stage-0
+   * splices *)
+  let item_splices = ref ([] : (int * lambda) list)
 
-module TranslSplicesIterator = struct
-  open TypedtreeIter
-  include DefaultIteratorArgument
+  module TranslSplicesIterator = struct
+    open TypedtreeIter
+    include DefaultIteratorArgument
 
-  let quote_depth = ref 0
-  let str_depth = ref 0
+    let quote_depth = ref 0
+    let str_depth = ref 0
 
-  let enter_expression expr =
-    match expr.exp_desc with
-    | Texp_escape e ->
-        if !quote_depth = 0 && !str_depth = 0 then
-          let body =
-            Translquote.transl_close_expression
-              Location.none
-              (transl_toplevel_splice e)
-          in
-          item_splices := !item_splices @ [body];
-        else
-          ()
-    | Texp_quote _ ->
-        incr quote_depth
-    | _ -> ()
+    let enter_expression expr =
+      match expr.exp_desc with
+      | Texp_escape { esc_exp = e; esc_index = Some idx } ->
+          if !quote_depth = 0 && !str_depth = 0 then
+            let body =
+              Translquote.transl_close_expression
+                Location.none
+                (transl_toplevel_splice e)
+            in
+            item_splices := !item_splices @ [(idx, body)];
+          else
+            ()
+      | Texp_escape { esc_index = None } ->
+          assert (not (!quote_depth = 0 && !str_depth = 0))
+      | Texp_quote _ ->
+          incr quote_depth
+      | _ -> ()
 
   let leave_expression expr =
     match expr.exp_desc with
@@ -121,25 +125,29 @@ module TranslSplicesIterator = struct
         decr quote_depth
     | _ -> ()
 
-  (* Do not inspect nested structures. The iterator is supposed to be used
-     by calling [iter_structure_item] exactly once on every [structure_item],
-     so inspecting structures (e.g. when the item is a module binding) would
-     count splices twice. *)
-  let enter_structure _ =
-    incr str_depth
+    (* Do not inspect nested structures. The iterator is supposed to be used
+       by calling [iter_structure_item] exactly once on every [structure_item],
+       so inspecting structures (e.g. when the item is a module binding) would
+       count splices twice. *)
+    let enter_structure _ =
+      incr str_depth
 
-  let leave_structure _ =
-    decr str_depth
+    let leave_structure _ =
+      decr str_depth
+  end
+
+  include TypedtreeIter.MakeIterator(TranslSplicesIterator)
+
+  let transl_item_splices str_item =
+    iter_structure_item str_item;
+    let splices = !item_splices in
+    item_splices := [];
+    splices
 end
 
-module TranslSplices = TypedtreeIter.MakeIterator(TranslSplicesIterator)
-
-let nb_splices = ref 0
 let splicearray_id = Ident.create_persistent "*splicearray*"
 
-let transl_item_splices item item_lam =
-  (* Find splices in current structure item *)
-  TranslSplices.iter_structure_item item;
+let insert_item_splices indexed_splices item_lam =
   (* Add the code for running splices *)
   let wrap_seq str_lam (idx, splice_lam) =
     Lsequence (
@@ -148,15 +156,22 @@ let transl_item_splices item item_lam =
           splice_lam], Location.none),
       str_lam)
   in
-  let indexed_splices =
-    List.mapi
-      (fun i spl -> (!nb_splices + i, spl))
-      !item_splices
-  in
-  let lam = List.fold_left wrap_seq item_lam indexed_splices in
-  item_splices := [];
-  nb_splices := !nb_splices + List.length indexed_splices;
-  lam
+  List.fold_left wrap_seq item_lam indexed_splices
+
+type splice_funs = {
+  transl_splices : structure_item -> (int * lambda) list;
+  insert_splices : (int * lambda) list -> lambda -> lambda;
+}
+
+let ignore_splice_funs = {
+  transl_splices = (fun _ -> []);
+  insert_splices = (fun _ lam -> lam)
+}
+
+let transl_splices_funs = {
+  transl_splices = TranslSplices.transl_item_splices;
+  insert_splices = insert_item_splices
+}
 
 let rec repeat n x =
   if n <= 0 then []
@@ -630,7 +645,7 @@ let transl_class_bindings cl_list =
 
 (* Compile a module expression *)
 
-let rec transl_module cc rootpath target_phase item_postproc mexp =
+let rec transl_module cc rootpath target_phase splice_funs mexp =
   let loc = mexp.mod_loc in
   if Env.contains_phase_mty target_phase mexp.mod_env mexp.mod_type then begin
     List.iter (Translattribute.check_attribute_on_module mexp)
@@ -645,7 +660,7 @@ let rec transl_module cc rootpath target_phase item_postproc mexp =
                 (Env.with_phase (Env.phase_of_sf target_phase) mexp.mod_env)
                 path)
         | Tmod_structure str ->
-            fst (transl_struct loc [] cc rootpath target_phase item_postproc str)
+            fst (transl_struct loc [] cc rootpath target_phase splice_funs str)
         | Tmod_functor(param, _, _, body) ->
             let bodypath = functor_path rootpath param in
             let inline_attribute =
@@ -660,7 +675,7 @@ let rec transl_module cc rootpath target_phase item_postproc mexp =
                                        is_a_functor = true };
                               loc = loc;
                               body = transl_module Tcoerce_none bodypath
-                                target_phase item_postproc body}
+                                target_phase splice_funs body}
                 | Tcoerce_functor(ccarg, ccres) ->
                     let param' = Ident.create "funarg" in
                     Lfunction{kind = Curried; params = [param'];
@@ -672,7 +687,7 @@ let rec transl_module cc rootpath target_phase item_postproc mexp =
                                           apply_coercion loc target_phase Alias
                                             ccarg (Lvar param'),
                                           transl_module ccres bodypath
-                                            target_phase item_postproc body)}
+                                            target_phase splice_funs body)}
                 | _ ->
                     fatal_error "Translmod.transl_module")
               cc
@@ -685,14 +700,14 @@ let rec transl_module cc rootpath target_phase item_postproc mexp =
               (Lapply{ap_should_be_tailcall=false;
                       ap_loc=loc;
                       ap_func=transl_module Tcoerce_none None
-                        target_phase item_postproc funct;
+                        target_phase splice_funs funct;
                       ap_args=[transl_module ccarg None target_phase
-                        item_postproc arg];
+                        splice_funs arg];
                       ap_inlined=inlined_attribute;
                       ap_specialised=Default_specialise})
         | Tmod_constraint(arg, _, _, ccarg) ->
             transl_module (compose_coercions target_phase cc ccarg)
-              rootpath target_phase item_postproc arg
+              rootpath target_phase splice_funs arg
         | Tmod_unpack(arg, _) ->
             if target_phase <> Static then
               apply_coercion loc target_phase Strict cc (Translcore.transl_exp arg)
@@ -700,11 +715,11 @@ let rec transl_module cc rootpath target_phase item_postproc mexp =
   end else
     Lprim(Pmakeblock (0,Immutable,None), [], loc)
 
-and transl_struct loc fields cc rootpath static_flag item_postproc str =
-  transl_structure loc fields cc rootpath static_flag item_postproc
+and transl_struct loc fields cc rootpath static_flag splice_funs str =
+  transl_structure loc fields cc rootpath static_flag splice_funs
     str.str_final_env str.str_items
 
-and transl_structure loc fields cc rootpath target_phase item_postproc
+and transl_structure loc fields cc rootpath target_phase splice_funs
       final_env =
   function
     [] ->
@@ -774,35 +789,36 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
         let target_phase = if target_phase = Static then 1 else 0 in
         item_phase = target_phase
       in
-      let (item_lam, size) =
+      let item_splices = splice_funs.transl_splices item in
+      let (str_lam, size) =
       match item.str_desc with
       | Tstr_eval (expr, _) ->
           (* toplevel expressions are deemed run-time *)
           if target_phase = Nonstatic then
             let body, size = transl_structure loc fields cc rootpath
-              target_phase item_postproc final_env rem
+              target_phase splice_funs final_env rem
             in
             Lsequence(transl_exp expr, body), size
           else
-            transl_structure loc fields cc rootpath target_phase item_postproc
+            transl_structure loc fields cc rootpath target_phase splice_funs
               final_env rem
       | Tstr_value(sf, rec_flag, pat_expr_list) -> begin
           if should_translate sf item then begin
             let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
             let body, size =
               transl_structure loc ext_fields cc rootpath target_phase
-                item_postproc final_env rem in
+                splice_funs final_env rem in
             transl_let rec_flag pat_expr_list body, size
           end else
             let ext_fields = fields in
             transl_structure loc ext_fields cc rootpath target_phase
-              item_postproc final_env rem
+              splice_funs final_env rem
       end
       | Tstr_macro(rec_flag, pat_expr_list) ->
           let ext_fields = rev_let_bound_idents pat_expr_list @ fields in
           let body, size =
             transl_structure loc ext_fields cc rootpath target_phase
-              item_postproc final_env rem
+              splice_funs final_env rem
           in
           transl_macro target_phase rec_flag pat_expr_list
             TreeInspect.expression body,
@@ -812,41 +828,41 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
             record_primitive descr.val_val
           );
           transl_structure loc fields cc rootpath target_phase
-            item_postproc final_env rem
+            splice_funs final_env rem
       | Tstr_type _ ->
           transl_structure loc fields cc rootpath target_phase
-            item_postproc final_env rem
+            splice_funs final_env rem
       | Tstr_typext(tyext) ->
           if target_phase = Nonstatic then
             let ids = List.map (fun ext -> ext.ext_id) tyext.tyext_constructors 
             in
             let body, size =
               transl_structure loc (List.rev_append ids fields)
-                cc rootpath target_phase item_postproc final_env rem
+                cc rootpath target_phase splice_funs final_env rem
             in
             transl_type_extension item.str_env rootpath tyext body, size
           else
-            transl_structure loc fields cc rootpath target_phase item_postproc
+            transl_structure loc fields cc rootpath target_phase splice_funs
               final_env rem
       | Tstr_exception ext ->
           let id = ext.ext_id in
           let path = field_path rootpath id in
           let body, size =
             transl_structure loc (id :: fields) cc rootpath target_phase
-              item_postproc final_env rem
+              splice_funs final_env rem
           in
           Llet(Strict, Pgenval, id,
                transl_extension_constructor item.str_env path ext,
                body), size
       | Tstr_module (sf, mb) ->
           if sf = Static && target_phase = Nonstatic then
-            transl_structure loc fields cc rootpath target_phase item_postproc
+            transl_structure loc fields cc rootpath target_phase splice_funs
               final_env rem
           else
             let id = mb.mb_id in
             let body, size =
               transl_structure loc (id :: fields) cc rootpath target_phase
-                item_postproc final_env rem
+                splice_funs final_env rem
             in
             let mod_expr =
               if sf = Static then
@@ -860,7 +876,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
               else
                 fun lam _ _ -> lam)
                   (transl_module Tcoerce_none (field_path rootpath id)
-                    target_phase item_postproc mod_expr)
+                    target_phase splice_funs mod_expr)
                   mb.mb_loc mb.mb_attributes
             in
             Llet(pure_module mb.mb_expr, Pgenval, id,
@@ -868,7 +884,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
                  body), size
       | Tstr_recmodule (sf, bindings) ->
           if sf = Static && target_phase = Nonstatic then
-            transl_structure loc fields cc rootpath target_phase item_postproc
+            transl_structure loc fields cc rootpath target_phase splice_funs
               final_env rem
           else
             let ext_fields =
@@ -876,7 +892,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
             in
             let body, size =
               transl_structure loc ext_fields cc rootpath target_phase
-                item_postproc final_env rem
+                splice_funs final_env rem
             in
             let lam =
               compile_recmodule target_phase
@@ -887,7 +903,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
                      else modl
                    in
                    transl_module Tcoerce_none (field_path rootpath id)
-                     target_phase item_postproc modl)
+                     target_phase splice_funs modl)
                 bindings
                 body
             in
@@ -895,13 +911,13 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
       | Tstr_class cl_list ->
           let (ids, class_bindings) = transl_class_bindings cl_list in
           if target_phase = Static then
-            transl_structure loc fields cc rootpath target_phase item_postproc
+            transl_structure loc fields cc rootpath target_phase splice_funs
               final_env rem
           else
             let body, size =
               transl_structure loc (List.rev_append ids fields)
                 cc rootpath target_phase
-                  item_postproc final_env rem
+                  splice_funs final_env rem
             in
             Lletrec(class_bindings, body), size
       | Tstr_include incl ->
@@ -913,7 +929,7 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
           let rec rebind_idents pos newfields = function
               [] ->
                 transl_structure loc newfields cc rootpath target_phase
-                  item_postproc final_env rem
+                  splice_funs final_env rem
             | id :: ids ->
                 let body, size =
                   rebind_idents (pos + 1) (id :: newfields) ids
@@ -925,16 +941,16 @@ and transl_structure loc fields cc rootpath target_phase item_postproc
           let body, size = rebind_idents 0 fields ids in
           Llet(pure_module modl, Pgenval, mid,
                transl_module Tcoerce_none None target_phase
-                 item_postproc modl, body),
+                 splice_funs modl, body),
           size
       | Tstr_modtype _
       | Tstr_open _
       | Tstr_class_type _
       | Tstr_attribute _ ->
           transl_structure loc fields cc rootpath target_phase
-            item_postproc final_env rem
+            splice_funs final_env rem
       in
-      (item_postproc item item_lam, size)
+      (splice_funs.insert_splices item_splices str_lam, size)
 
 and pure_module m =
   match m.mod_desc with
@@ -945,7 +961,8 @@ and pure_module m =
 (* Update forward declaration in Translcore *)
 let _ =
   Translcore.transl_module :=
-    fun cc rp m -> transl_module cc rp Nonstatic (fun _ lam -> lam) m
+    fun cc rp m -> transl_module cc rp Nonstatic
+    { transl_splices = (fun _ -> []); insert_splices = (fun _ lam -> lam) } m
 
 (* Introduce dependencies on modules referenced only by "external". *)
 
@@ -982,6 +999,50 @@ let required_globals ~flambda body =
 
 (* Compile an implementation *)
 
+(* Define an AST iterator that traverses the AST *in reading order*, and
+ * assigns to every top-level splice its position in the global splice array.
+ *)
+module SpliceNumberingParam = struct
+  open TypedtreeIter
+  include DefaultIteratorArgument
+
+  let splice_index = ref 0
+  let quote_depth = ref 0
+
+  let enter_expression exp =
+    match exp.exp_desc with
+    | Texp_escape desc ->
+        if !quote_depth = 0 then begin
+          desc.esc_index <- Some !splice_index;
+          incr splice_index
+        end
+    | Texp_quote _ ->
+        incr quote_depth
+    | _ -> ()
+
+  let leave_expression exp =
+    match exp.exp_desc with
+    | Texp_quote _ ->
+        decr quote_depth
+    | _ -> ()
+end
+
+module SpliceNumbering : sig
+  (* Effectful function. Mutates the [esc_index] field of all encountered
+   * [Texp_escape] constructors, to assign them their positions in the module
+   * structure, in source code order. Returns the number of splices in the
+   * structure. *)
+  val number_splices : structure -> int
+end = struct
+  include TypedtreeIter.MakeIterator(SpliceNumberingParam)
+
+  let number_splices str =
+    SpliceNumberingParam.splice_index := 0;
+    SpliceNumberingParam.quote_depth := 0;
+    iter_structure str;
+    !SpliceNumberingParam.splice_index
+end
+
 let transl_implementation_flambda module_name (str, cc) =
   reset_labels ();
   primitive_declarations := [];
@@ -990,7 +1051,10 @@ let transl_implementation_flambda module_name (str, cc) =
   let body, size =
     Translobj.transl_label_init
       (fun () -> transl_struct Location.none [] cc (global_path module_id)
-                   Nonstatic (fun _ lam -> lam) str)
+                   Nonstatic
+                   { transl_splices = (fun _ -> []);
+                     insert_splices = (fun _ lam -> lam) }
+                   str)
   in
   { module_ident = module_id;
     main_module_block_size = size;
@@ -999,15 +1063,22 @@ let transl_implementation_flambda module_name (str, cc) =
 
 let transl_implementation module_name target_phase (str, cc) =
   if target_phase = Static then
+    (* Before doing anything, we number the splices, i.e. we assign to each
+     * top-level [Texp_escape] its position in the list of top-level
+     * [Texp_escape]s. Here, we assume that every code containing splices will be
+     * first translated for the static phase before it is translated for the
+     * non-static phase. Hence, it is safe to do the splice numbering in the
+     * static-phase translation, and use the numbering for both static and
+     * dynamic phases.
+     *)
+    let nb_splices = SpliceNumbering.number_splices str in
     let module_id = Ident.create_persistent module_name in
-    Translcore.set_transl_splices None;
-    nb_splices := 0;
     let (mod_body, size) =
       transl_structure Location.none [] cc (Some (Path.Pident module_id))
-        Static transl_item_splices str.str_final_env str.str_items
+        Static transl_splices_funs str.str_final_env str.str_items
     in
     let code =
-      insert_splice_array module_id !nb_splices mod_body
+      insert_splice_array module_id nb_splices mod_body
     in
     { module_ident = module_id;
       main_module_block_size = size;
@@ -1174,7 +1245,7 @@ let nat_toplevel_name id =
   with Not_found ->
     fatal_error("Translmod.nat_toplevel_name: " ^ Ident.unique_name id)
 
-let transl_store_structure target_phase item_postproc glob map prims str =
+let transl_store_structure target_phase glob map prims str =
   let rec transl_store rootpath subst = function
     [] ->
       transl_store_subst := subst;
@@ -1317,7 +1388,7 @@ let transl_store_structure target_phase item_postproc glob map prims str =
                 else
                   fun lam _ _ -> lam)
                     (transl_module Tcoerce_none (field_path rootpath id)
-                      target_phase item_postproc modl)
+                      target_phase ignore_splice_funs modl)
                     loc mb_attributes
               in
               (* Careful: the module value stored in the global may be different
@@ -1343,7 +1414,7 @@ let transl_store_structure target_phase item_postproc glob map prims str =
                    in
                    subst_lambda subst
                      (transl_module Tcoerce_none (field_path rootpath id)
-                       target_phase item_postproc modl))
+                       target_phase ignore_splice_funs modl))
                 bindings
                 (Lsequence(store_idents Location.none ids,
                            transl_store rootpath (add_idents true ids subst) rem))
@@ -1373,7 +1444,7 @@ let transl_store_structure target_phase item_postproc glob map prims str =
             in
             Llet(Strict, Pgenval, mid,
                  subst_lambda subst (transl_module Tcoerce_none None Nonstatic
-                   item_postproc modl),
+                   ignore_splice_funs modl),
                  store_idents 0 ids)
         | Tstr_modtype _
         | Tstr_open _
@@ -1482,8 +1553,7 @@ let transl_store_gen target_phase module_name ({ str_items = str }, restr) topl 
         assert (size = 0);
         subst_lambda !transl_store_subst (transl_exp expr)
     | str ->
-        transl_store_structure target_phase (fun _ lam -> lam)
-          module_id map prims str
+        transl_store_structure target_phase module_id map prims str
   in
   transl_store_label_init module_id size f str
   (*size, transl_label_init (transl_store_structure module_id map prims str)*)
@@ -1564,10 +1634,11 @@ let close_toplevel_term target_phase (lam, ()) =
     (free_variables lam) lam
 
 let transl_toplevel_item target_phase item =
-  let item_postproc =
-    if target_phase = Static then transl_item_splices
-    else fun _ lam -> lam
+  let splice_funs =
+    if target_phase = Static then transl_splices_funs
+    else ignore_splice_funs
   in
+  let splices = splice_funs.transl_splices item in
   let item_lam =
     match item.str_desc with
       Tstr_eval (expr, _) ->
@@ -1618,7 +1689,7 @@ let transl_toplevel_item target_phase item =
           set_toplevel_unique_name id;
           let lam =
             transl_module Tcoerce_none (Some(Pident id)) target_phase
-              item_postproc modl
+              splice_funs modl
           in
           toploop_setvalue target_phase id lam
         end
@@ -1630,7 +1701,7 @@ let transl_toplevel_item target_phase item =
           compile_recmodule target_phase
             (fun id modl ->
               transl_module Tcoerce_none (Some(Pident id)) target_phase
-                item_postproc modl)
+                splice_funs modl)
             bindings
             (make_sequence (toploop_setvalue_id target_phase) idents)
         end
@@ -1660,7 +1731,7 @@ let transl_toplevel_item target_phase item =
         in
         Llet(Strict, Pgenval, mid,
              transl_module Tcoerce_none None target_phase
-               item_postproc modl,
+               splice_funs modl,
              set_idents 0 ids)
     | Tstr_modtype _
     | Tstr_open _
@@ -1670,10 +1741,7 @@ let transl_toplevel_item target_phase item =
     | Tstr_attribute _ ->
         lambda_unit
   in
-  if target_phase = Static then
-    transl_item_splices item item_lam
-  else
-    item_lam
+  splice_funs.insert_splices splices item_lam
 
 let transl_toplevel_item_and_close target_phase itm =
   close_toplevel_term target_phase
@@ -1694,12 +1762,13 @@ let transl_toplevel_definition target_phase str =
   reset_labels ();
   Hashtbl.clear used_primitives;
   if target_phase = Static then begin
-    Translcore.set_transl_splices None;
-    nb_splices := 0;
+    (* Number splices before anything else (see comment in
+     * [transl_implementation]. *)
+    let nb_splices = SpliceNumbering.number_splices str in
     let lam =
       make_sequence (transl_toplevel_item_and_close target_phase) str.str_items
     in
-    insert_splice_array_toplevel !nb_splices lam
+    insert_splice_array_toplevel nb_splices lam
   end
   else
     make_sequence (transl_toplevel_item_and_close target_phase) str.str_items

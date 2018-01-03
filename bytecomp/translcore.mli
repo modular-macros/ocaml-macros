@@ -20,11 +20,6 @@ open Asttypes
 open Typedtree
 open Lambda
 
-(** [set_transl_splices opt] resets the translation method for splicings in
-    [Translcore]. If [opt] is [None], then splicings will be ignored (i.e.
-    translated as the unit lambda). Otherwise, the splice array in [opt] will be
-    used to fill all upcoming splicings, starting from index 0. *)
-val set_transl_splices: Parsetree.expression array ref option -> unit
 val transl_exp: expression -> lambda
 val transl_apply: ?should_be_tailcall:bool
                   -> ?inlined:inline_attribute
@@ -44,6 +39,8 @@ val transl_extension_constructor: Env.t -> Path.t option ->
 val check_recursive_lambda: Ident.t list -> lambda -> bool
 
 val used_primitives: (Path.t, Location.t) Hashtbl.t
+
+val set_splice_array: Parsetree.expression array option -> unit
 
 type error =
     Illegal_letrec_pat

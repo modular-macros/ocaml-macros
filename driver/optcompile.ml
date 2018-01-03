@@ -97,7 +97,7 @@ let implementation ~backend ppf sourcefile outputprefix =
         else sstat_lam
       in
       let splices = Runstatic.run_static ppf w_stat_lam in
-      Translcore.set_transl_splices (Some (ref splices));
+      Translcore.set_splice_array (Some splices);
       if Config.flambda then begin
         if !Clflags.classic_inlining then begin
           Clflags.default_simplify_rounds := 1;

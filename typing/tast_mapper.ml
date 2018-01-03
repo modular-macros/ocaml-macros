@@ -348,8 +348,8 @@ let expr sub x =
         Texp_lazy (sub.expr sub exp)
     | Texp_quote exp ->
         Texp_quote (sub.expr sub exp)
-    | Texp_escape exp ->
-        Texp_escape (sub.expr sub exp)
+    | Texp_escape ({ esc_exp = exp } as desc) ->
+        Texp_escape { desc with esc_exp = (sub.expr sub exp) }
     | Texp_object (cl, sl) ->
         Texp_object (sub.class_structure sub cl, sl)
     | Texp_pack mexpr ->

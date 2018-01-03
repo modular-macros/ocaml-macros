@@ -362,7 +362,7 @@ let execute_phrase print_outcome ppf phr =
           Format.pp_print_newline ppf ()
         done
       ;
-      Translcore.set_transl_splices (Some (ref splices));
+      Translcore.set_splice_array (Some splices);
       let lam = Translmod.transl_toplevel_definition Asttypes.Nonstatic str in
       Warnings.check_fatal ();
       begin try

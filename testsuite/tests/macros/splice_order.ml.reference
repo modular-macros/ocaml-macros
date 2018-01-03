@@ -2,7 +2,12 @@
 # macro one : int expr = << 1 >>
 # macro two : int expr = << 2 >>
 # macro three : int expr = << 3 >>
-#               1
+# macro four : int expr = << 4 >>
+# macro five : int expr = << 5 >>
+#           1
 2
 3
-# 
+#       4
+#       5
+#   static val x : int ~Pervasives.ref = {~Pervasives.contents = 0}
+#       1#       2#       3# 

@@ -116,7 +116,7 @@ and expression_desc =
   | Texp_object of class_structure * string list
   | Texp_pack of module_expr
   | Texp_quote of expression
-  | Texp_escape of expression
+  | Texp_escape of escape_desc
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
 
@@ -527,6 +527,11 @@ and 'a class_infos =
     ci_loc: Location.t;
     ci_attributes: attribute list;
    }
+
+and escape_desc =
+  { esc_exp: expression;
+    mutable esc_index: int option;
+  }
 
 (* Auxiliary functions over the a.s.t. *)
 

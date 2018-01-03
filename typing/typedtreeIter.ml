@@ -358,7 +358,7 @@ module MakeIterator(Iter : IteratorArgument) : sig
         | Texp_pack (mexpr) ->
             iter_module_expr mexpr
         | Texp_quote exp -> iter_expression exp
-        | Texp_escape exp -> iter_expression exp
+        | Texp_escape { esc_exp = e } -> iter_expression e
         | Texp_unreachable ->
             ()
         | Texp_extension_constructor _ ->

@@ -404,8 +404,9 @@ and expression i ppf x =
   | Texp_quote e ->
       line i ppf "Texp_quote";
       expression i ppf e
-  | Texp_escape e ->
+  | Texp_escape { esc_index = idx; esc_exp = e } ->
       line i ppf "Texp_escape";
+      option i (fun i ppf x -> line i ppf "\"%d\"\n" x) ppf idx;
       expression i ppf e
   | Texp_unreachable ->
       line i ppf "Texp_unreachable"

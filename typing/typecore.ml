@@ -2889,7 +2889,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         sbody (Predef.type_expr ty_expected)
       in
         re {
-          exp_desc = Texp_escape body;
+          exp_desc = Texp_escape { esc_exp = body; esc_index = None };
           exp_loc = loc; exp_extra = [];
           exp_type = instance env ty_expected;
           exp_attributes = sexp.pexp_attributes;

@@ -99,7 +99,7 @@ let implementation ppf sourcefile outputprefix =
         else sstat_lam
       in
       let splices = Runstatic.run_static ppf w_stat_lam in
-      Translcore.set_transl_splices (Some (ref splices));
+      Translcore.set_splice_array (Some splices);
       let bytecode, required_globals =
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))

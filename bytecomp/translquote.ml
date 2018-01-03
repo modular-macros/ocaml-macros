@@ -767,7 +767,7 @@ and quote_expression transl pclos stage e =
   | Texp_quote exp ->
       let exp = quote_expression transl pclos (stage + 1) exp in
       apply loc Exp.quote [quote_loc loc; exp]
-  | Texp_escape exp ->
+  | Texp_escape { esc_exp = exp } ->
       if stage > 0 then begin
         let exp = quote_expression transl pclos (stage - 1) exp in
         apply loc Exp.escape [quote_loc loc; exp]
