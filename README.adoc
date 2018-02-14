@@ -2,22 +2,16 @@ Build status: image:https://api.travis-ci.org/ocamllabs/ocaml-macros.svg?branch=
 
 = OCaml macros =
 
-https://github.com/OlivierNicole/ocaml/tree/macros_unstable[macros_unstable] is
-merged into https://github.com/OlivierNicole/ocaml/tree/macros[macros] on a
-regular basis, once a set of changes has been applied and the tests run.
-
 == Overview
 
 This is an experimental implementation of OCaml macros, originally designed by
-Leo White and Jeremy Yallop:
+Leo White and Jeremy Yallop ([original paper](http://www.lpw25.net/papers/ocaml2015-abs1.pdf)). The
+best place to learn more is probably this
+[introduction post](http://otini.chnik.fr/posts/2017-01-06-modular-macros.html).
 
-http://www.lpw25.net/ocaml2015-abs1.pdf
-
-You can find a summary of the current progress here:
-
-https://oliviernicole.github.io/about_macros.html
-
-This branch is based on version 4.04 of OCaml.
+The current default branch is `macros_with_lambda_quotes`, which will eventually become the
+only implementation. However, for a nicer printing of quotes, you may want to use the legacy branch
+`macros_old` until prettier printing is implemented in this branch.
 
 == Installation
 
