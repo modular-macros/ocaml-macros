@@ -5,9 +5,9 @@ Build status: image:https://api.travis-ci.org/ocamllabs/ocaml-macros.svg?branch=
 == Overview
 
 This is an experimental implementation of OCaml macros, originally designed by
-Leo White and Jeremy Yallop ([original paper](http://www.lpw25.net/papers/ocaml2015-abs1.pdf)). The
+Leo White and Jeremy Yallop (http://www.lpw25.net/papers/ocaml2015-abs1.pdf[original paper]). The
 best place to learn more is probably this
-[introduction post](http://otini.chnik.fr/posts/2017-01-06-modular-macros.html).
+http://otini.chnik.fr/posts/2017-01-06-modular-macros.html[introduction post].
 
 The current default branch is `macros_with_lambda_quotes`, which will eventually become the
 only implementation. However, for a nicer printing of quotes, you may want to use the legacy branch
@@ -16,7 +16,8 @@ only implementation. However, for a nicer printing of quotes, you may want to us
 == Installation
 
 Installation instruction are the same as for the standard OCaml distribution.
-You can find a few examples of what is possible in the links above. You can also
+You can find a few examples of what is possible in the links above, or on the
+https://github.com/OlivierNicole/macros-examples[macros-examples repo]. You can also
 take a look at the `testsuite/tests/macros/` directory.
 
 === Installing OPAM packages
