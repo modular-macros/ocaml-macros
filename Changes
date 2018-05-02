@@ -1,3 +1,11 @@
+Working version
+---------------
+
+### Runtime system:
+
+- GPR#1752: do not alias function arguments to sigprocmask (Anil Madhavapeddy)
+
+
 OCaml 4.04.0:
 -------------
 
