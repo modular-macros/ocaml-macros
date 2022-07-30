@@ -1,3 +1,15 @@
+Working version
+---------------
+
+### Runtime system:
+
+- GPR#1752: do not alias function arguments to sigprocmask (Anil Madhavapeddy)
+
+### Tools:
+
+- GPR#1753: avoid potential off-by-one overflow in debugger socket path
+  length (Anil Madhavapeddy)
+
 OCaml 4.04.0:
 -------------
 
