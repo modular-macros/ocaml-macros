@@ -1518,18 +1518,19 @@ let advance_pos item pos_stat pos_rt env =
   let add sf sf' =
     match (sf, sf') with
     | (Nonstatic, sf) | (sf, Nonstatic) -> sf
-    | _ -> assert false
+    | (Static, Static) ->
+        raise (Invalid_argument "Evaluating static sigitem in phase-1 env")
   in
   let pos = function Static -> pos_stat | Nonstatic -> pos_rt in
   match item with
   | Sig_value (_id, sf, decl) ->
-      let sf = add (sf_of_phase (cur_phase env)) sf in
       begin match decl.val_kind with
       | Val_macro ->
         (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
       | Val_prim _ ->
+        let sf = add (sf_of_phase (cur_phase env)) sf in
         (Uniphase (sf, pos sf), pos_stat, pos_rt)
-      | _ when sf = Static ->
+      | _ when cur_phase env = 1 || sf = Static ->
         (Uniphase (Static, pos_stat), pos_stat+1, pos_rt)
       | _ ->
         (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
