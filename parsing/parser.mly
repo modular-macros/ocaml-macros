@@ -398,21 +398,6 @@ let val_of_let_bindings static_flag lbs =
   | None -> str
   | Some id -> ghstr (Pstr_extension((id, PStr [str]), []))
 
-let val_of_macro_bindings lbs =
-  let bindings =
-    List.map
-      (fun lb ->
-        Vb.mk ~loc:lb.lb_loc ~attrs:lb.lb_attributes
-          ~docs:(Lazy.force lb.lb_docs)
-          ~text:(Lazy.force lb.lb_text)
-          lb.lb_pattern lb.lb_expression)
-      lbs.lbs_bindings
-  in
-  let str = mkstr (Pstr_macro (lbs.lbs_rec, List.rev bindings)) in
-  match lbs.lbs_extension with
-  | None -> str
-  | Some id -> ghstr (Pstr_extension ((id, PStr [str]), []))
-
 let expr_of_let_bindings lbs body =
   let bindings =
     List.map
@@ -584,7 +569,6 @@ let package_type_of_module_type pmty =
 %token <string> HASHOP
 %token SIG
 %token STATIC
-%token MACRO
 %token STAR
 %token <string * string option> STRING
 %token STRUCT
@@ -634,7 +618,6 @@ The precedences must be listed from low to high.
 %nonassoc SEMI                          /* below EQUAL ({lbl=...; lbl=...}) */
 %nonassoc LET                           /* above SEMI ( ...; let ... in ...) */
 %nonassoc STATIC
-%nonassoc MACRO
 %nonassoc below_WITH
 %nonassoc FUNCTION WITH                 /* below BAR  (match ... with ...) */
 %nonassoc AND             /* above WITH (module rec A: SIG with ... and ...) */
@@ -845,8 +828,6 @@ structure_item:
       { val_of_let_bindings Nonstatic $1 }
   | static_bindings
       { val_of_let_bindings Static $1 }
-  | macro_bindings
-      { val_of_macro_bindings $1 }
   | primitive_declaration
       { let (body, ext) = $1 in mkstr_ext (Pstr_primitive body) ext }
   | primitive_description
@@ -1717,24 +1698,11 @@ static_bindings:
   | static_bindings and_static_bindings { addlb $1 $2 }
 ;
 static_binding:
-  STATIC ext_attributes rec_flag let_binding_body post_item_attributes
-    { let (ext, attr) = $2 in
-      mklbs ext $3 (mklb true $4 (attr@$5)) }
+  LET TILDE ext_attributes rec_flag let_binding_body post_item_attributes
+    { let (ext, attr) = $3 in
+      mklbs ext $4 (mklb true $5 (attr@$6)) }
 ;
 and_static_bindings:
-  AND attributes let_binding_body post_item_attributes
-    { mklb false $3 ($2@$4) }
-;
-macro_bindings:
-    macro_binding                     { $1 }
-  | macro_bindings and_macro_bindings { addlb $1 $2 }
-;
-macro_binding:
-  MACRO ext_attributes rec_flag let_binding_body post_item_attributes
-    { let (ext, attr) = $2 in
-      mklbs ext $3 (mklb true $4 (attr@$5)) }
-;
-and_macro_bindings:
   AND attributes let_binding_body post_item_attributes
     { mklb false $3 ($2@$4) }
 ;
@@ -1992,14 +1960,9 @@ value_description:
           Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
                 ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
         , ext) }
-  | STATIC VAL ext_attributes val_ident COLON core_type post_item_attributes
+  | VAL TILDE ext_attributes val_ident COLON core_type post_item_attributes
       { (Nonmacro Static, let (ext, attrs) = $3 in
           Val.mk (mkrhs $4 3) $6 ~attrs:(attrs@$7)
-                ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
-        , ext) }
-  | MACRO ext_attributes val_ident COLON core_type post_item_attributes
-      { (Macro, let (ext, attrs) = $2 in
-          Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
                 ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
         , ext) }
 ;

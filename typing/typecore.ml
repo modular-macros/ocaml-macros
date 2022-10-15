@@ -2865,8 +2865,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_env = env;
       }
   | Pexp_quote sbody ->
-      if not (Env.is_in_toplevel_splice env || Env.is_in_macro env) then
-        raise (Error (loc, env, Illegal_quoting));
+      (* if not (Env.is_in_toplevel_splice env || Env.is_in_macro env) then
+       *   raise (Error (loc, env, Illegal_quoting)); *)
       let ty = newgenvar() in
       let to_unify = Predef.type_expr ty in
       unify_exp_types loc env to_unify ty_expected;

@@ -24,6 +24,8 @@ open Typedtree
 open Typeopt
 open Lambda
 
+let treeinspect_expression = ref (fun _ -> assert false)
+
 type error =
     Illegal_letrec_pat
   | Illegal_letrec_expr
@@ -32,6 +34,7 @@ type error =
   | Unreachable_reached
   | Illegal_macro_pat
   | Illegal_macro_app
+  | Illegal_local_quoting of Path.t list
 
 exception Error of Location.t * error
 
@@ -751,39 +754,39 @@ and transl_exp0 e =
         transl_primitive e.exp_loc p e.exp_env e.exp_type (Some path)
   | Texp_ident(_, _, {val_kind = Val_anc _}) ->
       raise(Error(e.exp_loc, Free_super_var))
-  | Texp_ident(path, lid, {val_kind = Val_macro}) ->
-      if not (Env.is_in_toplevel_splice e.exp_env ||
-          Env.is_in_macro e.exp_env) then
-        (* not in a macro nor in a splice *)
-        raise (Error (e.exp_loc, Illegal_macro_app))
-      ;
-      let get_path () =
-        Translquote.path_arg e.exp_loc @@
-        transl_path ~loc:e.exp_loc
-          (Env.with_phase 0 e.exp_env) (* this path is meant for runtime *)
-          path
-      in
-      let lid = begin
-        match !path_clos with
-        | None -> get_path ()
-        | Some (path_id, map) ->
-            try
-              let field = Env.PathMap.find path map in
-              if field = -1 then
-                Lvar path_id
-              else
-                Translquote.transl_clos_field lid.loc path_id
-                  (Path.name path) field
-            with Not_found ->
-              get_path ()
-      end in
-      Lapply {
-        ap_func = transl_path ~loc:e.exp_loc e.exp_env path;
-        ap_args = [lid];
-        ap_loc = e.exp_loc;
-        ap_should_be_tailcall = false;
-        ap_inlined = Default_inline;
-        ap_specialised = Default_specialise; }
+  (* | Texp_ident(path, lid, {val_kind = Val_macro}) ->
+   *     if not (Env.is_in_toplevel_splice e.exp_env ||
+   *         Env.is_in_macro e.exp_env) then
+   *       (\* not in a macro nor in a splice *\)
+   *       raise (Error (e.exp_loc, Illegal_macro_app))
+   *     ;
+   *     let get_path () =
+   *       Translquote.path_arg e.exp_loc @@
+   *       transl_path ~loc:e.exp_loc
+   *         (Env.with_phase 0 e.exp_env) (\* this path is meant for runtime *\)
+   *         path
+   *     in
+   *     let lid = begin
+   *       match !path_clos with
+   *       | None -> get_path ()
+   *       | Some (path_id, map) ->
+   *           try
+   *             let field = Env.PathMap.find path map in
+   *             if field = -1 then
+   *               Lvar path_id
+   *             else
+   *               Translquote.transl_clos_field lid.loc path_id
+   *                 (Path.name path) field
+   *           with Not_found ->
+   *             get_path ()
+   *     end in
+   *     Lapply {
+   *       ap_func = transl_path ~loc:e.exp_loc e.exp_env path;
+   *       ap_args = [lid];
+   *       ap_loc = e.exp_loc;
+   *       ap_should_be_tailcall = false;
+   *       ap_inlined = Default_inline;
+   *       ap_specialised = Default_specialise; } *)
   | Texp_ident(path, _, {val_kind = Val_reg | Val_self _}) ->
     begin
       let get_path () =
@@ -796,7 +799,7 @@ and transl_exp0 e =
           try
             let field_idx = Env.PathMap.find path map in
             Lescape (* we don't want this to be lifted *)
-              (Translquote.transl_clos_field e.exp_loc path_id (Path.name
+              (Translquote.transl_clos_field ~phase:(Env.cur_phase e.exp_env) e.exp_loc path_id (Path.name
                 path) field_idx)
           with Not_found ->
             get_path ()
@@ -1155,7 +1158,10 @@ and transl_exp0 e =
           cl_attributes = [];
          }
   | Texp_quote exp ->
-      Translquote.quote_expression transl_exp !path_clos exp
+     begin match !treeinspect_expression exp with
+     | _, [], [] -> Translquote.quote_expression ~phase:(Env.cur_phase e.exp_env) transl_exp !path_clos exp
+     | _, cs_paths, macro_paths -> raise (Error (exp.exp_loc, Illegal_local_quoting (cs_paths @ macro_paths)))
+     end
   | Texp_escape exp ->
     begin
       (* If toplevel splice *)
@@ -1493,76 +1499,6 @@ and transl_match e arg pat_expr_list exn_pat_expr_list partial =
     static_catch [transl_exp arg] [val_id]
       (Matching.for_function e.exp_loc None (Lvar val_id) cases partial)
 
-let transl_macro target_phase rec_flag pat_expr_list inspect body =
-  let id_vb_list =
-    List.map
-      (fun ({vb_pat=pat} as vb) -> match pat.pat_desc with
-          Tpat_var (id,_) -> (id, vb)
-        | Tpat_alias ({pat_desc=Tpat_any}, id,_) -> (id, vb)
-        | _ -> raise(Error(pat.pat_loc, Illegal_macro_pat)))
-    pat_expr_list
-  in
-  let transl_one id {vb_expr=expr; vb_attributes; vb_loc} =
-    let (_, cs_paths, macro_paths) = inspect expr in
-    (* Filter out the current macro *)
-    let this_macro = Path.Pident id in
-    let macro_paths =
-      List.filter (fun p -> Path.compare p this_macro <> 0) macro_paths
-    in
-    let rec build_map acc i =
-      function
-      | [] -> acc
-      | x :: xs -> build_map (Env.PathMap.add x i acc) (succ i) xs
-    in
-    let path_mapping : int Env.PathMap.t =
-      build_map Env.PathMap.empty 0 (cs_paths @ macro_paths)
-    in
-    let path_mapping = Env.PathMap.add this_macro (-1) path_mapping in
-    if target_phase = Static then
-      let path_id = Ident.create "path" in
-      path_clos := Some (path_id, path_mapping);
-      let lam = transl_exp expr in
-      path_clos := None;
-      let lam =
-        Translattribute.add_inline_attribute lam vb_loc
-          vb_attributes
-      in
-      let lam =
-        Translattribute.add_specialise_attribute lam vb_loc
-          vb_attributes
-      in
-      if rec_flag = Recursive &&
-          not (check_recursive_lambda (List.map fst id_vb_list) lam) then
-        raise (Error (expr.exp_loc, Illegal_letrec_expr))
-      ;
-      let macro_ = Lfunction {
-        kind = Curried;
-        params = [path_id];
-        body = lam;
-        attr = default_function_attribute;
-        loc = expr.exp_loc; }
-      in
-      macro_
-    else
-      let clos_lam =
-        Lprim (Pmakeblock (0, Immutable, None),
-          List.map (fun p ->
-            transl_path (Env.with_phase 0 expr.exp_env) p
-          ) (cs_paths @ macro_paths),
-          Location.none)
-      in
-      clos_lam
-  in
-  match rec_flag with
-  | Nonrecursive ->
-      let transl body (id, vb) =
-        Llet (Alias, Pgenval, id, transl_one id vb, body)
-      in
-      List.fold_left transl body (List.rev id_vb_list)
-  | Recursive ->
-      let l = List.map (fun (x,y) -> (x, transl_one x y)) id_vb_list in
-      Lletrec (l, body)
-
 (* Wrapper for class compilation *)
 
 (*
@@ -1600,6 +1536,14 @@ let report_error ppf = function
   | Illegal_macro_app ->
       fprintf ppf
         "Macro application is only allowed in macros and under `$'"
+  | Illegal_local_quoting paths ->
+      fprintf ppf
+        "The following module-local names cannot be quoted: ";
+      let len = List.length paths in
+      List.iteri (fun i p ->
+          if i = pred len then fprintf ppf "%s" (Path.name p) else
+            fprintf ppf "%s,@ " (Path.name p))
+      paths
 
 let () =
   Location.register_error_of_exn

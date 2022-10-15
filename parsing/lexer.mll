@@ -77,7 +77,6 @@ let keyword_table =
     "rec", REC;
     "sig", SIG;
     "static", STATIC;
-    "macro", MACRO;
     "struct", STRUCT;
     "then", THEN;
     "to", TO;
