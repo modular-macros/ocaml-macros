@@ -81,6 +81,8 @@ end = struct
     ret
 end
 
+let () = Translcore.treeinspect_expression := TreeInspect.expression
+
 let transl_toplevel_splice exp =
   let (cs_glob, _, _) = TreeInspect.expression exp in
   List.fold_left

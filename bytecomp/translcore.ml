@@ -24,6 +24,8 @@ open Typedtree
 open Typeopt
 open Lambda
 
+let treeinspect_expression = ref (fun _ -> assert false)
+
 type error =
     Illegal_letrec_pat
   | Illegal_letrec_expr
@@ -32,6 +34,7 @@ type error =
   | Unreachable_reached
   | Illegal_macro_pat
   | Illegal_macro_app
+  | Illegal_local_quoting of Path.t list
 
 exception Error of Location.t * error
 
@@ -1155,7 +1158,11 @@ and transl_exp0 e =
           cl_attributes = [];
          }
   | Texp_quote exp ->
-      Translquote.quote_expression transl_exp !path_clos exp
+      Translquote.quote_expression ~phase:(Env.cur_phase e.exp_env) transl_exp !path_clos exp
+     (* begin match !treeinspect_expression exp with
+      * | _, [], [] -> Translquote.quote_expression ~phase:(Env.cur_phase e.exp_env) transl_exp !path_clos exp
+      * | _, cs_paths, macro_paths -> raise (Error (exp.exp_loc, Illegal_local_quoting (cs_paths @ macro_paths)))
+      * end *)
   | Texp_escape exp ->
     begin
       (* If toplevel splice *)
@@ -1600,6 +1607,14 @@ let report_error ppf = function
   | Illegal_macro_app ->
       fprintf ppf
         "Macro application is only allowed in macros and under `$'"
+  | Illegal_local_quoting paths ->
+      fprintf ppf
+        "The following module-local names cannot be quoted: ";
+      let len = List.length paths in
+      List.iteri (fun i p ->
+          if i = pred len then fprintf ppf "%s" (Path.name p) else
+            fprintf ppf "%s,@ " (Path.name p))
+      paths
 
 let () =
   Location.register_error_of_exn

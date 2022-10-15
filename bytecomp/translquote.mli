@@ -3,6 +3,7 @@ open Lambda
 open Asttypes
 
 val quote_expression :
+  phase:int ->
   (expression -> lambda) -> (Ident.t * int Env.PathMap.t) option ->
   expression -> lambda
 

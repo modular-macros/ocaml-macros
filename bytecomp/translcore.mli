@@ -53,6 +53,7 @@ type error =
   | Unreachable_reached
   | Illegal_macro_pat
   | Illegal_macro_app
+  | Illegal_local_quoting of Path.t list
 
 exception Error of Location.t * error
 
@@ -65,3 +66,5 @@ val transl_module :
       (module_coercion -> Path.t option -> module_expr -> lambda) ref
 val transl_object :
       (Ident.t -> string list -> class_expr -> lambda) ref
+
+val treeinspect_expression : (expression -> Ident.t loc list * Path.t list * Path.t list) ref

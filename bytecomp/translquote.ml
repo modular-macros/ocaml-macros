@@ -64,9 +64,9 @@ let second block =
   Lprim (Pfield 1, [block], Location.none)
 *)
 
-module Lam = struct
+module Lam (Base: sig val stdmod_path : string end) = struct
 
-  let stdmod_path = Ident.lift_string "CamlinternalQuote"
+  let stdmod_path = Base.stdmod_path
   let lambda_mod = "Lambda"
 
   let camlinternalQuote =
@@ -80,6 +80,7 @@ module Lam = struct
   let static_pos =
     function
     | Path.Uniphase (Static, i) -> i
+    | Path.Uniphase (Nonstatic, i) -> i
     | Path.Biphase (i, _) -> i
     | _ -> fatal_error (stdmod_path ^ " primitive at unexpected position.")
 
@@ -402,6 +403,9 @@ module Lam = struct
     lift_lambda path
 
 end
+
+module StaticLam = Lam(struct let stdmod_path = Ident.lift_string "CamlinternalQuote" end)
+module DynamicLam = Lam(struct let stdmod_path = "CamlinternalQuote" end)
 
 (*
 module Parsetree = struct
@@ -1166,12 +1170,14 @@ module Parsetree = struct
 end
 *)
 
-let quote_expression = Lam.quote_expression
+let quote_expression ~phase =
+  match phase with
+  | 0 -> DynamicLam.quote_expression
+  | 1 -> StaticLam.quote_expression
+  | _ -> assert false
 
 let transl_close_expression _loc e = e
 
-let path_arg = Lam.path_arg
-
+let path_arg = StaticLam.path_arg
 let wrap_local _loc _id _name lam = lam
-
-let transl_clos_field = Lam.transl_clos_field
+let transl_clos_field = StaticLam.transl_clos_field
