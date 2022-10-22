@@ -1537,7 +1537,7 @@ let transl_macro target_phase rec_flag pat_expr_list inspect body =
       let clos_lam =
         Lprim (Pmakeblock (0, Immutable, None),
           List.map (fun p ->
-            transl_path expr.exp_env p
+            transl_path (Env.with_phase 0 expr.exp_env) p
           ) (cs_paths @ macro_paths),
           Location.none)
       in
