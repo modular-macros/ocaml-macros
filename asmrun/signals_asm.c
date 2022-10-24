@@ -191,71 +191,71 @@ DECLARE_SIGNAL_HANDLER(trap_handler)
 
 /* Machine- and OS-dependent handling of stack overflow */
 
-#ifdef HAS_STACK_OVERFLOW_DETECTION
-
-static char * system_stack_top;
-static char sig_alt_stack[SIGSTKSZ];
-
-#if defined(SYS_linux)
-/* PR#4746: recent Linux kernels with support for stack randomization
-   silently add 2 Mb of stack space on top of RLIMIT_STACK.
-   2 Mb = 0x200000, to which we add 8 kB (=0x2000) for overshoot. */
-#define EXTRA_STACK 0x202000
-#else
-#define EXTRA_STACK 0x2000
-#endif
-
-#ifdef RETURN_AFTER_STACK_OVERFLOW
-extern void caml_stack_overflow(void);
-#endif
-
-DECLARE_SIGNAL_HANDLER(segv_handler)
-{
-  struct rlimit limit;
-  struct sigaction act;
-  char * fault_addr;
-
-  /* Sanity checks:
-     - faulting address is word-aligned
-     - faulting address is within the stack
-     - we are in OCaml code */
-  fault_addr = CONTEXT_FAULTING_ADDRESS;
-  if (((uintnat) fault_addr & (sizeof(intnat) - 1)) == 0
-      && getrlimit(RLIMIT_STACK, &limit) == 0
-      && fault_addr < system_stack_top
-      && fault_addr >= system_stack_top - limit.rlim_cur - EXTRA_STACK
-#ifdef CONTEXT_PC
-      && Is_in_code_area(CONTEXT_PC)
-#endif
-      ) {
-#ifdef RETURN_AFTER_STACK_OVERFLOW
-    /* Tweak the PC part of the context so that on return from this
-       handler, we jump to the asm function [caml_stack_overflow]
-       (from $ARCH.S). */
-#ifdef CONTEXT_PC
-    CONTEXT_PC = (context_reg) &caml_stack_overflow;
-#else
-#error "CONTEXT_PC must be defined if RETURN_AFTER_STACK_OVERFLOW is"
-#endif
-#else
-    /* Raise a Stack_overflow exception straight from this signal handler */
-#if defined(CONTEXT_YOUNG_PTR) && defined(CONTEXT_EXCEPTION_POINTER)
-    caml_exception_pointer = (char *) CONTEXT_EXCEPTION_POINTER;
-    caml_young_ptr = (value *) CONTEXT_YOUNG_PTR;
-#endif
-    caml_raise_stack_overflow();
-#endif
-  } else {
-    /* Otherwise, deactivate our exception handler and return,
-       causing fatal signal to be generated at point of error. */
-    act.sa_handler = SIG_DFL;
-    act.sa_flags = 0;
-    sigemptyset(&act.sa_mask);
-    sigaction(SIGSEGV, &act, NULL);
-  }
-}
-
-#endif
+//#ifdef HAS_STACK_OVERFLOW_DETECTION
+//
+//static char * system_stack_top;
+//static char sig_alt_stack[SIGSTKSZ];
+//
+//#if defined(SYS_linux)
+///* PR#4746: recent Linux kernels with support for stack randomization
+//   silently add 2 Mb of stack space on top of RLIMIT_STACK.
+//   2 Mb = 0x200000, to which we add 8 kB (=0x2000) for overshoot. */
+//#define EXTRA_STACK 0x202000
+//#else
+//#define EXTRA_STACK 0x2000
+//#endif
+//
+//#ifdef RETURN_AFTER_STACK_OVERFLOW
+//extern void caml_stack_overflow(void);
+//#endif
+//
+//DECLARE_SIGNAL_HANDLER(segv_handler)
+//{
+//  struct rlimit limit;
+//  struct sigaction act;
+//  char * fault_addr;
+//
+//  /* Sanity checks:
+//     - faulting address is word-aligned
+//     - faulting address is within the stack
+//     - we are in OCaml code */
+//  fault_addr = CONTEXT_FAULTING_ADDRESS;
+//  if (((uintnat) fault_addr & (sizeof(intnat) - 1)) == 0
+//      && getrlimit(RLIMIT_STACK, &limit) == 0
+//      && fault_addr < system_stack_top
+//      && fault_addr >= system_stack_top - limit.rlim_cur - EXTRA_STACK
+//#ifdef CONTEXT_PC
+//      && Is_in_code_area(CONTEXT_PC)
+//#endif
+//      ) {
+//#ifdef RETURN_AFTER_STACK_OVERFLOW
+//    /* Tweak the PC part of the context so that on return from this
+//       handler, we jump to the asm function [caml_stack_overflow]
+//       (from $ARCH.S). */
+//#ifdef CONTEXT_PC
+//    CONTEXT_PC = (context_reg) &caml_stack_overflow;
+//#else
+//#error "CONTEXT_PC must be defined if RETURN_AFTER_STACK_OVERFLOW is"
+//#endif
+//#else
+//    /* Raise a Stack_overflow exception straight from this signal handler */
+//#if defined(CONTEXT_YOUNG_PTR) && defined(CONTEXT_EXCEPTION_POINTER)
+//    caml_exception_pointer = (char *) CONTEXT_EXCEPTION_POINTER;
+//    caml_young_ptr = (value *) CONTEXT_YOUNG_PTR;
+//#endif
+//    caml_raise_stack_overflow();
+//#endif
+//  } else {
+//    /* Otherwise, deactivate our exception handler and return,
+//       causing fatal signal to be generated at point of error. */
+//    act.sa_handler = SIG_DFL;
+//    act.sa_flags = 0;
+//    sigemptyset(&act.sa_mask);
+//    sigaction(SIGSEGV, &act, NULL);
+//  }
+//}
+//
+//#endif
 
 /* Initialization of signal stuff */
 
@@ -291,20 +291,20 @@ void caml_init_signals(void)
 #endif
 
   /* Stack overflow handling */
-#ifdef HAS_STACK_OVERFLOW_DETECTION
-  {
-    stack_t stk;
-    struct sigaction act;
-    stk.ss_sp = sig_alt_stack;
-    stk.ss_size = SIGSTKSZ;
-    stk.ss_flags = 0;
-    SET_SIGACT(act, segv_handler);
-    act.sa_flags |= SA_ONSTACK | SA_NODEFER;
-    sigemptyset(&act.sa_mask);
-    system_stack_top = (char *) &act;
-    if (sigaltstack(&stk, NULL) == 0) { sigaction(SIGSEGV, &act, NULL); }
-  }
-#endif
+//#ifdef HAS_STACK_OVERFLOW_DETECTION
+//  {
+//    stack_t stk;
+//    struct sigaction act;
+//    stk.ss_sp = sig_alt_stack;
+//    stk.ss_size = SIGSTKSZ;
+//    stk.ss_flags = 0;
+//    SET_SIGACT(act, segv_handler);
+//    act.sa_flags |= SA_ONSTACK | SA_NODEFER;
+//    sigemptyset(&act.sa_mask);
+//    system_stack_top = (char *) &act;
+//    if (sigaltstack(&stk, NULL) == 0) { sigaction(SIGSEGV, &act, NULL); }
+//  }
+//#endif
 #if defined(_WIN32) && !defined(_WIN64)
   caml_win32_overflow_detection();
 #endif
