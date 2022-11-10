@@ -1307,10 +1307,10 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
               sdefs scope Val_macro
           in
           (* Purity check *)
-          List.iter (fun {vb_expr=exp} ->
-            if not (Typecore.is_nonexpansive true exp) then
-              raise (Error (exp.exp_loc, env, Impure_macro)))
-            defs;
+          (* List.iter (fun {vb_expr=exp} ->
+           *   if not (Typecore.is_nonexpansive true exp) then
+           *     raise (Error (exp.exp_loc, env, Impure_macro)))
+           *   defs; *)
           Tstr_macro (rec_flag, defs),
           List.map
             (fun id ->

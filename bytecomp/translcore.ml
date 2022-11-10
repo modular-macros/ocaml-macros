@@ -25,6 +25,7 @@ open Typeopt
 open Lambda
 
 let treeinspect_expression = ref (fun _ -> assert false)
+let allow_quoting_local_names = ref false
 
 type error =
     Illegal_letrec_pat
@@ -796,6 +797,11 @@ and transl_exp0 e =
       | None ->
           get_path ()
       | Some (path_id, map) ->
+         if not !allow_quoting_local_names then
+           failwith "Quoting local names is only allowed in a pure macro expression"
+         else if not !Clflags.path_closures then
+           Printf.ksprintf failwith "Using local names such as %s in macros is not permitted without -path-closures" (Path.name path)
+         else
           try
             let field_idx = Env.PathMap.find path map in
             Lescape (* we don't want this to be lifted *)
@@ -1158,10 +1164,11 @@ and transl_exp0 e =
           cl_attributes = [];
          }
   | Texp_quote exp ->
-      Translquote.quote_expression ~phase:(Env.cur_phase e.exp_env) transl_exp !path_clos exp
-     (* begin match !treeinspect_expression exp with
-      * | _, [], [] -> Translquote.quote_expression ~phase:(Env.cur_phase e.exp_env) transl_exp !path_clos exp
-      * | _, cs_paths, macro_paths -> raise (Error (exp.exp_loc, Illegal_local_quoting (cs_paths @ macro_paths)))
+     Translquote.quote_expression ~phase:(Env.cur_phase e.exp_env) transl_exp !path_clos exp
+     (* begin match !allow_quoting_local_names, !treeinspect_expression exp with
+      * | _, (_,[], _)
+      * | true, _ -> T
+      * | false, (_, _cs_paths, _macro_paths) -> failwith "Quoting local names is only allowed in a pure macro expression"
       * end *)
   | Texp_escape exp ->
     begin
@@ -1500,7 +1507,21 @@ and transl_match e arg pat_expr_list exn_pat_expr_list partial =
     static_catch [transl_exp arg] [val_id]
       (Matching.for_function e.exp_loc None (Lvar val_id) cases partial)
 
+let with_set r v k =
+  let u = !r in
+  let () = r := v in
+  match k () with
+  | x -> r := u; x
+  | exception e -> r := u; raise e
+
 let transl_macro target_phase rec_flag pat_expr_list inspect body =
+  with_set allow_quoting_local_names true @@ fun () ->
+  (* Rather crude: insist all macros in a recursive group are pure before allowing quoting *)
+  List.iter (fun {vb_expr=exp} ->
+      if not (Typecore.is_nonexpansive true exp) 
+       || (match exp.exp_desc with Texp_quote _ -> true | _ -> false) then
+        allow_quoting_local_names := false)
+    pat_expr_list;
   let id_vb_list =
     List.map
       (fun ({vb_pat=pat} as vb) -> match pat.pat_desc with
@@ -1542,12 +1563,24 @@ let transl_macro target_phase rec_flag pat_expr_list inspect body =
           not (check_recursive_lambda (List.map fst id_vb_list) lam) then
         raise (Error (expr.exp_loc, Illegal_letrec_expr))
       ;
-      let macro_ = Lfunction {
-        kind = Curried;
-        params = [path_id];
-        body = lam;
-        attr = default_function_attribute;
-        loc = expr.exp_loc; }
+      let macro_ = 
+        if not (Typecore.is_nonexpansive true expr) 
+           || (match expr.exp_desc with Texp_quote _ -> true | _ -> false) then
+          let let_id = Ident.create "macrhs" in
+          Llet (Strict, Pgenval, let_id, lam, 
+                Lfunction {
+                    kind = Curried;
+                    params = [path_id];
+                    body = Lvar let_id;
+                    attr = default_function_attribute;
+                    loc = expr.exp_loc; })
+        else
+          Lfunction {
+              kind = Curried;
+              params = [path_id];
+              body = lam;
+              attr = default_function_attribute;
+              loc = expr.exp_loc; }
       in
       macro_
     else
