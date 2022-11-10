@@ -82,6 +82,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _principal = set principal
   let _no_principal = unset principal
   let _path_closures = set path_closures
+  let _no_path_closures = unset path_closures
   let _rectypes = set recursive_types
   let _no_rectypes = unset recursive_types
   let _runtime_variant s = runtime_variant := s

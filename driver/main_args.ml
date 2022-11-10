@@ -406,6 +406,10 @@ let mk_path_closures f =
   "-path-closures", Arg.Unit f, " Use path closures when quoting local names"
 ;;
 
+let mk_no_path_closures f =
+  "-no-path-closures", Arg.Unit f, " Do not use path closures when quoting local names"
+;;
+
 let mk_rectypes f =
   "-rectypes", Arg.Unit f, " Allow arbitrary recursive types"
 ;;
@@ -753,6 +757,7 @@ module type Common_options = sig
   val _principal : unit -> unit
   val _no_principal : unit -> unit
   val _path_closures : unit -> unit
+  val _no_path_closures : unit -> unit
   val _rectypes : unit -> unit
   val _no_rectypes : unit -> unit
   val _safe_string : unit -> unit
@@ -811,6 +816,7 @@ module type Compiler_options = sig
   val _principal : unit -> unit
   val _no_principal : unit -> unit
   val _path_closures : unit -> unit
+  val _no_path_closures : unit -> unit
   val _rectypes : unit -> unit
   val _runtime_variant : string -> unit
   val _safe_string : unit -> unit
@@ -1005,6 +1011,7 @@ struct
     mk_principal F._principal;
     mk_no_principal F._no_principal;
     mk_path_closures F._path_closures;
+    mk_no_path_closures F._no_path_closures;
     mk_rectypes F._rectypes;
     mk_no_rectypes F._no_rectypes;
     mk_runtime_variant F._runtime_variant;
@@ -1069,6 +1076,7 @@ struct
     mk_principal F._principal;
     mk_no_principal F._no_principal;
     mk_path_closures F._path_closures;
+    mk_no_path_closures F._no_path_closures;
     mk_rectypes F._rectypes;
     mk_no_rectypes F._no_rectypes;
     mk_safe_string F._safe_string;
@@ -1169,6 +1177,7 @@ struct
     mk_principal F._principal;
     mk_no_principal F._no_principal;
     mk_path_closures F._path_closures;
+    mk_no_path_closures F._no_path_closures;
     mk_rectypes F._rectypes;
     mk_no_rectypes F._no_rectypes;
     mk_remove_unused_arguments F._remove_unused_arguments;
@@ -1274,6 +1283,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_principal F._principal;
     mk_no_principal F._no_principal;
     mk_path_closures F._path_closures;
+    mk_no_path_closures F._no_path_closures;
     mk_rectypes F._rectypes;
     mk_no_rectypes F._no_rectypes;
     mk_remove_unused_arguments F._remove_unused_arguments;

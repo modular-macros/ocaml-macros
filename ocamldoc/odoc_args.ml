@@ -214,6 +214,7 @@ module Options = Main_args.Make_ocamldoc_options(struct
   let _principal = set Clflags.principal
   let _no_principal = unset Clflags.principal
   let _path_closures = set Clflags.path_closures
+  let _no_path_closures = unset Clflags.path_closures
   let _rectypes = set Clflags.recursive_types
   let _no_rectypes = unset Clflags.recursive_types
   let _safe_string = unset Clflags.unsafe_string

@@ -93,6 +93,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _principal = option "-principal"
   let _no_principal = option "-no-principal"
   let _path_closures = option "-path-closures"
+  let _no_path_closures = option "-no-path-closures"
   let _rectypes = option "-rectypes"
   let _no_rectypes = option "-no-rectypes"
   let _runtime_variant s = option_with_arg "-runtime-variant" s
