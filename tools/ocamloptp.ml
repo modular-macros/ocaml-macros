@@ -114,6 +114,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _ppx _s = incompatible "-ppx"
   let _principal = option "-principal"
   let _no_principal = option "-no-principal"
+  let _path_closures = option "-path-closures"
   let _rectypes = option "-rectypes"
   let _no_rectypes = option "-no-rectypes"
   let _remove_unused_arguments = option "-remove-unused-arguments"

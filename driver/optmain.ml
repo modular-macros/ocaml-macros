@@ -159,6 +159,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _ppx s = first_ppx := s :: !first_ppx
   let _principal = set principal
   let _no_principal = clear principal
+  let _path_closures = set path_closures
   let _rectypes = set recursive_types
   let _no_rectypes = clear recursive_types
   let _remove_unused_arguments = set remove_unused_arguments

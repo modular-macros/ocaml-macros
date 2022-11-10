@@ -1178,6 +1178,12 @@ let quote_expression ~phase =
 
 let transl_close_expression _loc e = e
 
-let path_arg = StaticLam.path_arg
+let path_arg x = 
+  if !Clflags.path_closures then StaticLam.path_arg x
+  else failwith "Quoting local names is not permitted without -path-closures"
 let wrap_local _loc _id _name lam = lam
-let transl_clos_field = StaticLam.transl_clos_field
+let transl_clos_field x = 
+  if !Clflags.path_closures then StaticLam.transl_clos_field x
+  else failwith "Quoting local names is not permitted without -path-closures"
+
+

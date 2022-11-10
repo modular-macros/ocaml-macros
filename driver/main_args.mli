@@ -32,6 +32,7 @@ module type Common_options = sig
   val _ppx : string -> unit
   val _principal : unit -> unit
   val _no_principal : unit -> unit
+  val _path_closures : unit -> unit
   val _rectypes : unit -> unit
   val _no_rectypes : unit -> unit
   val _safe_string : unit -> unit
@@ -89,6 +90,7 @@ module type Compiler_options = sig
   val _pp : string -> unit
   val _principal : unit -> unit
   val _no_principal : unit -> unit
+  val _path_closures : unit -> unit
   val _rectypes : unit -> unit
   val _runtime_variant : string -> unit
   val _safe_string : unit -> unit
