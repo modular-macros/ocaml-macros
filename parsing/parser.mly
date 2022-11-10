@@ -583,7 +583,6 @@ let package_type_of_module_type pmty =
 %token HASH
 %token <string> HASHOP
 %token SIG
-%token STATIC
 %token MACRO
 %token STAR
 %token <string * string option> STRING
@@ -633,7 +632,6 @@ The precedences must be listed from low to high.
 %nonassoc below_SEMI
 %nonassoc SEMI                          /* below EQUAL ({lbl=...; lbl=...}) */
 %nonassoc LET                           /* above SEMI ( ...; let ... in ...) */
-%nonassoc STATIC
 %nonassoc MACRO
 %nonassoc below_WITH
 %nonassoc FUNCTION WITH                 /* below BAR  (match ... with ...) */
@@ -843,8 +841,6 @@ structure_tail:
 structure_item:
     let_bindings
       { val_of_let_bindings Nonstatic $1 }
-  | static_bindings
-      { val_of_let_bindings Static $1 }
   | macro_bindings
       { val_of_macro_bindings $1 }
   | primitive_declaration
@@ -899,12 +895,6 @@ module_binding:
       , Mb.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
             ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
       , ext }
-  | STATIC MODULE ext_attributes UIDENT module_binding_body post_item_attributes
-      { let (ext, attrs) = $3 in
-        Static
-      , Mb.mk (mkrhs $4 3) $5 ~attrs:(attrs@$6)
-            ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
-      , ext }
 ;
 rec_module_bindings:
     rec_module_binding { let (sf, b, ext) = $1 in (sf, [b], ext) }
@@ -916,12 +906,6 @@ rec_module_binding:
       { let (ext, attrs) = $2 in
         Nonstatic
       , Mb.mk (mkrhs $4 4) $5 ~attrs:(attrs@$6)
-            ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
-      , ext }
-  | STATIC MODULE ext_attributes REC UIDENT module_binding_body post_item_attributes
-      { let (ext, attrs) = $3 in
-        Static
-      , Mb.mk (mkrhs $5 4) $6 ~attrs:(attrs@$7)
             ~loc:(symbol_rloc ()) ~docs:(symbol_docs ())
       , ext }
 ;
@@ -1032,12 +1016,6 @@ module_declaration:
       , Md.mk (mkrhs $3 3) $4 ~attrs:(attrs@$5)
           ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext }
-  | STATIC MODULE ext_attributes UIDENT module_declaration_body post_item_attributes
-      { let (ext, attrs) = $3 in
-        Static
-      , Md.mk (mkrhs $4 3) $5 ~attrs:(attrs@$6)
-          ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
-      , ext }
 ;
 module_alias:
     MODULE ext_attributes UIDENT EQUAL mod_longident post_item_attributes
@@ -1045,13 +1023,6 @@ module_alias:
         Nonstatic
       , Md.mk (mkrhs $3 3)
           (Mty.alias ~loc:(rhs_loc 5) (mkrhs $5 5)) ~attrs:(attrs@$6)
-             ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
-      , ext }
-  | STATIC MODULE ext_attributes UIDENT EQUAL mod_longident post_item_attributes
-      { let (ext, attrs) = $3 in
-        Static
-      , Md.mk (mkrhs $4 3)
-          (Mty.alias ~loc:(rhs_loc 5) (mkrhs $6 5)) ~attrs:(attrs@$7)
              ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext }
 ;
@@ -1066,12 +1037,6 @@ rec_module_declaration:
       { let (ext, attrs) = $2 in
         Nonstatic
       , Md.mk (mkrhs $4 4) $6 ~attrs:(attrs@$7)
-            ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
-      , ext}
-  | STATIC MODULE ext_attributes REC UIDENT COLON module_type post_item_attributes
-      { let (ext, attrs) = $3 in
-        Static
-      , Md.mk (mkrhs $5 4) $7 ~attrs:(attrs@$8)
             ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
       , ext}
 ;
@@ -1712,19 +1677,6 @@ and_let_binding:
     AND attributes let_binding_body post_item_attributes
       { mklb false $3 ($2@$4) }
 ;
-static_bindings:
-    static_binding                      { $1 }
-  | static_bindings and_static_bindings { addlb $1 $2 }
-;
-static_binding:
-  STATIC ext_attributes rec_flag let_binding_body post_item_attributes
-    { let (ext, attr) = $2 in
-      mklbs ext $3 (mklb true $4 (attr@$5)) }
-;
-and_static_bindings:
-  AND attributes let_binding_body post_item_attributes
-    { mklb false $3 ($2@$4) }
-;
 macro_bindings:
     macro_binding                     { $1 }
   | macro_bindings and_macro_bindings { addlb $1 $2 }
@@ -1990,11 +1942,6 @@ value_description:
     VAL ext_attributes val_ident COLON core_type post_item_attributes
       { (Nonmacro Nonstatic, let (ext, attrs) = $2 in
           Val.mk (mkrhs $3 3) $5 ~attrs:(attrs@$6)
-                ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
-        , ext) }
-  | STATIC VAL ext_attributes val_ident COLON core_type post_item_attributes
-      { (Nonmacro Static, let (ext, attrs) = $3 in
-          Val.mk (mkrhs $4 3) $6 ~attrs:(attrs@$7)
                 ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
         , ext) }
   | MACRO ext_attributes val_ident COLON core_type post_item_attributes

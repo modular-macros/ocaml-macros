@@ -76,7 +76,6 @@ let keyword_table =
     "private", PRIVATE;
     "rec", REC;
     "sig", SIG;
-    "static", STATIC;
     "macro", MACRO;
     "struct", STRUCT;
     "then", THEN;
