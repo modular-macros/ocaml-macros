@@ -1176,7 +1176,9 @@ and transl_exp0 e =
       if Env.cur_stage e.exp_env = 0 then
         match !splice_array with
         | Some arr_ref ->
-            Array.get !arr_ref !splice_index
+           let v = Array.get !arr_ref (Array.length !arr_ref - !splice_index - 1) in
+           incr splice_index;
+           v
         | None ->
             assert false
       else (* else if we are inside a quote *)
