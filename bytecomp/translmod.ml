@@ -138,17 +138,17 @@ let transl_item_splices item item_lam =
   (* Find splices in current structure item *)
   TranslSplices.iter_structure_item item;
   (* Add the code for running splices *)
-  let wrap_seq str_lam (idx, splice_lam) =
-    Lsequence (
+  let wrap_seq str_lam splice_lam =
+    let idx = !nb_splices in
+    incr nb_splices;
+    (Lsequence (
       Lprim (Psetfield (idx, Pointer, Assignment),
         [Lvar splicearray_id;
           splice_lam], Location.none),
-      str_lam)
+      str_lam))
   in
-  let indexed_splices = List.mapi (fun i spl -> (i, spl)) !item_splices in
-  let lam = List.fold_left wrap_seq item_lam indexed_splices in
+  let lam = List.fold_left wrap_seq item_lam (List.rev !item_splices) in
   item_splices := [];
-  nb_splices := !nb_splices + List.length indexed_splices;
   lam
 
 let rec repeat n x =

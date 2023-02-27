@@ -713,9 +713,7 @@ let path_clos = ref (None : (Ident.t * int Env.PathMap.t) option)
 
 let set_transl_splices opt =
   splice_index := 0;
-  match opt with
-  | None -> splice_array := None
-  | Some a -> splice_array := Some a
+  splice_array := opt
 
 let rec transl_exp e =
   List.iter (Translattribute.check_attribute e) e.exp_attributes;
@@ -1162,7 +1160,9 @@ and transl_exp0 e =
       if Env.cur_stage e.exp_env = 0 then
         match !splice_array with
         | Some arr_ref ->
-            Array.get !arr_ref !splice_index
+           let idx = !splice_index in
+           incr splice_index;
+           Array.get !arr_ref idx
         | None ->
             assert false
       else (* else if we are inside a quote *)
