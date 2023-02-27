@@ -1,0 +1,6 @@
+
+#         1 "2" '3'
+val a : int = 1
+val b : string = "2"
+val c : char = '3'
+# 
