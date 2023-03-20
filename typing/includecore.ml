@@ -34,6 +34,9 @@ let value_descriptions env vd1 vd2 =
                   pc_env = env; pc_loc = vd1.Types.val_loc; } in
           Tcoerce_primitive pc
       | (_, Val_prim _) -> raise Dont_match
+      | (Val_macro, Val_macro) -> Tcoerce_none
+      | (Val_macro, _)
+      | (_, Val_macro) -> raise Dont_match
       | (_, _) -> Tcoerce_none
   end else
     raise Dont_match
