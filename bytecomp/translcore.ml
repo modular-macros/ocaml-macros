@@ -1278,10 +1278,11 @@ and transl_apply ?(should_be_tailcall=false) ?(inlined = Default_inline)
     | [] ->
         lapply lam (List.rev_map fst args)
   in
-  (build_apply lam [] (List.map (fun (l, x) ->
-                                   may_map transl_exp x, Btype.is_optional l)
-                                sargs)
-     : Lambda.lambda)
+  (build_apply lam [] (
+       List.fold_right
+         (fun (l,x) xs ->
+           (may_map transl_exp x, Btype.is_optional l) :: xs) sargs [])
+       : Lambda.lambda)
 
 and transl_function loc untuplify_fn repr partial cases =
   match cases with
