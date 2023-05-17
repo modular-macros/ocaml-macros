@@ -54,9 +54,12 @@ let run_static ppf lam =
       if Sys.command command <> 0 then begin
         Sys.remove execfilename;
         Sys.remove resultfilename;
-        Misc.fatal_error @@
-          "Something went wrong when executing splice generation command: "
-          ^ command
+        let msg =
+          "Failure during splice generation \
+           (perhaps a scope extrusion failure)"  in
+          raise (Location.Error
+                   { Location.loc = Location.none; msg = msg;
+                     sub = []; if_highlight = msg })
       end;
       Sys.remove execfilename;
       let ic = open_in resultfilename in
