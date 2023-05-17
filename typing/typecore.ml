@@ -1630,9 +1630,25 @@ let rec is_nonexpansive strict exp =
       is_nonexpansive_mod strict mexp && is_nonexpansive strict e
   | Texp_pack mexp ->
       is_nonexpansive_mod strict mexp
-  | Texp_quote _ -> true
+  | Texp_quote e ->
+      is_nonexpansive_quote strict e
   | Texp_escape _ -> false
   | _ -> false
+
+and is_nonexpansive_quote strict e =
+  let nonexpansive = ref true in
+  let module IterSplice = struct
+      include TypedtreeIter.DefaultIteratorArgument
+      let enter_expression e =
+        match e.exp_desc with
+        | Texp_escape e ->
+           nonexpansive := !nonexpansive && is_nonexpansive strict e
+        | _ -> ()
+    end
+  in
+  let module Iterator = TypedtreeIter.MakeIterator(IterSplice) in
+  Iterator.iter_expression e;
+  !nonexpansive
 
 and is_nonexpansive_mod strict mexp =
   match mexp.mod_desc with
