@@ -1,27 +1,10 @@
-= About the macros branch =
-
-https://github.com/OlivierNicole/ocaml/tree/macros_unstable[macros_unstable] is
-merged into https://github.com/OlivierNicole/ocaml/tree/macros[macros] on a
-regular basis, once a set of changes has been applied and the tests run.
-
 == Overview
 
-This is an experimental implementation of OCaml macros, originally designed by
-Leo White and Jeremy Yallop:
-
-http://www.lpw25.net/ocaml2015-abs1.pdf
-
-You can find a summary of the current progress here:
-
-https://oliviernicole.github.io/about_macros.html
-
-This branch is based on version 4.04 of OCaml.
+This is an experimental implementation of https://www.cl.cam.ac.uk/~jdy22/projects/modular-macros/[OCaml macros], based on version 4.04 of OCaml.
 
 == Installation
 
 Installation instruction are the same as for the standard OCaml distribution.
-You can find a few examples of what is possible in the links above. You can also
-take a look at the `testsuite/tests/macros/` directory.
 
 === Installing OPAM packages
 
@@ -30,43 +13,3 @@ include:
 
 * a use of the reserved words `static` or `macro` as an identifier;
 * a use of `$` as a regular operator.
-
-If you need to install Camlp4, you will have to pin it to
-https://github.com/OlivierNicole/camlp4[this repository]. Please be aware that
-this version of Camlp4 is only provided for backward-compatibility and can only
-generate "pre-macro" OCaml, i.e. it cannot generate any of the macro constructs.
-
-== Contributing
-
-You are very welcome to try out macros. Please do report any bugs or
-inconvenience by opening an issue on this repo.
-
-=== Pull requests
-
-Found a bug and know how to fix it? We certainly appreciate pull requests.
-If you plan on making big changes, please file an issue first to discuss why
-theses changes are needed.
-
-== Limitations / To Do
-
-Things to be done sorted by descending priority:
-
-* Support for declaring static type extensions (including static exceptions)
-* Solve issues of static linking and side effects, possibly by banning the
-  `static` keyword
-* Upgrade of `ocamldep` to take into account the modifications in dependency
-  trees because of the above
-* Fix GADT matching in quotations
-
-== List of Contributors
-
-The implementation of macros is an https://github.com/ocamllabs[OCaml Labs]
-research project.
-
-Main collaborators:
-
-* Olivier Nicole, main developer 
-* Leo White, quoting library, original design and supervision
-* Jeremy Yallop, original design and supervision
-* Oleg Kiselyov, developer of BER MetaOCaml, from which macros are inspired
-* Gemma Gordon, project manager
