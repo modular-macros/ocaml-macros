@@ -1537,14 +1537,12 @@ let advance_pos item pos_stat pos_rt env =
         (Uniphase (Static, pos_stat), pos_stat+1, pos_rt)
       else
         (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
-  | Sig_module (_, decl, sf, _) ->
+  | Sig_module (_, _decl, sf, _) ->
       let sf = add (sf_of_phase (cur_phase env)) sf in
       if sf = Static then
         (Uniphase (Static, pos_stat), pos_stat+1, pos_rt)
-      else if contains_phase_mty Static env decl.md_type then
-        (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
       else
-        (Uniphase (Nonstatic, pos_rt), pos_stat, pos_rt+1)
+        (Biphase (pos_stat, pos_rt), pos_stat+1, pos_rt+1)
   | Sig_modtype _ ->
       (nopos, pos_stat, pos_rt)
   | Sig_class _ ->
