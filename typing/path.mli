@@ -62,3 +62,4 @@ val map_head: (Ident.t -> Ident.t) -> t -> t
 
 val lifted: t -> bool
 
+val format_pos : Format.formatter -> pos -> unit

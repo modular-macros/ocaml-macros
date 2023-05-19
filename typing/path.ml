@@ -115,3 +115,8 @@ let rec lifted = function
   | Pdot (tl,_,_) -> lifted tl
   | Papply _ -> false
 
+let format_pos ppf = function
+  | Nopos -> Format.fprintf ppf "-"
+  | Uniphase (Asttypes.Static, s) -> Format.fprintf ppf "s:%d" s
+  | Uniphase (Asttypes.Nonstatic, d) -> Format.fprintf ppf "d:%d" d
+  | Biphase (s, d) -> Format.fprintf ppf "s:%d,d:%d" s d
