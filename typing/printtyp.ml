@@ -67,8 +67,12 @@ let rec path ppf = function
       ident ppf id
   | Pdot(Pident id, s, _pos) when Ident.same id ident_pervasive ->
       pp_print_string ppf s
-  | Pdot(p, s, _pos) ->
+  | Pdot(p, s, pos) ->
       path ppf p;
+      pp_print_char ppf '.';
+      pp_print_char ppf '[';
+      Path.format_pos ppf pos;
+      pp_print_char ppf ']';
       pp_print_char ppf '.';
       pp_print_string ppf s
   | Papply(p1, p2) ->
