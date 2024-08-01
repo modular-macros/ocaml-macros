@@ -117,6 +117,8 @@ type t =
   | Tmc_breaks_tailcall                     (* 72 *)
   | Generative_application_expects_unit     (* 73 *)
   | Degraded_to_partial_match               (* 74 *)
+  | Maco_dev of string                      (* 75 *)
+
 
 type alert = {kind:string; message:string; def:loc; use:loc}
 
