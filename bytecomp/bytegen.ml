@@ -983,6 +983,8 @@ let rec comp_expr stack_info env exp sz cont =
       end
   | Lifused (_, exp) ->
       comp_expr stack_info env exp sz cont
+  | Lsplice _ -> assert false (* MACO-NOTE definitely should not happen*)
+
 
 (* Compile a list of arguments [e1; ...; eN] to a primitive operation.
    The values of eN ... e2 are pushed on the stack, e2 at top of stack,

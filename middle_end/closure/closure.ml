@@ -1186,6 +1186,8 @@ let rec close ({ backend; fenv; cenv ; mutable_vars } as env) lam =
       close env lam
   | Lifused _ ->
       assert false
+  | Lsplice _ ->
+      assert false
 
 and close_list env = function
     [] -> []
