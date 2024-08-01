@@ -22,6 +22,7 @@ let empty_record loc = err loc "Records cannot be empty."
 let invalid_tuple loc = err loc "Tuples must have at least 2 components."
 let no_args loc = err loc "Function application with no argument."
 let empty_let loc = err loc "Let with no bindings."
+let empty_macro loc = err loc "Macro with no bindings."
 let empty_type loc = err loc "Type declarations cannot be empty."
 let empty_poly_binder loc =
   err loc "Explicit universal type quantification cannot be empty."
@@ -147,7 +148,8 @@ let iterator =
     let loc = st.pstr_loc in
     match st.pstr_desc with
     | Pstr_type (_, []) -> empty_type loc
-    | Pstr_value (_, []) -> empty_let loc
+    | Pstr_value (_, Value, []) -> empty_let loc
+    | Pstr_value (_, Macro, []) -> empty_macro loc
     | _ -> ()
   in
   let signature_item self sg =

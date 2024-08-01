@@ -333,7 +333,7 @@ module M = struct
     match desc with
     | Pstr_eval (x, attrs) ->
         sub.attributes sub attrs; sub.expr sub x
-    | Pstr_value (_r, vbs) -> List.iter (sub.value_binding sub) vbs
+    | Pstr_value (_r, _m, vbs) -> List.iter (sub.value_binding sub) vbs
     | Pstr_primitive vd -> sub.value_description sub vd
     | Pstr_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Pstr_typext te -> sub.type_extension sub te
@@ -452,6 +452,8 @@ module E = struct
         sub.binding_op sub let_;
         List.iter (sub.binding_op sub) ands;
         sub.expr sub body
+    | Pexp_quote e -> sub.expr sub e
+    | Pexp_splice e -> sub.expr sub e
     | Pexp_extension x -> sub.extension sub x
     | Pexp_unreachable -> ()
 
@@ -637,14 +639,14 @@ let default_iterator =
       );
 
     open_declaration =
-      (fun this {popen_expr; popen_override = _; popen_attributes; popen_loc} ->
+      (fun this {popen_expr; popen_static = _; popen_override = _; popen_attributes; popen_loc} ->
          this.module_expr this popen_expr;
          this.location this popen_loc;
          this.attributes this popen_attributes
       );
 
     open_description =
-      (fun this {popen_expr; popen_override = _; popen_attributes; popen_loc} ->
+      (fun this {popen_expr; popen_static = _; popen_override = _; popen_attributes; popen_loc} ->
          iter_loc this popen_expr;
          this.location this popen_loc;
          this.attributes this popen_attributes

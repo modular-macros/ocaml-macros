@@ -4357,6 +4357,12 @@ and type_expect_
             exp_env = env;
             exp_attributes = sexp.pexp_attributes; }
 
+  | Pexp_quote _ ->
+     assert false
+
+  | Pexp_splice _ ->
+     assert false
+
   | Pexp_extension ({ txt = ("ocaml.extension_constructor"
                              |"extension_constructor"); _ },
                     payload) ->

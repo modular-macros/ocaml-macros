@@ -268,6 +268,7 @@ let rec eq_structure_item_desc :
   (structure_item_desc * structure_item_desc) -> 'result =
   function
   | (Pstr_eval a0, Pstr_eval b0) -> eq_expression (a0, b0)
+  | (Pstr_macro (a0, a1), Pstr_macro (b0, b1))
   | (Pstr_value (a0, a1), Pstr_value (b0, b1)) ->
       (Asttypes.eq_rec_flag (a0, b0)) &&
         (eq_list

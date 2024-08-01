@@ -1014,6 +1014,9 @@ module Analyser =
       | Parsetree.Pstr_attribute _
       | Parsetree.Pstr_extension _ ->
           (0, env, [])
+      | Parsetree.Pstr_macro _ ->
+          (* MACO-NOTE not handled. ALtneratively fall-through to Pstr_value? *)
+          (0, env, [])
       | Parsetree.Pstr_value (rec_flag, pat_exp_list) ->
           (* of rec_flag * (pattern * expression) list *)
           (* For each value, look for the value name, then look in the
