@@ -72,6 +72,10 @@ let fmt_override_flag f x =
   | Override -> fprintf f "Override"
   | Fresh -> fprintf f "Fresh"
 
+let fmt_static_flag f x =
+    match x with
+    | Static -> fprintf f "Static"
+    | Nonstatic -> fprintf f "Nonstatic"
 let fmt_closed_flag f x =
   match x with
   | Closed -> fprintf f "Closed"
@@ -81,6 +85,11 @@ let fmt_rec_flag f x =
   match x with
   | Nonrecursive -> fprintf f "Nonrec"
   | Recursive -> fprintf f "Rec"
+
+let fmt_mac_flag f x =
+  match x with
+  | Macro -> fprintf f "Macro"
+  | Value -> fprintf f "Value"
 
 let fmt_direction_flag f x =
   match x with
@@ -388,6 +397,12 @@ and expression i ppf x =
       binding_op i ppf let_;
       list i binding_op ppf ands;
       expression i ppf body
+  | Pexp_quote arg ->
+        line i ppf "Pexp_quote\n";
+        expression i ppf arg
+  | Pexp_splice arg ->
+        line i ppf "Pexp_splice\n";
+        expression i ppf arg
   | Pexp_extension (s, arg) ->
       line i ppf "Pexp_extension \"%s\"\n" s.txt;
       payload i ppf arg
@@ -759,7 +774,8 @@ and signature_item i ppf x =
       attributes i ppf x.pmtd_attributes;
       modtype_declaration i ppf x.pmtd_type
   | Psig_open od ->
-      line i ppf "Psig_open %a %a\n" fmt_override_flag od.popen_override
+      line i ppf "Psig_open %a %a %a\n" fmt_static_flag od.popen_static 
+        fmt_override_flag od.popen_override
         fmt_longident_loc od.popen_expr;
       attributes i ppf od.popen_attributes
   | Psig_include incl ->
@@ -852,8 +868,8 @@ and structure_item i ppf x =
       line i ppf "Pstr_eval\n";
       attributes i ppf attrs;
       expression i ppf e;
-  | Pstr_value (rf, l) ->
-      line i ppf "Pstr_value %a\n" fmt_rec_flag rf;
+  | Pstr_value (rf, mf, l) ->
+      line i ppf "Pstr_value %a %a\n" fmt_rec_flag rf fmt_mac_flag mf;
       list i value_binding ppf l;
   | Pstr_primitive vd ->
       line i ppf "Pstr_primitive\n";
@@ -878,7 +894,8 @@ and structure_item i ppf x =
       attributes i ppf x.pmtd_attributes;
       modtype_declaration i ppf x.pmtd_type
   | Pstr_open od ->
-      line i ppf "Pstr_open %a\n" fmt_override_flag od.popen_override;
+      line i ppf "Pstr_open %a %a\n" fmt_static_flag od.popen_static 
+        fmt_override_flag od.popen_override;
       module_expr i ppf od.popen_expr;
       attributes i ppf od.popen_attributes
   | Pstr_class (l) ->

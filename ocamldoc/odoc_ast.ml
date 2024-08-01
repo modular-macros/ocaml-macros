@@ -1014,7 +1014,7 @@ module Analyser =
       | Parsetree.Pstr_attribute _
       | Parsetree.Pstr_extension _ ->
           (0, env, [])
-      | Parsetree.Pstr_value (rec_flag, pat_exp_list) ->
+      | Parsetree.Pstr_value (rec_flag, _, pat_exp_list) ->
           (* of rec_flag * (pattern * expression) list *)
           (* For each value, look for the value name, then look in the
              typedtree for the corresponding information,
