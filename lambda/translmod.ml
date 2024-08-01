@@ -42,6 +42,77 @@ type error =
 
 exception Error of Location.t * error
 
+module TranslSplices = struct
+  (* ordered array of (lambda, index in the splice array) pair for stage-0
+     splices *)
+  let item_splices = ref ([] : (int * lambda) list)
+
+  let transl_toplevel_splice ~scopes exp = Translcore.transl_exp ~scopes exp
+
+  let static_translate_expr ~scopes exp =
+    let open Tast_iterator in
+    let expr_iter iter (e : Typedtree.expression ) =
+      let open Tast_iterator in
+      match e.exp_desc with
+      (* MACO-TODO as we trigger this from translmod translstructure, should we worry
+         about duplicate calls with nested structures? *)
+      | Texp_splice { spl_exp; spl_index = Some idx } ->
+          let body =
+            Translquote.transl_close_expression Location.none
+              (Translquote.fv spl_exp)
+            (transl_toplevel_splice ~scopes spl_exp)
+          in
+          item_splices := !item_splices @ [(idx, body)];
+      | _ -> Tast_iterator.default_iterator.expr iter e
+    in
+    let iterator = {Tast_iterator.default_iterator with expr = expr_iter }
+    in
+    iterator.structure_item iterator exp
+
+  let transl_item_splices ~scopes expr =
+    ignore( static_translate_expr ~scopes expr );
+
+    let splices = !item_splices in
+    item_splices := []; splices
+
+end
+
+
+(* MACO-NOTE mimics formalisation translation function level
+   MACO-TODO reconsider, currently being used as a static flag. *)
+let transl_stage = ref (0 : staging_level)
+
+let splicearray_id = lazy (Ident.create_persistent "*splicearray*")
+
+let insert_item_splices indexed_splices item_lam =
+  let wrap_seq str_lam (idx, splice_lam) =
+    Lsequence
+      (Lprim (Psetfield (idx, Pointer, Assignment),
+              [Lvar (Lazy.force splicearray_id);
+               splice_lam], Loc_unknown),
+       str_lam)
+  in
+  List.fold_left wrap_seq item_lam indexed_splices
+
+let repeat n x = List.init n (Fun.const x)
+
+(* MACO-NOTE Wrap a module construction lambda inside a lambda that declares the module
+    global (as a side effect), constructs an array with all splices encountered
+    in this module and returns it.
+  *)
+let insert_splice_array module_id nb_splices str_lam =
+  let splice_arr =
+    Lprim (Pmakearray (Paddrarray, Mutable),
+      repeat nb_splices (Lconst (Const_base (Const_int 0))),
+      Loc_unknown)
+  in
+  let id = splicearray_id in
+  Llet (Strict, Pgenval, Lazy.force id,
+    splice_arr,
+    Lsequence (
+      Lprim (Psetglobal module_id, [str_lam], Loc_unknown),
+      Lvar (Lazy.force id) ))
+       
 let cons_opt x_opt xs =
   match x_opt with
   | None -> xs
@@ -599,26 +670,34 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
       else
         body
   | item :: rem ->
+     let stage = !transl_stage in
+      let str_lam =
       match item.str_desc with
       | Tstr_eval (expr, _) ->
-          let body =
-            transl_structure ~scopes loc fields cc rootpath final_env rem
-          in
-          Lsequence(transl_exp ~scopes expr, body)
-      | Tstr_value(rec_flag, _, pat_expr_list) ->
-          (* Translate bindings first *)
-          let mk_lam_let =
-            transl_let ~scopes ~in_structure:true rec_flag pat_expr_list in
-          let ext_fields =
-            List.rev_append (let_bound_idents pat_expr_list) fields in
-          (* Then, translate remainder of struct *)
-          let body =
-            transl_structure ~scopes loc ext_fields cc rootpath final_env rem
-          in
-          mk_lam_let body
-      | Tstr_primitive descr ->
-          record_primitive descr.val_val;
+        let body =
           transl_structure ~scopes loc fields cc rootpath final_env rem
+        in
+        if !transl_stage = 0 then Lsequence(transl_exp ~scopes expr, body)
+        else body
+      | Tstr_value (rec_flag, st_lev, pat_expr_list)
+           when !transl_stage = 0 || st_lev < 0 ->
+         (* pat_expr_list is a nonempty list of bindings with the same level.
+            Only static bindings are needed in Omega (the evaluation context
+            in the MacoCaml 2023 paper). *)
+         let ext_fields =
+           List.rev_append (let_bound_idents pat_expr_list) fields in
+         (* Translate bindings first *)
+         let mk_lam_let =
+           transl_let ~scopes ~in_structure:true rec_flag pat_expr_list in
+         (* Then, translate remainder of struct *)
+         let body =
+           transl_structure ~scopes loc ext_fields cc rootpath final_env rem in
+         mk_lam_let body
+      | Tstr_value (_, _, _) ->
+         transl_structure ~scopes loc fields cc rootpath final_env rem
+      | Tstr_primitive descr ->
+         (if !transl_stage = 0 then record_primitive descr.val_val);
+         transl_structure ~scopes loc fields cc rootpath final_env rem
       | Tstr_type _ ->
           transl_structure ~scopes loc fields cc rootpath final_env rem
       | Tstr_typext(tyext) ->
@@ -629,6 +708,7 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
           in
           transl_type_extension ~scopes item.str_env rootpath tyext body
       | Tstr_exception ext ->
+          (* MACO-REV always translate exceptions *)
           let id = ext.tyexn_constructor.ext_id in
           let path = field_path rootpath id in
           let body =
@@ -668,7 +748,7 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
       | Tstr_module ({mb_presence=Mp_absent}) ->
           transl_structure ~scopes loc fields cc rootpath final_env rem
       | Tstr_recmodule bindings ->
-          let ext_fields =
+           let ext_fields =
             List.rev_append (List.filter_map (fun mb -> mb.mb_id) bindings)
               fields
           in
@@ -692,13 +772,23 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
             transl_structure ~scopes loc (List.rev_append ids fields)
               cc rootpath final_env rem
           in
-          Value_rec_compiler.compile_letrec class_bindings body
+          if !transl_stage = 0 then Value_rec_compiler.compile_letrec class_bindings body
+          else body
       | Tstr_include incl ->
-          let ids = bound_value_identifiers incl.incl_type in
-          let modl = incl.incl_mod in
-          let mid = Ident.create_local "include" in
-          let rec rebind_idents pos newfields = function
-              [] ->
+          (* MACO-TODO conservatively ignoring all as we do not currently have static
+             opens (should eventually do the same as with opens).
+
+             Simplif will remove the [Llet] when it's not used, so It should
+             not really matter. Even if it was present, we could cheat and keep
+             the open, while not doing a dynamic link in the toplevel (which is guided
+             by typing on what modules to link), and should work as there are no runtime
+             checks. *)
+         if !transl_stage = 0 then
+           let ids = bound_value_identifiers incl.incl_type in
+           let modl = incl.incl_mod in
+           let mid = Ident.create_local "include" in
+           let rec rebind_idents pos newfields = function
+               [] ->
                 transl_structure ~scopes loc newfields cc rootpath final_env rem
             | id :: ids ->
                 let body =
@@ -706,22 +796,25 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
                 in
                 Llet(Alias, Pgenval, id,
                      Lprim(Pfield (pos, Pointer, Mutable),
-                        [Lvar mid], of_location ~scopes incl.incl_loc), body)
-          in
+                           [Lvar mid], of_location ~scopes incl.incl_loc), body)
+           in
           let body = rebind_idents 0 fields ids in
           Llet(pure_module modl, Pgenval, mid,
                transl_module ~scopes Tcoerce_none None modl, body)
-
+         else transl_structure ~scopes loc fields cc rootpath final_env rem
       | Tstr_open od ->
-          let pure = pure_module od.open_expr in
-          (* this optimization shouldn't be needed because Simplif would
-             actually remove the [Llet] when it's not used.
-             But since [scan_used_globals] runs before Simplif, we need to do
-             it. *)
-          begin match od.open_bound_items with
-          | [] when pure = Alias ->
+          (* We do not want static opens to be present in runtime, so that
+             there are no undesired effects from entry functions. *)
+         if !transl_stage = 0 && od.open_static = Nonstatic then
+           let pure = pure_module od.open_expr in
+           (* this optimization shouldn't be needed because Simplif would
+              actually remove the [Llet] when it's not used.
+              But since [scan_used_globals] runs before Simplif, we need to do
+              it. *)
+           begin match od.open_bound_items with
+           | [] when pure = Alias ->
               transl_structure ~scopes loc fields cc rootpath final_env rem
-          | _ ->
+           | _ ->
               let ids = bound_value_identifiers od.open_bound_items in
               let mid = Ident.create_local "open" in
               let rec rebind_idents pos newfields = function
@@ -739,10 +832,14 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
               Llet(pure, Pgenval, mid,
                    transl_module ~scopes Tcoerce_none None od.open_expr, body)
           end
+         else transl_structure ~scopes loc fields cc rootpath final_env rem
       | Tstr_modtype _
       | Tstr_class_type _
       | Tstr_attribute _ ->
           transl_structure ~scopes loc fields cc rootpath final_env rem
+      in
+      if stage = 0 then str_lam
+      else insert_item_splices (TranslSplices.transl_item_splices ~scopes item) str_lam
 
 (* Update forward declaration in Translcore *)
 let _ =
@@ -820,6 +917,28 @@ let transl_implementation module_name (str, cc) =
            Loc_unknown)
   in
   { implementation with code }
+
+let transl_implementation_static module_name (str, cc) =
+  transl_stage := -1;
+  let nb_splices = Env.get_tlsplice_count ()  in
+
+  let module_id = Ident.create_persistent module_name in
+  let scopes = enter_module_definition ~scopes:empty_scopes module_id in
+  let mod_body =
+    transl_struct ~scopes Loc_unknown [] cc
+      (Some (Path.Pident module_id)) str
+  in
+  let body =
+    insert_splice_array module_id nb_splices mod_body
+  in
+
+  transl_stage := 0;
+  let size =
+    module_block_size (bound_value_identifiers str.str_type) cc in
+  { module_ident = module_id;
+    main_module_block_size = size;
+    required_globals = required_globals ~flambda:false body;
+    code = body }
 
 (* Build the list of value identifiers defined by a toplevel structure
    (excluding primitive declarations). *)
