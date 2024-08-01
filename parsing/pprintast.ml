@@ -253,6 +253,10 @@ let override = function
   | Override -> "!"
   | Fresh -> ""
 
+let static = function
+  | Static -> "~"
+  | Nonstatic -> ""
+
 (* variance encoding: need to sync up with the [parser.mly] *)
 let type_variance = function
   | NoVariance -> ""
@@ -873,7 +877,7 @@ and expression ctxt f x =
            (*no indentation here, a new line*) *)
         (*   rec_flag rf *)
         pp f "@[<2>%a in@;<1 -2>%a@]"
-          (bindings reset_ctxt) (rf,l)
+          (bindings "let" reset_ctxt) (rf,l)
           (expression ctxt) e
     | Pexp_apply (e, l) ->
         begin if not (sugar_expr ctxt f x) then
@@ -971,6 +975,10 @@ and expression ctxt f x =
           (binding_op ctxt) let_
           (list ~sep:"@," (binding_op ctxt)) ands
           (expression ctxt) body
+    | Pexp_quote e ->
+        pp f "@[<2><<@ %a@ >>@]" (expression ctxt)  e
+    | Pexp_splice e ->
+        pp f "@[<2>$%a@]" (simple_expr ctxt) e
     | Pexp_extension e -> extension ctxt f e
     | Pexp_unreachable -> pp f "."
     | Pexp_struct_item (si, e) ->
@@ -1253,7 +1261,7 @@ and class_expr ctxt f x =
           (class_expr ctxt) e
     | Pcl_let (rf, l, ce) ->
         pp f "%a@ in@ %a"
-          (bindings ctxt) (rf,l)
+          (bindings "let" ctxt) (rf,l)
           (class_expr ctxt) ce
     | Pcl_apply (ce, l) ->
         pp f "((%a)@ %a)" (* Cf: #7200 *)
@@ -1392,7 +1400,8 @@ and signature_item ctxt f x : unit =
         longident_loc pms.pms_manifest
         (item_attributes ctxt) pms.pms_attributes
   | Psig_open od ->
-      pp f "@[<hov2>open%s@ %a@]%a"
+      pp f "@[<hov2>open%s%s@ %a@]%a"
+        (static od.popen_static)
         (override od.popen_override)
         longident_loc od.popen_expr
         (item_attributes ctxt) od.popen_attributes
@@ -1529,17 +1538,17 @@ and binding ?(is_method=false) ctxt f
     end
 
 (* [in] is not printed *)
-and bindings ctxt f (rf,l) =
+and bindings fst_kwd ctxt f (rf,l) =
   let binding kwd rf f x =
     pp f "@[<2>%s %a%a@]%a" kwd rec_flag rf
       (binding ctxt) x (item_attributes ctxt) x.pvb_attributes
   in
   match l with
   | [] -> ()
-  | [x] -> binding "let" rf f x
+  | [x] -> binding fst_kwd rf f x
   | x::xs ->
       pp f "@[<v>%a@,%a@]"
-        (binding "let" rf) x
+        (binding fst_kwd rf) x
         (list ~sep:"@," (binding "and" Nonrecursive)) xs
 
 and binding_op ctxt f x =
@@ -1560,9 +1569,12 @@ and structure_item ctxt f x =
         (item_attributes ctxt) attrs
   | Pstr_type (_, []) -> assert false
   | Pstr_type (rf, l)  -> type_def_list ctxt f (rf, true, l)
-  | Pstr_value (rf, l) ->
+  | Pstr_value (rf, Value, l) ->
       (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
-      pp f "@[<2>%a@]" (bindings ctxt) (rf,l)
+      pp f "@[<2>%a@]" (bindings "let" ctxt) (rf,l)
+  | Pstr_value (rf, Macro, l) ->
+      (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
+      pp f "@[<2>%a@]" (bindings "macro" ctxt) (rf,l)
   | Pstr_typext te -> type_extension ctxt f te
   | Pstr_exception ed -> exception_declaration ctxt f ed
   | Pstr_module x ->
@@ -1594,7 +1606,8 @@ and structure_item ctxt f x =
         ) x.pmb_expr
         (item_attributes ctxt) x.pmb_attributes
   | Pstr_open od ->
-      pp f "@[<2>open%s@;%a@]%a"
+      pp f "@[<2>open%s%s@;%a@]%a"
+        (static od.popen_static)
         (override od.popen_override)
         (module_expr ctxt) od.popen_expr
         (item_attributes ctxt) od.popen_attributes

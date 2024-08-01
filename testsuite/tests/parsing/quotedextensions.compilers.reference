@@ -56,7 +56,7 @@
             ]
         ]
   structure_item (quotedextensions.ml[21,389+0]..[23,443+26])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (quotedextensions.ml[21,389+4]..[21,389+26])
@@ -91,7 +91,7 @@
           ]
     ]
   structure_item (quotedextensions.ml[24,470+0]..[26,542+35])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (quotedextensions.ml[24,470+4]..[24,470+35])
@@ -126,7 +126,7 @@
           ]
     ]
   structure_item (quotedextensions.ml[28,579+0]..[30,643+31])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (quotedextensions.ml[28,579+4]..[28,579+31])

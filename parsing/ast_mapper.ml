@@ -45,7 +45,7 @@ type mapper = {
   class_type_declaration: mapper -> class_type_declaration
                           -> class_type_declaration;
   class_type_field: mapper -> class_type_field -> class_type_field;
-  constant: mapper -> constant -> constant;
+  constant: mapper -> Parsetree.constant -> Parsetree.constant;
   constructor_declaration: mapper -> constructor_declaration
                            -> constructor_declaration;
   directive_argument: mapper -> directive_argument -> directive_argument;
@@ -421,7 +421,7 @@ module M = struct
     | Pstr_eval (x, attrs) ->
         let attrs = sub.attributes sub attrs in
         eval ~loc ~attrs (sub.expr sub x)
-    | Pstr_value (r, vbs) -> value ~loc r (List.map (sub.value_binding sub) vbs)
+    | Pstr_value (r, m, vbs) -> value ~loc r m (List.map (sub.value_binding sub) vbs)
     | Pstr_primitive vd -> primitive ~loc (sub.value_description sub vd)
     | Pstr_type (rf, l) -> type_ ~loc rf (List.map (sub.type_declaration sub) l)
     | Pstr_typext te -> type_extension ~loc (sub.type_extension sub te)
@@ -544,6 +544,8 @@ module E = struct
     | Pexp_letop {let_; ands; body} ->
         letop ~loc ~attrs (sub.binding_op sub let_)
           (List.map (sub.binding_op sub) ands) (sub.expr sub body)
+    | Pexp_quote e -> quote ~loc ~attrs (sub.expr sub e)
+    | Pexp_splice e -> splice ~loc ~attrs (sub.expr sub e)
     | Pexp_extension x -> extension ~loc ~attrs (sub.extension sub x)
     | Pexp_unreachable -> unreachable ~loc ~attrs ()
     | Pexp_struct_item (si, e) ->
@@ -707,8 +709,9 @@ let default_mapper =
     package_type = T.map_package_type;
     value_description =
       (fun this {pval_name; pval_type; pval_prim; pval_loc;
-                 pval_attributes} ->
+                 pval_macro; pval_attributes} ->
         Val.mk
+          pval_macro
           (map_loc map_string this pval_name)
           (this.typ this pval_type)
           ~attrs:(this.attributes this pval_attributes)
@@ -757,16 +760,18 @@ let default_mapper =
 
 
     open_declaration =
-      (fun this {popen_expr; popen_override; popen_attributes; popen_loc} ->
+      (fun this {popen_expr; popen_static; popen_override; popen_attributes; popen_loc} ->
          Opn.mk (this.module_expr this popen_expr)
+           ~static:popen_static
            ~override:popen_override
            ~loc:(this.location this popen_loc)
            ~attrs:(this.attributes this popen_attributes)
       );
 
     open_description =
-      (fun this {popen_expr; popen_override; popen_attributes; popen_loc} ->
+      (fun this {popen_expr; popen_static; popen_override; popen_attributes; popen_loc} ->
          Opn.mk (map_loc_lid this popen_expr)
+           ~static:popen_static
            ~override:popen_override
            ~loc:(this.location this popen_loc)
            ~attrs:(this.attributes this popen_attributes)

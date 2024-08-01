@@ -19,7 +19,7 @@
             Pexp_ident "x" (extensions.ml[9,153+20]..[9,153+21])
     ]
   structure_item (extensions.ml[10,176+0]..[10,176+46])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (extensions.ml[10,176+4]..[10,176+14])
@@ -79,14 +79,14 @@
             []
     ]
   structure_item (extensions.ml[13,251+0]..[13,251+74])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (extensions.ml[13,251+4]..[13,251+23])
           Ppat_extension "foo"
           [
             structure_item (extensions.ml[13,251+10]..[13,251+21])
-              Pstr_value Nonrec
+              Pstr_value Nonrec Value
               [
                 <def>
                   pattern (extensions.ml[13,251+14]..[13,251+16])
@@ -148,7 +148,7 @@
           Ptyp_var a
       ]
   structure_item (extensions.ml[16,344+0]..[16,344+60])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (extensions.ml[16,344+4]..[16,344+19])
@@ -210,7 +210,7 @@
                 PConst_int (0,None)
         ]
   structure_item (extensions.ml[20,445+0]..[20,445+60])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (extensions.ml[20,445+4]..[20,445+28])
@@ -254,7 +254,7 @@
           []
     ]
   structure_item (extensions.ml[23,534+0]..[25,606+23])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (extensions.ml[23,534+4]..[23,534+38])

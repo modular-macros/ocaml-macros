@@ -1,6 +1,6 @@
 [
   structure_item (shortcut_ext_attr.ml[9,170+0]..[30,721+31])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (shortcut_ext_attr.ml[9,170+4]..[9,170+6])
@@ -59,7 +59,7 @@
                         Pstr_extension "foo"
                         [
                           structure_item (shortcut_ext_attr.ml[13,261+7]..[13,261+23]) ghost
-                            Pstr_open Fresh
+                            Pstr_open Nonstatic Fresh
                             module_expr (shortcut_ext_attr.ml[13,261+22]..[13,261+23])
                               Pmod_ident "M" (shortcut_ext_attr.ml[13,261+22]..[13,261+23])
                               attribute "foo"
@@ -580,7 +580,7 @@
     Pstr_extension "foo"
     [
       structure_item (shortcut_ext_attr.ml[76,1578+0]..[77,1598+15])
-        Pstr_value Nonrec
+        Pstr_value Nonrec Value
         [
           <def>
               attribute "foo"
@@ -788,7 +788,7 @@
     Pstr_extension "foo"
     [
       structure_item (shortcut_ext_attr.ml[94,1905+0]..[94,1905+16]) ghost
-        Pstr_open Fresh
+        Pstr_open Nonstatic Fresh
         module_expr (shortcut_ext_attr.ml[94,1905+15]..[94,1905+16])
           Pmod_ident "M" (shortcut_ext_attr.ml[94,1905+15]..[94,1905+16])
           attribute "foo"
@@ -965,7 +965,7 @@
             Psig_extension "foo"
             [
               signature_item (shortcut_ext_attr.ml[115,2267+2]..[115,2267+18]) ghost
-                Psig_open Fresh "M" (shortcut_ext_attr.ml[115,2267+17]..[115,2267+18])
+                Psig_open Nonstatic Fresh "M" (shortcut_ext_attr.ml[115,2267+17]..[115,2267+18])
                   attribute "foo"
                     []
             ]

@@ -162,6 +162,7 @@ and out_type_extension =
     otyext_private: Asttypes.private_flag }
 and out_val_decl =
   { oval_name: string;
+    oval_level: int;
     oval_type: out_type;
     oval_prims: string list;
     oval_attributes: out_attribute list }

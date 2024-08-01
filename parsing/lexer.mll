@@ -75,6 +75,7 @@ let all_keywords =
     "initializer", INITIALIZER, v1_0;
     "lazy", LAZY, v1_6;
     "let", LET, always;
+    "macro", MACRO, v5_3;
     "match", MATCH, always;
     "method", METHOD, v1_0;
     "module", MODULE, always;
@@ -85,7 +86,7 @@ let all_keywords =
     "of", OF, always;
     "open", OPEN, always;
     "or", OR, always;
-(*  "parser", PARSER; *)
+  (*  "parser", PARSER; *)
     "private", PRIVATE, v1_0;
     "rec", REC, always;
     "sig", SIG, always;
@@ -447,7 +448,6 @@ let () =
       | _ ->
           None
     )
-
 }
 
 let newline = ('\013'* '\010')
@@ -466,6 +466,8 @@ let delim_ext = (lowercase | uppercase | utf8)*
 
 let symbolchar =
   ['!' '$' '%' '&' '*' '+' '-' '.' '/' ':' '<' '=' '>' '?' '@' '^' '|' '~']
+let symbolcharnodot =
+  ['!' '$' '%' '&' '*' '+' '-'     '/' ':' '<' '=' '>' '?' '@' '^' '|' '~']
 let dotsymbolchar =
   ['!' '$' '%' '&' '*' '+' '-' '/' ':' '=' '>' '?' '@' '^' '|']
 let symbolchar_or_hash =
@@ -512,6 +514,12 @@ rule token = parse
       { token lexbuf }
   | "_"
       { UNDERSCORE }
+  | "<<" 
+      { LESSLESS }
+  | ">>"
+      { GREATERGREATER }
+  | "$"
+      { DOLLAR }
   | "~"
       { TILDE }
   | ".~"
@@ -706,8 +714,17 @@ rule token = parse
             { PREFIXOP op }
   | ['~' '?'] symbolchar_or_hash + as op
             { PREFIXOP op }
+  (* The complicated case of >. or infix operator that starts with >. *)
+  (* First, narrow the following original rule to exclude leading ">"
+     The single ">" has already been covered, see GREATER earlier
   | ['=' '<' '>' '|' '&' '$'] symbolchar * as op
             { INFIXOP0 op }
+  *)
+  | ['=' '<'     '|' '&' '$'] symbolchar * as op	(* non-controversial INFIXOP0 *)
+            { INFIXOP0 op }
+  | ['>'] symbolcharnodot symbolchar * as op    (* NNN exclude ">." case *)
+            { INFIXOP0 op }                     (* NNN *)
+  (* remaining case is ">." followed possibly by zero or more symbolchar *)
   | ['@' '^'] symbolchar * as op
             { INFIXOP1 op }
   | ['+' '-'] symbolchar * as op

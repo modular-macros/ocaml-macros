@@ -11,7 +11,7 @@ let missing_rhs loc =
   let mtd = H.Mtd.mk ~loc name in
   H.Sig.modtype_subst ~loc mtd
 
-let empty_let loc = H.Str.value ~loc Asttypes.Nonrecursive []
+let empty_let loc = H.Str.value ~loc Asttypes.Nonrecursive Value []
 let empty_type loc = H.Str.type_ ~loc Asttypes.Nonrecursive []
 let empty_poly_binder loc = H.Typ.(poly ~loc [] (any ~loc ()))
 let tfunctor_opt_arg loc =

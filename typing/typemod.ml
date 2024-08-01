@@ -2760,7 +2760,7 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
             (fun () -> Typecore.type_expression env sexpr)
         in
         Tstr_eval (expr, attrs), [], shape_map, env
-    | Pstr_value(rec_flag, sdefs) ->
+    | Pstr_value(rec_flag, _, sdefs) ->
         let (defs, newenv) =
           Typecore.type_binding env rec_flag sdefs in
         let defs = match rec_flag with
