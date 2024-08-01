@@ -20,7 +20,7 @@ open Typedtree
 open Lambda
 
 val transl_implementation:
-      string -> structure * module_coercion -> Lambda.program
+      Asttypes.static_flag -> string -> structure * module_coercion -> Lambda.program
 val transl_store_phrases: string -> structure -> int * lambda
 val transl_store_implementation:
       string -> structure * module_coercion -> Lambda.program
