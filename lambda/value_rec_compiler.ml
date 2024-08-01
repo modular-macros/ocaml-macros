@@ -167,6 +167,7 @@ let compute_static_size lam =
     | Lsend _ -> dynamic_size ()
     | Levent (e, _) ->
       compute_expression_size env e
+    | Lsplice _ -> dynamic_size ()
     | Lifused _ -> Constant
   and compute_and_join_sizes env branches =
     List.fold_left (fun size branch ->
@@ -571,6 +572,7 @@ let rec split_static_function block_var local_idents lam :
   | Lfor _
   | Lassign _
   | Lsend _
+  | Lsplice _
   | Lifused _ -> Misc.fatal_error "letrec binding is not a static function"
 and rebuild_arms :
   type a. _ -> _ -> (a * Lambda.lambda) list ->
