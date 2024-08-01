@@ -98,6 +98,9 @@ let rec eliminate_ref id = function
       Levent(eliminate_ref id l, ev)
   | Lifused(v, e) ->
       Lifused(v, eliminate_ref id e)
+  | Lsplice _ -> assert false (* MACO-REV OUt of curioisity, I am not being conservative here, 
+                                 this should NEVER happen, unless translation begins inter-
+                                 leaving optimisations *)
 
 (* Simplification of exits *)
 
@@ -185,6 +188,7 @@ let simplify_exits lam =
   | Lsend(_k, m, o, ll, _) -> List.iter (count ~try_depth) (m::o::ll)
   | Levent(l, _) -> count ~try_depth l
   | Lifused(_v, l) -> count ~try_depth l
+  | Lsplice _ -> assert false
 
   and count_default ~try_depth sw = match sw.sw_failaction with
   | None -> ()
@@ -336,6 +340,7 @@ let simplify_exits lam =
       List.map (simplif ~try_depth) ll, loc)
   | Levent(l, ev) -> Levent(simplif ~try_depth l, ev)
   | Lifused(v, l) -> Lifused (v,simplif ~try_depth l)
+  | Lsplice _ -> assert false
   in
   simplif ~try_depth:0 lam
 
@@ -467,6 +472,7 @@ let simplify_lets lam =
   | Levent(l, _) -> count bv l
   | Lifused(v, l) ->
       if count_var v > 0 then count bv l
+  | Lsplice _ -> assert false
 
   and count_lfunction fn =
     count Ident.Map.empty fn.body
@@ -619,6 +625,7 @@ let simplify_lets lam =
   | Levent(l, ev) -> Levent(simplif l, ev)
   | Lifused(v, l) ->
       if count_var v > 0 then simplif l else lambda_unit
+  | Lsplice _ -> assert false
   in
   simplif lam
 
@@ -709,6 +716,7 @@ let rec emit_tail_infos is_tail lambda =
       emit_tail_infos is_tail lam
   | Lifused (_, lam) ->
       emit_tail_infos is_tail lam
+  | Lsplice _ -> assert false
 and list_emit_tail_infos_fun f is_tail =
   List.iter (fun x -> emit_tail_infos is_tail (f x))
 and list_emit_tail_infos is_tail =
