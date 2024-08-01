@@ -313,6 +313,15 @@ type lambda =
   | Lsend of meth_kind * lambda * lambda * lambda list * scoped_location
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
+  (* MACO-NOTE We swtiched to quoted translation on quotes. This means
+    that quoted translation might encounter inner-level splices, so we
+    we need a representation for them. These are fully erased during
+    quoted translation. 
+    
+    MACO-REV I am being conservative and making Lsplice well behaved in
+    all matches in lambda.ml - but I suspect it is not necessary as these 
+    should never encounter the (erased) splice. *)
+  | Lsplice of lambda
 
 and rec_binding = {
   id : Ident.t;
