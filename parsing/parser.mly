@@ -564,17 +564,18 @@ let mklbs ext rf lb =
   } in
   addlb lbs lb
 
-let val_of_let_bindings ~loc lbs =
+let val_of_bindings ~loc lbs mac =
   let bindings =
     List.map
       (fun lb ->
          Vb.mk ~loc:lb.lb_loc ~attrs:lb.lb_attributes
            ~docs:(Lazy.force lb.lb_docs)
            ~text:(Lazy.force lb.lb_text)
-           ?value_constraint:lb.lb_constraint lb.lb_pattern lb.lb_expression)
+           ?value_constraint:lb.lb_constraint 
+           lb.lb_pattern lb.lb_expression)
       lbs.lbs_bindings
   in
-  let str = mkstr ~loc (Pstr_value(lbs.lbs_rec, List.rev bindings)) in
+  let str = mkstr ~loc (Pstr_value(lbs.lbs_rec, mac, List.rev bindings)) in
   match lbs.lbs_extension with
   | None -> str
   | Some id -> ghstr ~loc (Pstr_extension((id, PStr [str]), []))
@@ -726,6 +727,10 @@ let mk_directive ~loc name arg =
    string that will not trigger a syntax error; see how [not_expecting]
    is used in the definition of [type_variance]. */
 
+
+%token LESSLESS               "<<"
+%token GREATERGREATER         ">>"
+%token DOLLAR                 "$"
 %token AMPERAMPER             "&&"
 %token AMPERSAND              "&"
 %token AND                    "and"
@@ -793,6 +798,7 @@ let mk_directive ~loc name arg =
 %token LESS                   "<"
 %token LESSMINUS              "<-"
 %token LET                    "let"
+%token MACRO                  "macro"
 %token <string> LIDENT        "lident" (* just an example *)
 %token LPAREN                 "("
 %token LBRACKETAT             "[@"
@@ -914,6 +920,7 @@ The precedences must be listed from low to high.
 %nonassoc prec_unary_minus prec_unary_plus /* unary - */
 %nonassoc prec_constant_constructor     /* cf. simple_expr (C versus C x) */
 %nonassoc prec_constr_appl              /* above AS BAR COLONCOLON COMMA */
+%left	    prec_splice    
 %nonassoc below_HASH
 %nonassoc HASH                         /* simple_expr/toplevel_directive */
 %left     HASHOP
@@ -925,6 +932,7 @@ The precedences must be listed from low to high.
           NEW PREFIXOP STRING TRUE UIDENT
           LBRACKETPERCENT QUOTED_STRING_EXPR
           METAOCAML_BRACKET_OPEN METAOCAML_ESCAPE
+          LESSLESS DOLLAR
 
 /* Entry points */
 
@@ -1523,7 +1531,9 @@ structure:
 (* A structure item. *)
 structure_item:
     let_bindings(ext)
-      { val_of_let_bindings ~loc:$sloc $1 }
+      { val_of_bindings ~loc:$sloc $1 Value }
+  | macro_bindings
+      { val_of_bindings ~loc:$sloc $1 Macro }  (* MACO-TODO Psig_macro *)
   | mkstr(
       item_extension post_item_attributes
         { let docs = symbol_docs $sloc in
@@ -1669,9 +1679,11 @@ module_type_declaration:
 
 (* Opens. *)
 
+
 open_declaration:
   OPEN
   override = override_flag
+  static = static_import_flag
   ext = ext
   attrs1 = attributes
   me = module_expr
@@ -1680,13 +1692,14 @@ open_declaration:
     let attrs = attrs1 @ attrs2 in
     let loc = make_loc $sloc in
     let docs = symbol_docs $sloc in
-    Opn.mk me ~override ~attrs ~loc ~docs, ext
+    Opn.mk me ~static ~override ~attrs ~loc ~docs, ext
   }
 ;
 
 open_description:
   OPEN
   override = override_flag
+  static = static_import_flag
   ext = ext
   attrs1 = attributes
   id = mkrhs(mod_ext_longident)
@@ -1695,7 +1708,7 @@ open_description:
     let attrs = attrs1 @ attrs2 in
     let loc = make_loc $sloc in
     let docs = symbol_docs $sloc in
-    Opn.mk id ~override ~attrs ~loc ~docs, ext
+    Opn.mk id ~static ~override ~attrs ~loc ~docs, ext
   }
 ;
 
@@ -1775,6 +1788,8 @@ signature_item:
     { $1 }
   | wrap_mksig_ext(
       value_description
+        { psig_value $1 }
+    | macro_description
         { psig_value $1 }
     | primitive_declaration
         { psig_value $1 }
@@ -2656,6 +2671,10 @@ simple_expr:
   | mod_longident DOT
     LPAREN MODULE ext_attributes module_expr COLON error
       { unclosed "(" $loc($3) ")" $loc($8) }
+  | LESSLESS seq_expr GREATERGREATER
+       { Pexp_quote $2 }
+  | DOLLAR simple_expr %prec prec_splice
+       { Pexp_splice $2 }
 ;
 labeled_simple_expr:
     simple_expr %prec below_HASH
@@ -2772,6 +2791,35 @@ letop_bindings:
         let and_ = {pbop_op; pbop_pat; pbop_exp; pbop_loc} in
         let_pat, let_exp, and_ :: rev_ands }
 ;
+
+macro_bindings:
+     macro_binding                           { $1 }
+   | macro_bindings and_macro_binding          { addlb $1 $2 }
+;
+
+%inline macro_binding:
+   MACRO
+   ext = ext
+   attrs1 = attributes
+   rec_flag = rec_flag
+   body = let_binding_body
+   attrs2 = post_item_attributes
+     {
+       let attrs = attrs1 @ attrs2 in
+       mklbs ext rec_flag (mklb ~loc:$sloc true body attrs)
+     }
+;
+and_macro_binding:
+   AND
+   attrs1 = attributes
+   body = let_binding_body
+   attrs2 = post_item_attributes
+     {
+       let attrs = attrs1 @ attrs2 in
+       mklb ~loc:$sloc false body attrs
+     }
+;
+
 strict_binding:
     EQUAL seq_expr
       { $2 }
@@ -3215,7 +3263,22 @@ value_description:
     { let attrs = attrs1 @ attrs2 in
       let loc = make_loc $sloc in
       let docs = symbol_docs $sloc in
-      Val.mk id ty ~attrs ~loc ~docs,
+      Val.mk Value id ty ~attrs ~loc ~docs,
+      ext }
+;
+
+macro_description:
+  MACRO
+  ext = ext
+  attrs1 = attributes
+  id = mkrhs(val_ident)
+  COLON
+  ty = possibly_poly(core_type)
+  attrs2 = post_item_attributes
+    { let attrs = attrs1 @ attrs2 in
+      let loc = make_loc $sloc in
+      let docs = symbol_docs $sloc in
+      Val.mk Macro id ty ~attrs ~loc ~docs,
       ext }
 ;
 
@@ -3234,7 +3297,7 @@ primitive_declaration:
     { let attrs = attrs1 @ attrs2 in
       let loc = make_loc $sloc in
       let docs = symbol_docs $sloc in
-      Val.mk id ty ~prim ~attrs ~loc ~docs,
+      Val.mk Value id ty ~prim ~attrs ~loc ~docs,
       ext }
 ;
 
@@ -4201,6 +4264,10 @@ virtual_with_private_flag:
 %inline override_flag:
     /* empty */                                 { Fresh }
   | BANG                                        { Override }
+;
+%inline static_import_flag:
+    /* empty */                                 { Nonstatic }
+  | TILDE                                       { Static }
 ;
 subtractive:
   | MINUS                                       { "-" }

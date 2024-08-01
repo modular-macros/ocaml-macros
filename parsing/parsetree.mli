@@ -438,6 +438,8 @@ and expression_desc =
   | Pexp_letop of letop
       (** - [let* P = E0 in E1]
             - [let* P0 = E00 and* P1 = E01 in E1] *)
+  | Pexp_quote of expression
+  | Pexp_splice of expression
   | Pexp_extension of extension  (** [[%id]] *)
   | Pexp_unreachable  (** [.] *)
 
@@ -529,6 +531,7 @@ and type_constraint =
 and value_description =
     {
      pval_name: string loc;
+     pval_macro: macro_flag;
      pval_type: core_type;
      pval_prim: string list;
      pval_attributes: attributes;  (** [... [\@\@id1] [\@\@id2]] *)
@@ -537,6 +540,10 @@ and value_description =
 (** Values of type {!value_description} represents:
     - [val x: T],
             when {{!value_description.pval_prim}[pval_prim]} is [[]]
+             and {{!value_description.pval_level}[pval_level]} is [0]
+    - [macro x: T],
+            when {{!value_description.pval_prim}[pval_prim]} is [[]]
+             and {{!value_description.pval_level}[pval_level]} is [-1]
     - [external x: T = "s1" ... "sn"]
             when {{!value_description.pval_prim}[pval_prim]} is [["s1";..."sn"]]
 *)
@@ -918,7 +925,8 @@ and signature_item =
 and signature_item_desc =
   | Psig_value of value_description
       (** - [val x: T]
-            - [external x: T = "s1" ... "sn"]
+          - [macro x: T]
+          - [external x: T = "s1" ... "sn"]
          *)
   | Psig_type of rec_flag * type_declaration list
       (** [type t1 = ... and ... and tn  = ...] *)
@@ -978,10 +986,13 @@ and 'a open_infos =
     {
      popen_expr: 'a;
      popen_override: override_flag;
+     popen_static: static_flag;
      popen_loc: Location.t;
      popen_attributes: attributes;
     }
 (** Values of type ['a open_infos] represents:
+    - [open~ X] when {{!open_infos.popen_static}[popen_static]}
+                  is {{!Asttypes.static_flag.Static}[Static]}
     - [open! X] when {{!open_infos.popen_override}[popen_override]}
                   is {{!Asttypes.override_flag.Override}[Override]}
     (silences the "used identifier shadowing" warning)
@@ -1060,12 +1071,20 @@ and structure_item =
 
 and structure_item_desc =
   | Pstr_eval of expression * attributes  (** [E] *)
-  | Pstr_value of rec_flag * value_binding list
-      (** [Pstr_value(rec, [(P1, E1 ; ... ; (Pn, En))])] represents:
+  | Pstr_value of rec_flag * macro_flag * value_binding list
+      (** [Pstr_value(rec, mac, [(P1, E1 ; ... ; (Pn, En))])] represents:
             - [let P1 = E1 and ... and Pn = EN]
-                when [rec] is {{!Asttypes.rec_flag.Nonrecursive}[Nonrecursive]},
+                when [rec] is {{!Asttypes.rec_flag.Nonrecursive}[Nonrecursive]}
+                 and [mac] is {{!Asttypes.macro_flag.Value}[Value]}
             - [let rec P1 = E1 and ... and Pn = EN ]
-                when [rec] is {{!Asttypes.rec_flag.Recursive}[Recursive]}.
+                when [rec] is {{!Asttypes.rec_flag.Recursive}[Recursive]}
+                 and [mac] is {{!Asttypes.macro_flag.Value}[Value]}
+            - [macro P1 = E1 and ... and Pn = EN]
+                when [rec] is {{!Asttypes.rec_flag.Nonrecursive}[Nonrecursive]}
+                 and [mac] is {{!Asttypes.macro_flag.Macro}[Macro]}
+            - [macro rec P1 = E1 and ... and Pn = EN ]
+                when [rec] is {{!Asttypes.rec_flag.Recursive}[Recursive]}
+                 and [mac] is {{!Asttypes.macro_flag.Macro}[Macro]}.
         *)
   | Pstr_primitive of value_description
       (** - [val x: T]

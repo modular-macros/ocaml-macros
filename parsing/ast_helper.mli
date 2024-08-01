@@ -198,6 +198,8 @@ module Exp:
                -> expression
     val letop: ?loc:loc -> ?attrs:attrs -> binding_op
                -> binding_op list -> expression -> expression
+    val quote : ?loc:loc -> ?attrs:attrs -> expression -> expression
+    val splice : ?loc:loc -> ?attrs:attrs -> expression -> expression
     val extension: ?loc:loc -> ?attrs:attrs -> extension -> expression
     val unreachable: ?loc:loc -> ?attrs:attrs -> unit -> expression
 
@@ -209,7 +211,7 @@ module Exp:
 module Val:
   sig
     val mk: ?loc:loc -> ?attrs:attrs -> ?docs:docs ->
-      ?prim:string list -> str -> core_type -> value_description
+      ?prim:string list -> macro_flag -> str -> core_type -> value_description
   end
 
 (** Type declarations *)
@@ -318,7 +320,8 @@ module Str:
     val mk: ?loc:loc -> structure_item_desc -> structure_item
 
     val eval: ?loc:loc -> ?attrs:attributes -> expression -> structure_item
-    val value: ?loc:loc -> rec_flag -> value_binding list -> structure_item
+    val value: ?loc:loc -> rec_flag -> macro_flag -> value_binding list ->
+      structure_item
     val primitive: ?loc:loc -> value_description -> structure_item
     val type_: ?loc:loc -> rec_flag -> type_declaration list -> structure_item
     val type_extension: ?loc:loc -> type_extension -> structure_item
@@ -367,7 +370,7 @@ module Mb:
 module Opn:
   sig
     val mk: ?loc: loc -> ?attrs:attrs -> ?docs:docs ->
-      ?override:override_flag -> 'a -> 'a open_infos
+      ?static:static_flag -> ?override:override_flag -> 'a -> 'a open_infos
   end
 
 (** Includes *)

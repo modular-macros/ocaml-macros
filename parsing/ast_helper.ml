@@ -228,6 +228,8 @@ module Exp = struct
   let open_ ?loc ?attrs a b = mk ?loc ?attrs (Pexp_open (a, b))
   let letop ?loc ?attrs let_ ands body =
     mk ?loc ?attrs (Pexp_letop {let_; ands; body})
+  let quote ?loc ?attrs a = mk ?loc ?attrs (Pexp_quote a)
+  let splice ?loc ?attrs a = mk ?loc ?attrs (Pexp_splice a)
   let extension ?loc ?attrs a = mk ?loc ?attrs (Pexp_extension a)
   let unreachable ?loc ?attrs () = mk ?loc ?attrs Pexp_unreachable
 
@@ -307,7 +309,7 @@ module Str = struct
   let mk ?(loc = !default_loc) d = {pstr_desc = d; pstr_loc = loc}
 
   let eval ?loc ?(attrs = []) a = mk ?loc (Pstr_eval (a, attrs))
-  let value ?loc a b = mk ?loc (Pstr_value (a, b))
+  let value ?loc a b c = mk ?loc (Pstr_value (a, b, c))
   let primitive ?loc a = mk ?loc (Pstr_primitive a)
   let type_ ?loc rec_flag a = mk ?loc (Pstr_type (rec_flag, a))
   let type_extension ?loc a = mk ?loc (Pstr_typext a)
@@ -419,9 +421,10 @@ end
 
 module Val = struct
   let mk ?(loc = !default_loc) ?(attrs = []) ?(docs = empty_docs)
-        ?(prim = []) name typ =
+        ?(prim = []) mac_flag name typ =
     {
      pval_name = name;
+     pval_macro = mac_flag;
      pval_type = typ;
      pval_attributes = add_docs_attrs docs attrs;
      pval_loc = loc;
@@ -479,9 +482,10 @@ end
 
 module Opn = struct
   let mk ?(loc = !default_loc) ?(attrs = []) ?(docs = empty_docs)
-        ?(override = Fresh) expr =
+        ?(static = Nonstatic) ?(override = Fresh) expr = let _ = static in
     {
      popen_expr = expr;
+     popen_static = static;
      popen_override = override;
      popen_loc = loc;
      popen_attributes = add_docs_attrs docs attrs;

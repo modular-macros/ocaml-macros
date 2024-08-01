@@ -72,6 +72,13 @@ module Uid = struct
   let for_actual_declaration = function
     | Item _ -> true
     | _ -> false
+    
+  let to_string = function
+    | Internal -> "<internal>"
+    | Predef name -> Format.sprintf "<predef:%s>" name
+    | Compilation_unit s -> s
+    | Item { comp_unit; id } -> Format.sprintf "%s.%d" comp_unit id
+
 end
 
 module Sig_component_kind = struct

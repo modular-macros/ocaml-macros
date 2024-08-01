@@ -42,7 +42,11 @@ type virtual_flag = Virtual | Concrete
 
 type override_flag = Override | Fresh
 
+type static_flag = Static | Nonstatic
+
 type closed_flag = Closed | Open
+
+type macro_flag = Macro | Value
 
 type label = string
 

@@ -70,6 +70,8 @@ module Uid : sig
 
   val for_actual_declaration : t -> bool
 
+  val to_string : t -> string
+
   include Identifiable.S with type t := t
 end
 
