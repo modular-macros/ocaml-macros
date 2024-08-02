@@ -136,6 +136,9 @@ type error =
   | Non_packable_local_modtype_subst of Path.t
   | With_cannot_remove_packed_modtype of Path.t * module_type
   | Cannot_alias of Path.t
+  | Staging_mode_violation of string
+  | Staging_level_violation of string
+  | Macro_is_not_function
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

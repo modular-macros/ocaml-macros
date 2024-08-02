@@ -193,6 +193,9 @@ let classify_expression : Typedtree.expression -> sd =
         (* Unit-returning expressions *)
         Static
 
+    | Texp_quote _
+    | Texp_splice _
+
     | Texp_unreachable ->
         Static
 
@@ -931,6 +934,8 @@ let rec expression : Typedtree.expression -> term_judg =
           list binding_op (let_ :: ands) <<< Dereference;
           case_env body <<< Delay
         ]
+    | Texp_quote e -> expression e
+    | Texp_splice { spl_exp = e } -> expression e
     | Texp_unreachable ->
       (*
         ----------
@@ -1096,7 +1101,7 @@ and structure_item : Typedtree.structure_item -> bind_judg =
       *)
       let judg_e = expression e <<< Guard in
       Env.join (judg_e m) env
-    | Tstr_value (rec_flag, bindings) ->
+    | Tstr_value (rec_flag, _, bindings) ->
       value_bindings rec_flag bindings m env
     | Tstr_module {mb_id; mb_expr} ->
       module_binding (mb_id, mb_expr) m env

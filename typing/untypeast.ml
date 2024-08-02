@@ -159,8 +159,9 @@ let structure_item sub item =
   let desc =
     match item.str_desc with
       Tstr_eval (exp, attrs) -> Pstr_eval (sub.expr sub exp, attrs)
-    | Tstr_value (rec_flag, list) ->
-        Pstr_value (rec_flag, Value, List.map (sub.value_binding sub) list)
+    | Tstr_value (rec_flag, level, list) ->
+        let mac_flag : macro_flag = if level < 0 then Macro else Value in
+        Pstr_value (rec_flag, mac_flag, List.map (sub.value_binding sub) list)
     | Tstr_primitive vd ->
         Pstr_primitive (sub.value_description sub vd)
     | Tstr_type (rec_flag, list) ->
@@ -197,8 +198,9 @@ let structure_item sub item =
 let value_description sub v =
   let loc = sub.location sub v.val_loc in
   let attrs = sub.attributes sub v.val_attributes in
-  Val.mk ~loc ~attrs Value (* TODO *)
+  Val.mk ~loc ~attrs
     ~prim:v.val_prim
+    (if v.val_val.val_staging_level = 0 then Value else Macro)
     (map_loc sub v.val_name)
     (sub.typ sub v.val_desc)
 
@@ -549,6 +551,8 @@ let expression sub exp =
         let ands = List.map2 (sub.binding_op sub) ands and_pats in
         let body = sub.expr sub body.c_rhs in
         Pexp_letop {let_; ands; body }
+    | Texp_quote exp -> Pexp_quote (sub.expr sub exp)
+    | Texp_splice { spl_exp = exp } -> Pexp_splice (sub.expr sub exp)
     | Texp_unreachable ->
         Pexp_unreachable
     | Texp_extension_constructor (lid, _) ->

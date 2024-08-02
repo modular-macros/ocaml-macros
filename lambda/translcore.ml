@@ -563,6 +563,8 @@ and transl_exp0 ~in_new_scope ~scopes e =
   | Texp_letop{let_; ands; param; body; partial} ->
       event_after ~scopes e
         (transl_letop ~scopes e.exp_loc e.exp_env let_ ands param body partial)
+  | Texp_quote _ -> lambda_unit (* TODO *)
+  | Texp_splice _ -> lambda_unit (* TODO *)
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
   | Texp_open (od, e) ->

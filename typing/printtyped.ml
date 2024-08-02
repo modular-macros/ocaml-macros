@@ -86,6 +86,11 @@ let fmt_override_flag f x =
   | Override -> fprintf f "Override"
   | Fresh -> fprintf f "Fresh"
 
+let fmt_static_flag f x =
+  match x with
+  | Static -> fprintf f "Static"
+  | Nonstatic -> fprintf f "Nonstatic"
+
 let fmt_closed_flag f x =
   match x with
   | Closed -> fprintf f "Closed"
@@ -451,6 +456,13 @@ and expression i ppf x =
       binding_op (i+1) ppf let_;
       list (i+1) binding_op ppf ands;
       case i ppf body
+  | Texp_quote (e) ->
+      line i ppf "Texp_quote";
+      expression i ppf e;
+  | Texp_splice { spl_index; spl_exp = e } ->
+      line i ppf "Texp_splice";
+      Option.iter (line i ppf "%d") spl_index;
+      expression i ppf e;
   | Texp_unreachable ->
       line i ppf "Texp_unreachable"
   | Texp_extension_constructor (li, _) ->
@@ -777,7 +789,7 @@ and signature_item i ppf x =
       attributes i ppf x.mtd_attributes;
       modtype_declaration i ppf x.mtd_type
   | Tsig_open od ->
-      line i ppf "Tsig_open %a %a\n"
+      line i ppf "Tsig_open %a %a %a\n" fmt_static_flag od.open_static
         fmt_override_flag od.open_override
         fmt_path (fst od.open_expr);
       attributes i ppf od.open_attributes
@@ -867,8 +879,11 @@ and structure_item i ppf x =
       line i ppf "Tstr_eval\n";
       attributes i ppf attrs;
       expression i ppf e;
-  | Tstr_value (rf, l) ->
+  | Tstr_value (rf, 0, l) ->
       line i ppf "Tstr_value %a\n" fmt_rec_flag rf;
+      list i (value_binding rf) ppf l;
+  | Tstr_value (rf, _, l) ->
+      line i ppf "Tstr_value (static) %a\n" fmt_rec_flag rf;
       list i (value_binding rf) ppf l;
   | Tstr_primitive vd ->
       line i ppf "Tstr_primitive\n";
@@ -893,7 +908,7 @@ and structure_item i ppf x =
       attributes i ppf x.mtd_attributes;
       modtype_declaration i ppf x.mtd_type
   | Tstr_open od ->
-      line i ppf "Tstr_open %a\n"
+      line i ppf "Tstr_open %a %a\n" fmt_static_flag od.open_static
         fmt_override_flag od.open_override;
       module_expr i ppf od.open_expr;
       attributes i ppf od.open_attributes

@@ -224,6 +224,7 @@ let iter_on_occurrences
       | Texp_send _
       | Texp_letmodule _ | Texp_letexception _ | Texp_assert _ | Texp_lazy _
       | Texp_object _ | Texp_pack _ | Texp_letop _ | Texp_unreachable
+      | Texp_quote _ | Texp_splice _
       | Texp_open _ -> ());
       default_iterator.expr sub e);
 
