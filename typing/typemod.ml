@@ -80,6 +80,9 @@ type error =
   | Non_packable_local_modtype_subst of Path.t
   | With_cannot_remove_packed_modtype of Path.t * module_type
   | Cannot_alias of Path.t
+  | Staging_mode_violation of string
+  | Staging_level_violation of string
+  | Macro_is_not_function
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -111,9 +114,9 @@ let extract_sig_open env loc mty =
 
 (* Compute the environment after opening a module *)
 
-let type_open_ ?used_slot ?toplevel ovf env loc lid =
+let type_open_ ?used_slot ?toplevel sf ovf env loc lid =
   let path = Env.lookup_module_path ~load:true ~loc:lid.loc lid.txt env in
-  match Env.open_signature ~loc ?used_slot ?toplevel ovf path env with
+  match Env.open_signature ~loc ?used_slot ?toplevel ~sf ovf path env with
   | Ok env -> path, env
   | Error _ ->
       let md = Env.find_module path env in
@@ -129,7 +132,7 @@ let initial_env ~loc ~initially_opened_module
     let txt =
       Location.init lexbuf (Printf.sprintf "command line argument: -open %S" m);
       Parse.simple_module_path lexbuf in
-        snd (type_open_ Override env loc {txt;loc})
+        snd (type_open_ Nonstatic Override env loc {txt;loc})
   in
   let add_units env units =
     String.Set.fold
@@ -173,7 +176,7 @@ let type_open_descr ?used_slot ?toplevel env sod =
   let (path, newenv) =
     Builtin_attributes.warning_scope sod.popen_attributes
       (fun () ->
-         type_open_ ?used_slot ?toplevel sod.popen_override env sod.popen_loc
+         type_open_ ?used_slot ?toplevel sod.popen_static sod.popen_override env sod.popen_loc
            sod.popen_expr
       )
   in
@@ -181,6 +184,7 @@ let type_open_descr ?used_slot ?toplevel env sod =
     {
       open_expr = (path, sod.popen_expr);
       open_bound_items = [];
+      open_static = sod.popen_static;
       open_override = sod.popen_override;
       open_env = newenv;
       open_attributes = sod.popen_attributes;
@@ -195,6 +199,17 @@ let type_module_type_of_fwd :
       Typedtree.module_expr * Types.module_type) ref
   = ref (fun _env _m -> assert false)
 
+(* check that macro bindings are functions *)
+let check_macros_are_arrows env valbinds =
+  List.iter
+    (fun {vb_expr} ->
+      match vb_expr.exp_desc with
+      | Texp_function _ -> ()
+      | _ -> raise(Error(vb_expr.exp_loc, env, Macro_is_not_function))
+    )
+    valbinds
+
+      
 (* Additional validity checks on type definitions arising from
    recursive modules *)
 
@@ -2665,7 +2680,7 @@ and type_open_decl_aux ?used_slot ?toplevel ~funct_body names env od =
   match od.popen_expr.pmod_desc with
   | Pmod_ident lid ->
     let path, newenv =
-      type_open_ ?used_slot ?toplevel od.popen_override env loc lid
+      type_open_ ?used_slot ?toplevel od.popen_static od.popen_override env loc lid
     in
     let md = { mod_desc = Tmod_ident (path, lid);
                mod_type = Mty_alias path;
@@ -2676,6 +2691,7 @@ and type_open_decl_aux ?used_slot ?toplevel ~funct_body names env od =
     let open_descr = {
       open_expr = md;
       open_bound_items = [];
+      open_static = od.popen_static;
       open_override = od.popen_override;
       open_env = newenv;
       open_loc = loc;
@@ -2699,6 +2715,7 @@ and type_open_decl_aux ?used_slot ?toplevel ~funct_body names env od =
     Signature_group.iter (Signature_names.check_sig_item ?info names loc) sg;
     let sg =
       List.map (function
+        (* MACO-NOTE review any change required for static imports? *)
         | Sig_value(id, vd, _) -> Sig_value(id, vd, visibility)
         | Sig_type(id, td, rs, _) -> Sig_type(id, td, rs, visibility)
         | Sig_typext(id, ec, et, _) -> Sig_typext(id, ec, et, visibility)
@@ -2713,6 +2730,7 @@ and type_open_decl_aux ?used_slot ?toplevel ~funct_body names env od =
     let open_descr = {
       open_expr = md;
       open_bound_items = sg;
+      open_static = od.popen_static;
       open_override = od.popen_override;
       open_env = newenv;
       open_loc = loc;
@@ -2760,7 +2778,26 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
             (fun () -> Typecore.type_expression env sexpr)
         in
         Tstr_eval (expr, attrs), [], shape_map, env
-    | Pstr_value(rec_flag, _, sdefs) ->
+    | Pstr_value(rec_flag, Value, sdefs) ->
+        let staging_level = Env.get_env_level env in
+        let staging_mode = Env.get_env_mode env in
+        if  staging_level <> 0 then
+          let msg =
+            Format.sprintf 
+              "Level is %d, the expected level is 0. Mode is %s"
+              staging_level 
+              (Env.mode_to_str staging_mode)
+          in
+            raise (Error (loc, env, Staging_level_violation msg))
+        else if staging_mode <> M_C then 
+          let msg =
+            Format.sprintf 
+              "Mode is %s, the expected mode is MC. The current level is %d"
+              (Env.mode_to_str staging_mode)
+              (Env.get_env_level env) 
+          in     
+            raise (Error (loc, env, Staging_mode_violation msg))
+        else
         let (defs, newenv) =
           Typecore.type_binding env rec_flag sdefs in
         let defs = match rec_flag with
@@ -2780,10 +2817,66 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
             ([], shape_map)
             (let_bound_idents_full defs)
         in
-        Tstr_value(rec_flag, defs),
+        Tstr_value(rec_flag, staging_level, defs),
         List.rev items,
         shape_map,
         newenv
+    | Pstr_value (rec_flag, Macro, sdefs) -> 
+      (* MACO-TODO merge with Pstr_value *)
+
+      let original_level = Env.get_env_level env in
+      let original_mode = Env.get_env_mode env in
+      let static_level_env = Env.with_level_down env in
+
+      if  original_level <> 0 then 
+        (* MACO-NOTE 0 before decrease so enforcing -1 *)
+        let msg =
+          Format.sprintf 
+            "Level is %d, the expected level is -1. Mode is %s"
+            original_level 
+            (Env.mode_to_str original_mode)
+        in
+          raise (Error (loc, env, Staging_level_violation msg)) 
+      else if original_mode <> M_C then 
+        let msg =
+          Format.sprintf 
+            "Mode is %s, the expected mode is MC. The current level is %d"
+            (Env.mode_to_str original_mode)
+            original_level
+        in    
+          raise (Error (loc, env, Staging_mode_violation msg))
+      else
+        
+      let (defs, newenv) =
+        (* MACO-NOTE pass Val_macro instead of default Val_reg? *)
+        Typecore.type_binding static_level_env rec_flag sdefs in
+        let defs = match rec_flag with
+          | Recursive -> Typecore.annotate_recursive_bindings env defs
+          | Nonrecursive -> defs
+        in
+      (* MACO-NOTE enforce macros being functions. 
+         MACO-REV same as is_function_type ? *)
+      let () = check_macros_are_arrows static_level_env defs
+      in
+      (* Note: Env.find_value does not trigger the value_used event. Values
+        will be marked as being used during the signature inclusion test. *)
+      let items, shape_map =
+        List.fold_left
+          (fun (acc, shape_map) (id, { Asttypes.loc; _ }, _typ, _uid)->
+            Signature_names.check_value names loc id;
+            let vd =  Env.find_value (Pident id) newenv in
+            Sig_value(id, vd, Exported) :: acc,
+            Shape.Map.add_value shape_map id vd.val_uid
+          )
+          ([], shape_map)
+          (let_bound_idents_full defs)
+      in
+      Tstr_value(rec_flag, original_level-1, defs),
+      List.rev items,
+      shape_map,
+      (Env.with_level original_level newenv)
+
+      (* MACO-NOTE should enforce check exit mode is M_C and 0 ? *)
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
         Signature_names.check_value names desc.val_loc desc.val_id;
@@ -3289,7 +3382,8 @@ let type_implementation target initial_env ast =
       if !Clflags.print_types then (* #7656 *)
         ignore @@ Warnings.parse_options false "-32-34-37-38-60";
       let (str, sg, names, shape, finalenv) =
-        type_structure initial_env ast in
+        type_structure initial_env ast 
+      in
       let shape =
         let id = Ident.create_persistent @@ Unit_info.modname target in
         Shape.set_uid_if_none shape (Uid.of_compilation_unit_id id)
@@ -3715,6 +3809,13 @@ let report_error ~loc _env = function
          for an anonymous module type.@ %a"
         Style.inline_code (Path.name p)
         Misc.print_see_manual manual_ref
+  | Staging_level_violation msg ->
+      Location.errorf ~loc "Bad staging level on definition. %s" msg
+  | Staging_mode_violation msg ->
+      Location.errorf ~loc "Bad staging mode on definition. %s" msg
+  | Macro_is_not_function ->
+      Location.errorf ~loc "macro definition should be a function"
+
 
 let report_error env ~loc err =
   Printtyp.wrap_printing_env ~error:true env

@@ -47,8 +47,8 @@ end
 
 (* Forward declaration, to be filled in by Typemod.type_open *)
 val type_open:
-  (?used_slot:bool ref -> Asttypes.override_flag -> Env.t -> Location.t ->
-   Longident.t Asttypes.loc -> Path.t * Env.t)
+  (?used_slot:bool ref -> Asttypes.static_flag -> Asttypes.override_flag ->
+   Env.t -> Location.t -> Longident.t Asttypes.loc -> Path.t * Env.t)
     ref
 
 val valid_tyvar_name : string -> bool

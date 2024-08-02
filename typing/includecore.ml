@@ -67,6 +67,7 @@ type value_mismatch =
   | Primitive_mismatch of primitive_mismatch
   | Not_a_primitive
   | Type of Errortrace.moregen_error
+  | Staging_level_mismatch
 
 exception Dont_match of value_mismatch
 
@@ -101,6 +102,8 @@ let value_descriptions ~loc env name
     name;
   match Ctype.moregeneral env vd1.val_type vd2.val_type with
   | exception Ctype.Moregen err -> raise (Dont_match (Type err))
+  | () when vd1.val_staging_level <> vd2.val_staging_level ->
+        raise (Dont_match Staging_level_mismatch)
   | () -> value_descriptions_consistency env vd1 vd2
 
 (* Inclusion between manifest types (particularly for private row types) *)
@@ -248,6 +251,8 @@ let report_value_mismatch first second env ppf err =
       Errortrace_report.moregen ppf Type_scheme env trace
         (msg "The type")
         (msg "is not compatible with the type")
+  | Staging_level_mismatch ->
+     pr "The staging levels do not match"
 
 let report_type_inequality env ppf err =
   let msg = Fmt.Doc.msg in

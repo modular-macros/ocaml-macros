@@ -524,6 +524,9 @@ type t = {
   local_constraints: type_declaration Path.Map.t;
   id_pairs: (Ident.Unscoped.t * Ident.Unscoped.t) list;
   flags: int;
+  env_staging_level: staging_level;
+  env_staging_mode: staging_mode;
+  nof_tlsplice: int; (* MACO-NOTE convenience for translation and for avoiding interpretation *)
 }
 
 and module_components =
@@ -727,6 +730,16 @@ let empty = {
   id_pairs = [];
   flags = 0;
   not_aliasable = Ident.empty;
+  env_staging_level = 0; 
+  (* MACO-REV check upon module exit that level is 0 and M_C ? *)
+  env_staging_mode = M_C; 
+
+  (* MACO-NOTE -1 means no top-level splice. Otherwise, zero-based 
+     indexing
+     
+     MACO-TODO reimplement as Current_unit_name (Static_meta), so 
+     that it is easy to store other info such as static deps *)
+  nof_tlsplice = -1; 
  }
 
 let in_signature b env =
@@ -760,6 +773,28 @@ let diff env1 env2 =
   TycompTbl.diff_keys is_local_ext env1.constrs env2.constrs @
   IdTbl.diff_keys env1.modules env2.modules @
   IdTbl.diff_keys env1.classes env2.classes
+
+
+
+(* Touch staging modes or levels *)
+let get_env_level env = env.env_staging_level
+and with_level level env = {env with env_staging_level = level}
+
+let get_env_mode env = env.env_staging_mode
+and with_mode mode env = {env with env_staging_mode = mode}
+
+let with_level_up env =
+  with_level (get_env_level env + 1) env
+
+let with_level_down env =
+  with_level (get_env_level env - 1) env
+
+let mode_to_str = function
+  | M_C -> "C"
+  | M_Q -> "Q"
+  | M_S -> "S"
+
+let get_nof_tlsplice env = env.nof_tlsplice
 
 (* Functions for use in "wrap" parameters in IdTbl *)
 let wrap_identity x = x
@@ -846,6 +881,25 @@ end
 let set_current_unit = Current_unit.set
 let get_current_unit = Current_unit.get
 let get_current_unit_name = Current_unit.Name.get
+
+module StaticInfo : sig
+  val get_count : unit -> int
+  val set_count : int -> unit
+end = struct
+
+  (* MACO-TODO static_deps and other meta *)
+  let nof_splices = ref 0
+
+  let get_count () =
+    !nof_splices
+
+  let set_count num =
+    nof_splices := num
+end
+
+let get_tlsplice_count = StaticInfo.get_count
+
+let set_tlsplice_count num = StaticInfo.set_count num
 
 let find_same_module id tbl =
   match IdTbl.find_same id tbl with
@@ -2469,7 +2523,7 @@ let enter_unbound_module name reason env =
 
 (* Open a signature path *)
 
-let add_components slot root env0 comps =
+let add_components ?(sf = Nonstatic) slot root env0 comps =
   let add_l w comps env0 =
     TycompTbl.add_open slot w root comps env0
   in
@@ -2481,7 +2535,24 @@ let add_components slot root env0 comps =
     add_l (fun x -> `Label x) comps.comp_labels env0.labels
   in
   let values =
-    add (fun x -> `Value x) comps.comp_values env0.values
+    let decrement_all_value_levels comp_values =
+      NameMap.mapi (fun key value ->
+        let new_vda_desc = {
+          value.vda_description with
+          val_staging_level = value.vda_description.val_staging_level - 1
+        } in 
+            let dbg_msg = Format.sprintf "key: %s level: %d\n" key new_vda_desc.val_staging_level in
+            let _ = Location.prerr_warning Location.none (Warnings.Maco_dev dbg_msg ) in 
+        { value with vda_description = new_vda_desc}
+      ) comp_values 
+    in
+    add (fun x -> `Value x) 
+      (if sf = Static then begin
+        Location.prerr_warning Location.none (Warnings.Maco_dev "decrementing levels" );
+        decrement_all_value_levels comps.comp_values
+      end
+      else comps.comp_values) 
+      env0.values
   in
   let types =
     add (fun x -> `Type x) comps.comp_types env0.types
@@ -2507,16 +2578,16 @@ let add_components slot root env0 comps =
     modtypes;
     classes;
     cltypes;
-    modules;
+    modules; (* MACO-TODO go into comp_modules structure components and decrease all value levels. *)
   }
 
-let open_signature slot root env0 : (_,_) result =
+let open_signature ?(sf = Nonstatic) slot root env0 : (_,_) result =
   match get_components_res (find_module_components root env0) with
   | Error _ -> Error `Not_found
   | exception Not_found -> Error `Not_found
   | Ok (Functor_comps _) -> Error `Functor
   | Ok (Structure_comps comps) ->
-    Ok (add_components slot root env0 comps)
+    Ok (add_components ~sf slot root env0 comps)
 
 let remove_last_open root env0 =
   let rec filter_summary summary =
@@ -2566,7 +2637,8 @@ let open_pers_signature name env =
 
 let open_signature
     ?(used_slot = ref false)
-    ?(loc = Location.none) ?(toplevel = false)
+    ?(loc = Location.none) ?(toplevel = false) 
+    ?(sf = Nonstatic)
     ovf root env =
   let unused =
     match ovf with
@@ -2609,9 +2681,9 @@ let open_signature
       end;
       used := true
     in
-    open_signature (Some slot) root env
+    open_signature ~sf (Some slot) root env
   end
-  else open_signature None root env
+  else open_signature ~sf None root env
 
 (* Read a signature from a file *)
 let read_signature u =

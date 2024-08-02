@@ -214,6 +214,8 @@ type error =
   | Optional_poly_param of string
   | Cannot_unify_tfunctor_to_tarrow of Errortrace.unification_error
   | Cannot_omit_tfunctor_argument of Ident.Unscoped.t * type_expr
+  | Staging_level_violation of string
+  | Staging_mode_violation of string
 
 
 let not_principal fmt =
@@ -247,7 +249,7 @@ let type_str_item =
 (* Forward declaration, to be filled in by Typemod.type_open *)
 
 let type_open :
-  (?used_slot:bool ref -> override_flag -> Env.t -> Location.t ->
+  (?used_slot:bool ref -> static_flag -> override_flag -> Env.t -> Location.t ->
    Longident.t loc -> Path.t * Env.t)
     ref =
   ref (fun ?used_slot:_ _ -> assert false)
@@ -478,6 +480,7 @@ let type_continuation_pat env expected_ty sp =
       let id = Ident.create_local name.txt in
       let desc =
         { val_type = expected_ty; val_kind = Val_reg;
+          val_staging_level = Env.get_env_level env;
           Types.val_loc = loc; val_attributes = [];
           val_uid = Uid.mk ~current_unit:(Env.get_current_unit ()); }
       in
@@ -2264,7 +2267,7 @@ and type_pat_aux
         :: p.pat_extra }
   | Ppat_open (lid,p) ->
       let path, new_env =
-        !type_open Asttypes.Fresh !!penv sp.ppat_loc lid in
+        !type_open Asttypes.Nonstatic Asttypes.Fresh !!penv sp.ppat_loc lid in
       Pattern_env.set_env penv new_env;
       let p = type_pat tps category ~penv p expected_ty in
       let new_env = !!penv in
@@ -2298,6 +2301,7 @@ let add_pattern_variables ?check ?check_as env pv =
        let check = if pv_kind=As_var then check_as else check in
        Env.add_value ?check pv_id
          {val_type = pv_type; val_kind = Val_reg; Types.val_loc = pv_loc;
+          val_staging_level = Env.get_env_level env;
           val_attributes = pv_attributes;
           val_uid = pv_uid;
          } env
@@ -2400,6 +2404,7 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
           Env.add_value pv_id
             { val_type = pv_type
             ; val_kind = Val_reg
+            ; val_staging_level = Env.get_env_level val_env
             ; val_attributes = pv_attributes
             ; val_loc = pv_loc
             ; val_uid
@@ -2410,6 +2415,7 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
           Env.add_value id' ~check
             { val_type = pv_type
             ; val_kind = Val_ivar (Immutable, cl_num)
+            ; val_staging_level = Env.get_env_level met_env
             ; val_attributes = pv_attributes
             ; val_loc = pv_loc
             ; val_uid
@@ -3361,6 +3367,7 @@ let rec is_nonexpansive exp =
      See GPR#1142 *)
   | Texp_assert (exp, _) ->
       is_nonexpansive exp
+  | Texp_quote e | Texp_splice { spl_exp = e } -> is_nonexpansive e
   | Texp_apply ({ exp_desc = Texp_ident (_, _, {val_kind = Val_prim p}) },
                 args) ->
     begin match p, args with
@@ -3391,7 +3398,7 @@ and is_nonexpansive_struct_item item =
   match item.str_desc with
   | Tstr_eval _ | Tstr_primitive _ | Tstr_type _
   | Tstr_modtype _ | Tstr_class_type _  -> true
-  | Tstr_value (_, pat_exp_list) ->
+  | Tstr_value (_, _, pat_exp_list) ->
       List.for_all (fun vb -> is_nonexpansive vb.vb_expr) pat_exp_list
   | Tstr_module {mb_expr=m;_}
   | Tstr_open {open_expr=m;_}
@@ -3760,7 +3767,8 @@ let check_partial_application ~statement exp =
             | Texp_while _ | Texp_for _ | Texp_instvar _
             | Texp_setinstvar _ | Texp_override _ | Texp_assert _
             | Texp_lazy _ | Texp_object _ | Texp_pack _ | Texp_unreachable
-            | Texp_extension_constructor _ | Texp_ifthenelse (_, _, None)
+            | Texp_extension_constructor _ | Texp_quote _ | Texp_splice _
+            | Texp_ifthenelse (_, _, None)
             | Texp_function _ ->
                 check_statement ()
             | Texp_match (_, cases, eff_cases, _) ->
@@ -4063,6 +4071,51 @@ type type_function_result_param =
 { param : function_param;
   has_poly : bool;
 }
+(* check and report staging level errors *)
+
+
+let check_env_mode loc accepted env =
+  if not (List.mem (Env.get_env_mode env) accepted) then begin
+    let msg =
+      Format.sprintf
+        "Mode is %s, the expected modes are: [%s]. The current level is %d"
+        (Env.mode_to_str (Env.get_env_mode env))
+        (String.concat "; "  (List.map Env.mode_to_str accepted))
+        (Env.get_env_level env)
+    in
+    raise (Error (loc, env, Staging_mode_violation msg));
+  end
+
+let check_value_staging_level loc
+    (value : Types.value_description) (env : Env.t) : unit =
+  let uid_name = Format.asprintf "%a" Uid.print value.val_uid in
+
+  let bind_level = value.val_staging_level in
+  let expected_level = Env.get_env_level env in
+
+  if bind_level <> expected_level then begin
+
+    (* ignore levels on pervasives *)
+    if not (String.starts_with ~prefix:"[intf]Stdlib" uid_name) then begin
+      (* MACO-TODO
+          Get Stdlib name (all of the intially opened modules, really) from
+          typemod intial_env.
+
+          Move error message construction to exception handler.
+       *)
+
+    let msg =
+      Format.sprintf
+        "Bind level is %d, the expected level is %d. Mode is %s"
+        bind_level
+        expected_level
+        (Env.mode_to_str (Env.get_env_mode env))
+    in
+      raise (Error (loc, env, Staging_level_violation msg));
+    end
+    else (); (*Location.prerr_warning loc
+                (Warnings.Maco_dev "dbg - ignoring level mismatch on pervasive" );*)
+  end
 
 (* Generalize expressions *)
 let may_lower_contravariant env exp =
@@ -4169,6 +4222,7 @@ and type_expect_
   match sexp.pexp_desc with
   | Pexp_ident lid ->
       let path, desc = type_ident env ~recarg lid in
+      check_value_staging_level loc desc env;
       let exp_desc =
         match desc.val_kind with
         | Val_ivar (_, cl_num) ->
@@ -4833,6 +4887,7 @@ and type_expect_
         | Ppat_var {txt} ->
             Env.enter_value txt
               {val_type = instance Predef.type_int;
+               val_staging_level = Env.get_env_level env;
                val_attributes = [];
                val_kind = Val_reg;
                val_loc = loc;
@@ -5192,12 +5247,6 @@ and type_expect_
             exp_env = env;
             exp_attributes = sexp.pexp_attributes; }
 
-  | Pexp_quote _ ->
-     assert false
-
-  | Pexp_splice _ ->
-     assert false
-
   | Pexp_extension ({ txt = ("ocaml.extension_constructor"
                              |"extension_constructor"); _ },
                     payload) ->
@@ -5248,7 +5297,64 @@ and type_expect_
       end
   | Pexp_extension ext ->
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
+  | Pexp_quote e ->
+      (* let original_mode = Env.get_env_mode env in
+      if original_mode = M_Q then begin 
+        (* MACO-NOTE Valid modes are C v S*)
+        raise (Error (loc, env, Staging_level_violation))
+      end; *)
+      check_env_mode loc [Types.M_C ; Types.M_S] env;
+      let ty = newgenvar () in
+      let to_unify = Predef.type_expr ty in
+      with_explanation (fun () ->
+        unify_exp_types loc env to_unify (generic_instance ty_expected));
+      let body = type_expect 
+        (Env.with_mode M_Q (Env.with_level_up env)) 
+        e (mk_expected ty) in
+      re {
+        exp_desc = Texp_quote body;
+        exp_loc = loc; exp_extra = [];
+        exp_type = instance ty_expected;
+        exp_attributes = sexp.pexp_attributes;
+        exp_env = env;
+      }
+  | Pexp_splice e -> 
+      check_env_mode loc [Types.M_C ; Types.M_Q] env;
 
+      (*MACO-NOTE Number Top-level splices in order of appearance. Top-level 
+        splices are simply splices at Mode M (see Maco 2023 paper, source 
+        typing). Splices that are not top-level receive index None. We also 
+        mark everything inside the top-level splice with an environment flag, 
+        which may be convenient elsewhere.
+
+        We actually generate two new environments for top-level splices, one 
+        with an succesor tl-splice count which outlives the body of the splice, 
+        and one with the flag set which only lives within the body of the splice.
+
+        MACO-TODO port all splice counting state to Env :: StaticInfo
+        *)
+
+      let tl_n : int option = 
+        if Env.get_env_mode env = Types.M_C then
+          let before_bump = Env.get_tlsplice_count () in
+          Env.set_tlsplice_count (before_bump + 1);
+          Some before_bump
+        else 
+          None
+      in
+      
+      let body = type_expect 
+        (Env.with_mode M_S (Env.with_level_down env))
+        e (mk_expected (Predef.type_expr ty_expected))
+      in
+      re {
+        exp_desc = Texp_splice { spl_exp = body; spl_index = tl_n };
+        exp_loc = loc; 
+        exp_extra = [];
+        exp_type = instance ty_expected;
+        exp_attributes = sexp.pexp_attributes;
+        exp_env = env;
+      }
   | Pexp_unreachable ->
       re { exp_desc = Texp_unreachable;
            exp_loc = loc; exp_extra = [];
@@ -6276,6 +6382,7 @@ and type_argument ?explanation ?recarg env sarg ty_expected' ty_expected =
         let id = Ident.create_local name in
         let desc =
           { val_type = ty; val_kind = Val_reg;
+            val_staging_level = Env.get_env_level env;
             val_attributes = [];
             val_loc = Location.none;
             val_uid = Uid.mk ~current_unit:(Env.get_current_unit ());
@@ -6632,6 +6739,7 @@ and map_half_typed_cases
   let patterns = List.map (fun ((x : untyped_case), _) -> x.pattern) caselist in
   let contains_polyvars = List.exists contains_polymorphic_variant patterns in
   let erase_either = contains_polyvars && contains_variant_either ty_arg in
+  (* MACO-TODO pattern matching on GADTs under quotes *)
   let may_contain_gadts = List.exists may_contain_gadts patterns in
   let may_contain_modules = List.exists may_contain_modules patterns in
   let create_inner_level = may_contain_gadts || may_contain_modules in
@@ -8132,6 +8240,10 @@ let report_error ~loc env = function
             The module argument %a cannot be omitted in this application.@]"
             (Style.as_inline_code Printtyp.type_expr) func_ty
             Style.inline_code (Ident.Unscoped.name id_us)
+  | Staging_level_violation msg ->
+      Location.errorf ~loc "Bad staging level. %s" msg
+  | Staging_mode_violation msg ->
+      Location.errorf ~loc "Bad staging mode. %s" msg
 
 let report_error ~loc env err =
   Printtyp.wrap_printing_env ~error:true env

@@ -3052,7 +3052,25 @@ let find_lowest_level ty =
 let add_gadt_equation uenv source destination =
   (* Format.eprintf "@[add_gadt_equation %s %a@]@."
     (Path.name source) !Btype.print_raw destination; *)
+  (* MACO-NOTE we can do better, by adding a staging level to GADT equations,
+     and only using them at the right level. That a is much noisier change, and 
+     for now this is better than dissallowing staging with GADTs outright  
+     
+     MACO-NOTE we must also check the mode as well, as a quoted GADT inside a
+     macro may be at level 0 and still unsound (stephens example). 
+     
+     MACO-REV In fact, perhaps only enforcing the mode is enough (and more 
+     expressive)? as that lets us do anything inside an (unquoted) macro body *)
+
   let env = get_env uenv in
+
+  let staging_level = Env.get_env_level env in
+  let staging_mode = Env.get_env_mode env in
+
+  if (* staging_level <> 0 ||*) staging_mode <> M_C then
+    Location.prerr_warning Location.none (Warnings.Maco_dev 
+      ("avoided gadt constraint at level "^(string_of_int staging_level)))
+  else begin
   if has_free_univars env destination then
     occur_univar_or_unscoped ~inj_only:true env destination
   else if local_non_recursive_abbrev uenv source destination then begin
@@ -3072,6 +3090,7 @@ let add_gadt_equation uenv source destination =
     in
     add_local_constraint uenv source decl;
     cleanup_abbrev ()
+  end
   end
 
 let eq_package_path env p1 p2 =

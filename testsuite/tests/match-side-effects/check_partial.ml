@@ -72,7 +72,7 @@ let lazy_needs_partial : _ * bool t ref -> int = function
                 *match*/5 =o (field_mut 0 (field_imm 1 param/1)))
                (if (isint *match*/5) (if *match*/5 12 (exit 3)) (exit 3)))))
         with (3)
-         (raise (makeblock 0 (global Match_failure/21!) [0: "" 1 49])))))
+         (raise (makeblock 0 (global Match_failure/0!) [0: "" 1 49])))))
   (apply (field_mut 1 (global Toploop!)) "lazy_needs_partial"
     lazy_needs_partial/0))
 val lazy_needs_partial : unit lazy_t * bool t ref -> int = <fun>

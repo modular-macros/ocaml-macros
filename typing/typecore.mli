@@ -255,6 +255,8 @@ type error =
   | Optional_poly_param of string
   | Cannot_unify_tfunctor_to_tarrow of Errortrace.unification_error
   | Cannot_omit_tfunctor_argument of Ident.Unscoped.t * type_expr
+  | Staging_level_violation of string
+  | Staging_mode_violation of string
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -269,7 +271,7 @@ val type_str_item:
   (Env.t -> Parsetree.structure_item -> Typedtree.structure_item * Env.t) ref
 (* Forward declaration, to be filled in by Typemod.type_open *)
 val type_open:
-  (?used_slot:bool ref -> override_flag -> Env.t -> Location.t ->
+  (?used_slot:bool ref -> static_flag -> override_flag -> Env.t -> Location.t ->
    Longident.t loc -> Path.t * Env.t)
     ref
 (* Forward declaration, to be filled in by Typemod.type_open_decl *)
