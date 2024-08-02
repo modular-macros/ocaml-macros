@@ -394,7 +394,7 @@ let transl_type_param env styp =
 (* Forward declaration (set in Typemod.type_open) *)
 
 let type_open :
-  (?used_slot:bool ref -> override_flag -> Env.t -> Location.t ->
+  (?used_slot:bool ref -> static_flag -> override_flag -> Env.t -> Location.t ->
    Longident.t loc -> Path.t * Env.t)
     ref =
   ref (fun ?used_slot:_ _ -> assert false)
@@ -680,7 +680,7 @@ and transl_type_aux env ~row_context ~aliased ~policy styp =
            }) ty
   | Ptyp_open (mod_ident, t) ->
       let path, new_env =
-        !type_open Asttypes.Fresh env loc mod_ident
+        !type_open Asttypes.Nonstatic Asttypes.Fresh env loc mod_ident
       in
       let cty = transl_type new_env ~policy ~row_context t in
       ctyp (Ttyp_open (path, mod_ident, cty)) cty.ctyp_type

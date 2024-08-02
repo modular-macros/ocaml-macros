@@ -59,6 +59,23 @@ val diff: t -> t -> Ident.t list
 (* approximation to the preimage equivalence class of [find_type] *)
 val same_type_declarations: t -> t -> bool
 
+val get_env_mode : t -> staging_mode
+val with_mode: staging_mode -> t -> t
+val get_env_level : t -> staging_level
+val with_level: staging_level -> t -> t
+val with_level_down: t -> t
+val with_level_up: t -> t
+
+val mode_to_str : staging_mode -> string
+
+(* top level splice counter accessor (-1 is no splices, zero-based indexing) *)
+val get_nof_tlsplice : t -> int
+
+(* get number of top-level splices *)
+val get_tlsplice_count : unit -> int
+
+val set_tlsplice_count : int -> unit
+
 type type_descr_kind =
   (label_description, constructor_description) type_kind
 
@@ -345,6 +362,7 @@ val add_signature: signature -> t -> t
 val open_signature:
     ?used_slot:bool ref ->
     ?loc:Location.t -> ?toplevel:bool ->
+    ?sf:Asttypes.static_flag ->
     Asttypes.override_flag -> Path.t ->
     t -> (t, [`Not_found | `Functor]) result
 

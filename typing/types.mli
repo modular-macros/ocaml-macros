@@ -386,11 +386,17 @@ module VarSet : Set.S with type elt = string
 module Meths : Map.S with type key = string
 module Vars  : Map.S with type key = string
 
+(* Representation of metaprogramming levels and mode *)
+
+type staging_level = int
+type staging_mode = M_C | M_Q | M_S
+
 (* Value descriptions *)
 
 type value_description =
   { val_type: type_expr;                (* Type of the value *)
     val_kind: value_kind;
+    val_staging_level: staging_level;
     val_loc: Location.t;
     val_attributes: Parsetree.attributes;
     val_uid: Uid.t;
