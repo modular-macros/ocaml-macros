@@ -163,9 +163,9 @@ let structure_item sub {str_loc; str_desc; str_env} =
     match str_desc with
     | Tstr_eval (exp, attrs) ->
         Tstr_eval (sub.expr sub exp, sub.attributes sub attrs)
-    | Tstr_value (rec_flag, list) ->
+    | Tstr_value (rec_flag, st_lev, list) ->
         let (rec_flag, list) = sub.value_bindings sub (rec_flag, list) in
-        Tstr_value (rec_flag, list)
+        Tstr_value (rec_flag, st_lev, list)
     | Tstr_primitive v -> Tstr_primitive (sub.value_description sub v)
     | Tstr_type (rec_flag, list) ->
         let (rec_flag, list) = sub.type_declarations sub (rec_flag, list) in
@@ -505,6 +505,10 @@ let expr sub x =
           body = sub.case sub body;
           partial;
         }
+    | Texp_quote exp ->
+        Texp_quote (sub.expr sub exp)
+    | Texp_splice ({ spl_exp = exp } as desc) ->
+        Texp_splice { desc with spl_exp = (sub.expr sub exp) }
     | Texp_unreachable ->
         Texp_unreachable
     | Texp_extension_constructor (lid, path) ->

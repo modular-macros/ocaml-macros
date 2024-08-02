@@ -100,7 +100,7 @@ let classify env ty : classification =
       | Some (`String | `Bytes
              | `Int32 | `Int64 | `Nativeint
              | `Extension_constructor | `Continuation
-             | `Array | `Floatarray | `Iarray)
+             | `Array | `Floatarray | `Iarray | `Expr)
         -> Addr
       | Some #Predef.data_type_constr | None ->
         try

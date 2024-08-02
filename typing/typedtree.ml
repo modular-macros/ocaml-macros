@@ -149,6 +149,8 @@ and expression_desc =
       body : value case;
       partial : partial;
     }
+  | Texp_quote of expression
+  | Texp_splice of splice_desc
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
   | Texp_open of open_declaration * expression
@@ -308,7 +310,7 @@ and structure_item =
 
 and structure_item_desc =
     Tstr_eval of expression * attributes
-  | Tstr_value of rec_flag * value_binding list
+  | Tstr_value of rec_flag * Types.staging_level * value_binding list
   | Tstr_primitive of value_description
   | Tstr_type of rec_flag * type_declaration list
   | Tstr_typext of type_extension
@@ -439,6 +441,7 @@ and 'a open_infos =
     {
      open_expr: 'a;
      open_bound_items: Types.signature;
+     open_static: static_flag;
      open_override: override_flag;
      open_env: Env.t;
      open_loc: Location.t;
@@ -664,6 +667,11 @@ and 'a class_infos =
     ci_loc: Location.t;
     ci_attributes: attribute list;
    }
+
+and splice_desc =
+  { spl_exp: expression;
+    spl_index: int option;
+  }
 
 type implementation = {
   structure: structure;

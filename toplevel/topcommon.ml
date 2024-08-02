@@ -68,7 +68,7 @@ let find_eval_phrase str =
   let open Typedtree in
   match str.str_items with
   | [ { str_desc = Tstr_eval (e, attrs) ; str_loc = loc } ]
-  | [ { str_desc = Tstr_value (Asttypes.Nonrecursive,
+  | [ { str_desc = Tstr_value (Asttypes.Nonrecursive, 0,
                                 [{ vb_expr = e
                                  ; vb_pat = { pat_desc = Tpat_any; _ }
                                  ; vb_attributes = attrs }])

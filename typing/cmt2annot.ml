@@ -126,7 +126,7 @@ let rec iterator ~scope rebuild_env =
     let open Location in
     let loc = str.str_loc in
     begin match str.str_desc with
-    | Tstr_value (rec_flag, bindings) ->
+    | Tstr_value (rec_flag, _, bindings) ->
         let doit loc_start = bind_bindings {scope with loc_start} bindings in
         begin match rec_flag, rem with
         | Recursive, _ -> doit loc.loc_start

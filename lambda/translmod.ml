@@ -605,7 +605,7 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
             transl_structure ~scopes loc fields cc rootpath final_env rem
           in
           Lsequence(transl_exp ~scopes expr, body)
-      | Tstr_value(rec_flag, pat_expr_list) ->
+      | Tstr_value(rec_flag, _, pat_expr_list) ->
           (* Translate bindings first *)
           let mk_lam_let =
             transl_let ~scopes ~in_structure:true rec_flag pat_expr_list in
@@ -829,7 +829,7 @@ let rec defined_idents = function
   | item :: rem ->
     match item.str_desc with
     | Tstr_eval _ -> defined_idents rem
-    | Tstr_value(_rec_flag, pat_expr_list) ->
+    | Tstr_value(_rec_flag, _, pat_expr_list) ->
       let_bound_idents pat_expr_list @ defined_idents rem
     | Tstr_primitive _ -> defined_idents rem
     | Tstr_type _ -> defined_idents rem
@@ -896,7 +896,7 @@ and all_idents = function
   | item :: rem ->
     match item.str_desc with
     | Tstr_eval _ -> all_idents rem
-    | Tstr_value(_rec_flag, pat_expr_list) ->
+    | Tstr_value(_rec_flag, _, pat_expr_list) ->
       let_bound_idents pat_expr_list @ all_idents rem
     | Tstr_primitive _ -> all_idents rem
     | Tstr_type _ -> all_idents rem
@@ -992,7 +992,7 @@ let transl_store_structure ~scopes glob map prims aliases str =
             Lsequence(Lambda.subst no_env_update subst
                         (transl_exp ~scopes expr),
                       transl_store ~scopes rootpath subst cont rem)
-        | Tstr_value(rec_flag, pat_expr_list) ->
+        | Tstr_value(rec_flag, _, pat_expr_list) ->
             let ids = let_bound_idents pat_expr_list in
             let lam =
               transl_let ~scopes ~in_structure:true rec_flag pat_expr_list
@@ -1451,14 +1451,14 @@ let close_toplevel_term lam =
 let transl_toplevel_item ~scopes item =
   match item.str_desc with
     Tstr_eval (expr, _)
-  | Tstr_value(Nonrecursive,
+  | Tstr_value(Nonrecursive, _,
                [{vb_pat = {pat_desc=Tpat_any};vb_expr = expr}]) ->
       (* special compilation for toplevel "let _ = expr", so
          that Toploop can display the result of the expression.
          Otherwise, the normal compilation would result
          in a Lsequence returning unit. *)
       transl_exp ~scopes expr
-  | Tstr_value(rec_flag, pat_expr_list) ->
+  | Tstr_value(rec_flag, _, pat_expr_list) ->
       let idents = let_bound_idents pat_expr_list in
       transl_let ~scopes ~in_structure:true rec_flag pat_expr_list
         (make_sequence toploop_setvalue_id idents)
