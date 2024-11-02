@@ -34,6 +34,11 @@ exception Error of Location.t * error
 
 let use_dup_for_constant_mutable_arrays_bigger_than = 4
 
+let splice_array = ref (None : lambda array option)
+
+let set_splice_array arr =
+  splice_array := arr
+
 (* Forward declaration -- to be filled in by Translmod.transl_module *)
 let transl_module =
   ref((fun ~scopes:_ _cc _rootpath _modl -> assert false) :
@@ -560,8 +565,16 @@ and transl_exp0 ~in_new_scope ~scopes e =
   | Texp_letop{let_; ands; param; body; partial} ->
       event_after ~scopes e
         (transl_letop ~scopes e.exp_loc e.exp_env let_ ands param body partial)
-  | Texp_quote _ -> lambda_unit (* TODO *)
-  | Texp_splice _ -> lambda_unit (* TODO *)
+  | Texp_quote e -> 
+    Translquote.quote_expression (transl_exp ~scopes e)
+  | Texp_splice { spl_index = None; spl_exp = e  } -> (* Internal splice *)
+     Lsplice (transl_exp ~scopes e)
+  | Texp_splice { spl_index = Some idx } -> (* Top-level splice *)
+    begin
+      match !splice_array with
+      | Some arr -> Array.get arr idx
+      | None -> failwith "splice_array is not initialized" (* bug *)
+    end
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
   | Texp_open (od, e) ->
@@ -973,6 +986,37 @@ and transl_let ~scopes ?(in_structure=false) rec_flag pat_expr_list =
           Translattribute.add_function_attributes def vb_loc vb_attributes
         in
         ( id, rkind, def ) in
+      let lam_bds = List.map2 transl_case pat_expr_list idlist in
+      fun body -> Value_rec_compiler.compile_letrec lam_bds body
+
+and _transl_macro ~scopes ?(in_structure=false) rec_flag pat_expr_list =
+  match rec_flag with
+    Nonrecursive ->
+      let rec transl = function
+        [] ->
+          fun body -> body
+      | {vb_pat=pat; vb_expr=expr; vb_attributes=attr; vb_loc} :: rem ->
+          let lam = transl_bound_exp ~scopes ~in_structure pat expr in
+          let lam = Translattribute.add_function_attributes lam vb_loc attr in
+          let mk_body = transl rem in
+          fun body ->
+            Matching.for_let ~scopes pat.pat_loc lam pat (mk_body body)
+      in transl pat_expr_list
+  | Recursive ->
+      let idlist =
+        List.map
+          (fun {vb_pat=pat} -> match pat.pat_desc with
+              Tpat_var (id,_,_) -> id
+            | Tpat_alias ({pat_desc=Tpat_any}, id,_,_,_) -> id
+            | _ -> assert false)
+        pat_expr_list in
+      let transl_case {vb_expr=expr; vb_attributes; vb_loc; vb_pat;
+                       vb_rec_kind = rkind} id =
+        let def = transl_bound_exp ~scopes ~in_structure vb_pat expr in
+        let def =
+          Translattribute.add_function_attributes def vb_loc vb_attributes
+        in
+        (id, rkind, def) in
       let lam_bds = List.map2 transl_case pat_expr_list idlist in
       fun body -> Value_rec_compiler.compile_letrec lam_bds body
 

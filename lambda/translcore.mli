@@ -21,6 +21,8 @@ open Typedtree
 open Lambda
 open Debuginfo.Scoped_location
 
+val set_splice_array: lambda array option -> unit
+
 val pure_module : module_expr -> let_kind
 
 val transl_exp: scopes:scopes -> expression -> lambda

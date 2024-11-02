@@ -177,6 +177,7 @@ lambda_SOURCES = $(addprefix lambda/, \
   translobj.mli translobj.ml \
   translattribute.mli translattribute.ml \
   translprim.mli translprim.ml \
+  translquote.mli translquote.ml \
   translcore.mli translcore.ml \
   translclass.mli translclass.ml \
   translmod.mli translmod.ml \
