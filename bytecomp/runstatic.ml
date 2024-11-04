@@ -96,6 +96,7 @@ let traverse_and_load_cu_deps (cu_reloc:(Cmo_format.reloc_info * int) list) =
   cu_reloc
 
 let run_lambda ppf slam =
+  (* Format.(fprintf err_formatter) "lambda: %a@." Printlambda.lambda slam; *)
   let initial_symtable = Symtable.current_state() in
   ignore (Symtable.init_toplevel ());
 
@@ -119,7 +120,11 @@ let run_lambda ppf slam =
   end;
   let splices =
     let _, closure = Meta.reify_bytecode code [| events |] None in
-    try (Obj.obj (closure ()) : Lambda.lambda array)
+    try let l = (Obj.obj (closure ()) : Lambda.lambda array) in
+        (* Array.iteri (fun i lam ->
+         *     Format.(fprintf err_formatter) "lambda[%d]: %a@." i Printlambda.lambda lam)
+         *   l; *)
+          l
     with exn -> failf "Compile-time evaluation failed: %s" (Printexc.to_string exn)
   in
   Symtable.reset ();
