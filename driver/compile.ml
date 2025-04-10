@@ -30,7 +30,7 @@ let interface ~source_file ~output_prefix =
 
 let compute_macros ppf modname (str, cc) =
   if Env.get_tlsplice_count () <> 0 then 
-    let s_prog = Translmod.transl_implementation Static modname (str, cc) in
+    let s_prog = Translmod.transl_implementation_static modname (str, cc) in
     let stat_lam = s_prog.Lambda.code in
     let sstat_lam = Simplif.simplify_lambda stat_lam in
     let splices = Runstatic.run_lambda ppf sstat_lam in
