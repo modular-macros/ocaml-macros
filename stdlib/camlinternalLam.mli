@@ -4,4 +4,6 @@ module Ident : sig
       | Scoped of { name: string; stamp: int; scope: int }
       | Global of string
       | Predef of { name: string; stamp: int }
+
+    val compare : t -> t -> int
 end
