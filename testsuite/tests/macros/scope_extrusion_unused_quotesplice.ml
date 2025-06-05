@@ -15,4 +15,4 @@ macro m () =
   | effect R z, k -> << $z >> ; << fun _ -> 0 >>
 
 let w = $(m ()) 10
-(*Eager scope extrusion check should throw an error*)
+(*Eager scope extrusion check should not throw an error*)
