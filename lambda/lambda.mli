@@ -467,6 +467,8 @@ val subst:
     the bound variables within [lt].
  *)
 
+val thunk: Ident.t -> lambda -> lambda
+
 val rename : Ident.t Ident.Map.t -> lambda -> lambda
 (** A version of [subst] specialized for the case where we're just renaming
     idents. *)
