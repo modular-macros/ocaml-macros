@@ -436,6 +436,13 @@ let default_stub_attribute =
 
 let max_raw = 32
 
+let thunk x body = Lfunction({kind=Curried;
+                              params=[(x, Pgenval)];
+                              return=Pboxedintval(Pnativeint);
+                              body;
+                              attr=default_function_attribute;
+                              loc=Loc_unknown})
+
 let make_key e =
   let exception Not_simple in
   let count = ref 0   (* Used for controlling size *)
