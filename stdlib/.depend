@@ -107,7 +107,6 @@ stdlib__Callback.cmx : callback.ml \
     stdlib__Obj.cmx \
     stdlib__Callback.cmi
 stdlib__Callback.cmi : callback.mli
-camlinternalAST.cmi :
 camlinternalFormat.cmo : \
     stdlib__Sys.cmi \
     stdlib__String.cmi \
@@ -135,9 +134,9 @@ camlinternalFormatBasics.cmx : \
     camlinternalFormatBasics.cmi
 camlinternalFormatBasics.cmi :
 camlinternalLam.cmo : \
-    camlinternalLam.cmi 
+    camlinternalLam.cmi
 camlinternalLam.cmx : \
-    camlinternalLam.cmi 
+    camlinternalLam.cmi
 camlinternalLam.cmi :
 camlinternalLazy.cmo : \
     stdlib__Sys.cmi \
@@ -185,33 +184,16 @@ camlinternalOO.cmx : \
 camlinternalOO.cmi : \
     stdlib__Obj.cmi
 camlinternalQuote.cmo : \
-    stdlib__Marshal.cmi \
-    stdlib__Format.cmi \
-    stdlib__Effect.cmo \
+    stdlib__Set.cmi \
+    stdlib__Effect.cmi \
     camlinternalLam.cmi \
-    camlinternalAST.cmi \
     camlinternalQuote.cmi
 camlinternalQuote.cmx : \
-    stdlib__Marshal.cmx \
-    stdlib__Format.cmx \
+    stdlib__Set.cmx \
     stdlib__Effect.cmx \
-    camlinternalLam.cmi \
-    camlinternalAST.cmi \
+    camlinternalLam.cmx \
     camlinternalQuote.cmi
-camlinternalQuote.ml.bk.cmo : \
-    stdlib__Marshal.cmi \
-    stdlib__Map.cmi \
-    stdlib__Effect.cmi \
-    stdlib__Format.cmi \
-    camlinternalAST.cmi
-camlinternalQuote.ml.bk.cmx : \
-    stdlib__Marshal.cmx \
-    stdlib__Map.cmx \
-    stdlib__Effect.cmx \
-    stdlib__Format.cmx \
-    camlinternalAST.cmi
-camlinternalQuote.cmi : \
-    camlinternalLam.cmi 
+camlinternalQuote.cmi :
 stdlib__Char.cmo : char.ml \
     stdlib__Char.cmi
 stdlib__Char.cmx : char.ml \

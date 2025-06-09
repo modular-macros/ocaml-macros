@@ -4892,8 +4892,7 @@ lambda/translmod.cmi : \
     typing/path.cmi \
     parsing/location.cmi \
     lambda/lambda.cmi \
-    typing/ident.cmi \
-    parsing/asttypes.cmi
+    typing/ident.cmi
 lambda/translobj.cmo : \
     typing/primitive.cmi \
     utils/misc.cmi \
@@ -4967,31 +4966,32 @@ lambda/translprim.cmi : \
     utils/format_doc.cmi \
     typing/env.cmi
 lambda/translquote.cmo : \
+    typing/typedtree.cmi \
+    typing/tast_iterator.cmi \
+    parsing/parse.cmi \
     utils/misc.cmi \
-    parsing/longident.cmi \
     parsing/location.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
     typing/env.cmi \
     lambda/debuginfo.cmi \
-    parsing/asttypes.cmi \
     lambda/translquote.cmi
 lambda/translquote.cmx : \
+    typing/typedtree.cmx \
+    typing/tast_iterator.cmx \
+    parsing/parse.cmx \
     utils/misc.cmx \
-    parsing/longident.cmx \
     parsing/location.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
     typing/env.cmx \
     lambda/debuginfo.cmx \
-    parsing/asttypes.cmx \
     lambda/translquote.cmi
 lambda/translquote.cmi : \
     typing/typedtree.cmi \
     parsing/location.cmi \
     lambda/lambda.cmi \
-    typing/ident.cmi \
-    parsing/asttypes.cmi
+    typing/ident.cmi
 lambda/value_rec_compiler.cmo : \
     typing/value_rec_types.cmi \
     typing/primitive.cmi \
