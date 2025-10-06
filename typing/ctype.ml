@@ -2585,13 +2585,7 @@ let add_gadt_equation uenv source destination =
 
   let env = get_env uenv in
 
-  let staging_level = Env.get_env_level env in
-  let staging_mode = Env.get_env_mode env in
-
-  if (* staging_level <> 0 ||*) staging_mode <> M_C then
-    Location.prerr_warning Location.none (Warnings.Maco_dev 
-      ("avoided gadt constraint at level "^(string_of_int staging_level)))
-  else begin
+  begin
   if has_free_univars env destination then
     occur_univar ~inj_only:true env destination
   else if local_non_recursive_abbrev uenv source destination then begin
