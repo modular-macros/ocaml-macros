@@ -2584,7 +2584,10 @@ let add_gadt_equation uenv source destination =
      expressive)? as that lets us do anything inside an (unquoted) macro body *)
 
   let env = get_env uenv in
+  
+  let staging_mode = Env.get_env_mode env in
 
+  if (* staging_level <> 0 ||*) staging_mode == M_C then
   begin
   if has_free_univars env destination then
     occur_univar ~inj_only:true env destination
