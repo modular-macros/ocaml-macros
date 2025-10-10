@@ -2587,7 +2587,7 @@ let add_gadt_equation uenv source destination =
   
   let staging_mode = Env.get_env_mode env in
 
-  if (* staging_level <> 0 ||*) staging_mode == M_C then
+  if (* staging_level <> 0 ||*) staging_mode = M_C then
   begin
   if has_free_univars env destination then
     occur_univar ~inj_only:true env destination
