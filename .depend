@@ -619,7 +619,6 @@ typing/cmt2annot.cmi : \
     parsing/location.cmi \
     file_formats/cmt_format.cmi
 typing/ctype.cmo : \
-    utils/warnings.cmi \
     typing/types.cmi \
     typing/type_immediacy.cmi \
     typing/subst.cmi \
@@ -638,7 +637,6 @@ typing/ctype.cmo : \
     parsing/asttypes.cmi \
     typing/ctype.cmi
 typing/ctype.cmx : \
-    utils/warnings.cmx \
     typing/types.cmx \
     typing/type_immediacy.cmx \
     typing/subst.cmx \
