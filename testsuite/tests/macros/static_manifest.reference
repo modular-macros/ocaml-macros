@@ -1,0 +1,20 @@
+File static_manifest_mac$macros.cmo
+Unit name: Static_manifest_mac$macros
+Interfaces imported:
+	00000000000000000000000000000000	Stdlib__Uchar
+	00000000000000000000000000000000	Stdlib__Seq
+	00000000000000000000000000000000	Stdlib__Result
+	00000000000000000000000000000000	Stdlib__Expr
+	00000000000000000000000000000000	Stdlib__Either
+	00000000000000000000000000000000	Stdlib__Complex
+	00000000000000000000000000000000	Stdlib
+	00000000000000000000000000000000	Static_manifest_zz
+	00000000000000000000000000000000	Static_manifest_mac
+	00000000000000000000000000000000	Static_manifest_aa
+	00000000000000000000000000000000	CamlinternalFormatBasics
+Required globals:
+Uses unsafe features: no
+Static archives:
+	static_manifest_zz.cmo
+	static_manifest_aa.cmo
+Force link: no

@@ -115,6 +115,18 @@ let pr_item =
 
 (* Execute a toplevel phrase *)
 
+exception Macros_not_supported
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Macros_not_supported ->
+          let loc = Location.in_file !Location.input_name in
+          Some
+            (Location.errorf ~loc
+               "Macros are not supported by the native toplevel.")
+      | _ -> None)
+
 let phrase_seqid = ref 0
 
 let name_expression ~loc ~attrs exp =
@@ -123,6 +135,7 @@ let name_expression ~loc ~attrs exp =
   let vd =
     { val_type = exp.exp_type;
       val_kind = Val_reg;
+      val_staging_level = 0;
       val_loc = loc;
       val_attributes = attrs;
       val_uid = Uid.internal_not_actually_unique; }
@@ -144,7 +157,7 @@ let name_expression ~loc ~attrs exp =
        vb_loc = loc; }
    in
    let item =
-     { str_desc = Tstr_value(Nonrecursive, [vb]);
+     { str_desc = Tstr_value(Nonrecursive, 0, [vb]);
        str_loc = loc;
        str_env = exp.exp_env; }
    in
@@ -163,7 +176,9 @@ let execute_phrase print_outcome ppf phr =
       incr phrase_seqid;
       let phrase_name = "TOP" ^ string_of_int !phrase_seqid in
       Compilenv.reset ?packname:None phrase_name;
+      Env.set_tlsplice_count 0;
       let (str, sg', newenv) = typecheck_phrase ppf oldenv sstr in
+      if Env.get_tlsplice_count () <> 0 then raise Macros_not_supported;
       (* `let _ = <expression>` or even just `<expression>` require special
          handling in toplevels, or nothing is displayed. In bytecode, the
          lambda for <expression> is directly executed and the result _is_ the
@@ -265,6 +280,12 @@ let setvalue _ _ = assert false
 (* Loading files *)
 
 (* Load in-core a .cmxs file *)
+
+let load_static_file ppf name =
+  Format.fprintf ppf
+    "Cannot #static_use %s: macros are not supported by the native \
+     toplevel.@." name;
+  false
 
 let load_file _ (* fixme *) ppf name0 =
   let name =

@@ -61,6 +61,23 @@ val diff: t -> t -> Ident.t list
 (* approximation to the preimage equivalence class of [find_type] *)
 val same_type_declarations: t -> t -> bool
 
+val get_env_mode : t -> staging_mode
+val with_mode: staging_mode -> t -> t
+val get_env_level : t -> staging_level
+
+val is_compile_time_module : Ident.t -> t -> bool
+val with_level: staging_level -> t -> t
+val with_level_down: t -> t
+val with_level_up: t -> t
+
+val mode_to_str : staging_mode -> string
+
+val describe_level : staging_level -> string
+
+val get_tlsplice_count : unit -> int
+
+val set_tlsplice_count : int -> unit
+
 type type_descr_kind =
   (label_description, constructor_description) type_kind
 
@@ -109,9 +126,12 @@ val find_hash_type: Path.t -> t -> type_declaration
 (* Find the "#t" type given the path for "t" *)
 
 val find_value_address: Path.t -> t -> address
+val find_value_env_address: Path.t -> t -> address
 val find_module_address: Path.t -> t -> address
+val find_module_macros_address: Path.t -> t -> address
 val find_class_address: Path.t -> t -> address
 val find_constructor_address: Path.t -> t -> address
+val constructor_staging_level: Path.t -> t -> int
 
 (** Lookup an item in the environment and returns its Uid. *)
 val find_uid : Shape.Sig_component_kind.t -> Path.t -> t -> Uid.t option
@@ -180,6 +200,7 @@ type unbound_value_hint =
 
 type lookup_error =
   | Unbound_value of Longident.t * unbound_value_hint
+  | Wrong_staging_level of Longident.t * int * int
   | Unbound_type of Longident.t
   | Unbound_constructor of Longident.t
   | Unbound_label of Longident.t
@@ -197,6 +218,7 @@ type lookup_error =
   | Functor_used_as_structure of Longident.t
   | Abstract_used_as_structure of Longident.t
   | Generative_used_as_applicative of Longident.t
+  | Template_used_as_applicative of Longident.t
   | Illegal_reference_to_recursive_module of
       { container : string option; unbound : string }
   | Illegal_reference_to_recursive_class_type of
@@ -353,6 +375,10 @@ val add_persistent_structure : Ident.t -> t -> t
    directory. *)
 val persistent_structures_of_dir : Load_path.Dir.t -> Misc.Stdlib.String.Set.t
 
+val register_stage_units :
+  static:Misc.Stdlib.String.Set.t -> run:Misc.Stdlib.String.Set.t -> unit
+val reset_stage_units : unit -> unit
+
 (* [filter_non_loaded_persistent f env] removes all the persistent
    structures that are not yet loaded and for which [f] returns
    [false]. *)
@@ -371,7 +397,8 @@ val open_signature:
     Asttypes.override_flag -> Path.t ->
     t -> (t, [`Not_found | `Functor]) result
 
-val open_pers_signature: string -> t -> (t, [`Not_found]) result
+val open_pers_signature:
+    ?stage_shift:int -> string -> t -> (t, [`Not_found]) result
 
 val remove_last_open: Path.t -> t -> t option
 

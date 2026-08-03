@@ -602,6 +602,7 @@ module Pqueue         = Pqueue
 module Effect         = Effect
 module Either         = Either
 module Ephemeron      = Ephemeron
+module Expr           = Expr
 module Filename       = Filename
 module Float          = Float
 module Format         = Format

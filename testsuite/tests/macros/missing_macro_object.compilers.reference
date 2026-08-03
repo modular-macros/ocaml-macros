@@ -1,0 +1,2 @@
+File "missing_macro_object.ml", line 1:
+Error: Cannot find missing_macro_object_lib$macros.cmo, which holds the macros of Missing_macro_object_lib.

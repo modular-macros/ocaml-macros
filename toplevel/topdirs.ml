@@ -73,23 +73,45 @@ let _ = add_directive "quit" (Directive_none dir_quit)
 
 (* To add a directory to the load path *)
 
-let dir_directory s =
+let load_path_units ~dll s =
   let d = expand_directory Config.standard_library s in
-  Dll.add_path [d];
+  if dll then Dll.add_path [d];
   let dir = Load_path.Dir.create ~hidden:false d in
   Load_path.prepend_dir dir;
+  Env.persistent_structures_of_dir dir
+
+let add_units_to_toplevel_env units =
   toplevel_env :=
     Stdlib.String.Set.fold
       (fun name env ->
          Env.add_persistent_structure (Ident.create_persistent name) env)
-      (Env.persistent_structures_of_dir dir)
+      units
       !toplevel_env
+
+let dir_directory s =
+  let units = load_path_units ~dll:true s in
+  Env.register_stage_units ~static:Stdlib.String.Set.empty ~run:units;
+  add_units_to_toplevel_env units
+
+let dir_static_dir s =
+  let units = load_path_units ~dll:false s in
+  Env.register_stage_units ~static:units ~run:Stdlib.String.Set.empty;
+  Translmod.register_toplevel_shifted_units units;
+  add_units_to_toplevel_env units
 
 let _ = add_directive "directory" (Directive_string dir_directory)
     {
       section = section_run;
       doc = "Add the given directory to search path for source and compiled \
              files.";
+    }
+
+let _ = add_directive "static_dir" (Directive_string dir_static_dir)
+    {
+      section = section_run;
+      doc = "Add the given directory to the search path as a \
+             COMPILE-TIME world directory: its units serve level -1, \
+             shifted (shifted imports).";
     }
 
 (* To remove a directory from the load path *)
@@ -135,6 +157,9 @@ let with_error_fmt f x = f (error_fmt ()) x
 let dir_load ppf name =
   action_on_suberror (Topeval.load_file false ppf name)
 
+let dir_static_use ppf name =
+  action_on_suberror (Topeval.load_static_file ppf name)
+
 let _ = add_directive "load" (Directive_string (with_error_fmt dir_load))
     {
       section = section_run;
@@ -149,6 +174,15 @@ let _ = add_directive "load_rec"
     {
       section = section_run;
       doc = "As #load, but loads dependencies recursively.";
+    }
+
+let _ = add_directive "static_use"
+    (Directive_string (with_error_fmt dir_static_use))
+    {
+      section = section_run;
+      doc = "Load a bytecode library as the compile-time world's own \
+             incarnation, for use by macros and splices (shifted \
+             imports).";
     }
 
 let load_file = Topeval.load_file false

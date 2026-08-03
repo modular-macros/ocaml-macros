@@ -31,6 +31,7 @@ type error =
   | Linking_error
   | Assembler_error of string
   | File_not_found of string
+  | Macro_member of string
 
 exception Error of error
 

@@ -44,17 +44,17 @@ let rec strengthen_lazy ~aliasable env mty p =
   match scrape_lazy env mty with
     MtyL_signature sg ->
       MtyL_signature(strengthen_lazy_sig ~aliasable env sg p)
-  | MtyL_functor(Named (Some param, arg), res)
+  | MtyL_functor(Plain, Named (Some param, arg), res)
     when !Clflags.applicative_functors ->
       let env =
         Env.add_module_lazy ~update_summary:false param Mp_present arg env
       in
-      MtyL_functor(Named (Some param, arg),
+      MtyL_functor(Plain, Named (Some param, arg),
         strengthen_lazy ~aliasable:false env res (Papply(p, Pident param)))
-  | MtyL_functor(Named (None, arg), res)
+  | MtyL_functor(Plain, Named (None, arg), res)
     when !Clflags.applicative_functors ->
       let param = Ident.create_scoped ~scope:(Path.scope p) "Arg" in
-      MtyL_functor(Named (Some param, arg),
+      MtyL_functor(Plain, Named (Some param, arg),
         strengthen_lazy ~aliasable:false env res (Papply(p, Pident param)))
   | mty ->
       mty
@@ -142,9 +142,9 @@ let rec make_aliases_absent pres mty =
   | Mty_alias _ -> Mp_absent, mty
   | Mty_signature sg ->
       pres, Mty_signature(make_aliases_absent_sig sg)
-  | Mty_functor(arg, res) ->
+  | Mty_functor(k, arg, res) ->
       let _, res = make_aliases_absent Mp_present res in
-      pres, Mty_functor(arg, res)
+      pres, Mty_functor(k, arg, res)
   | mty ->
       pres, mty
 
@@ -206,9 +206,9 @@ let rec nondep_mty_with_presence env va ids pres mty =
   | Mty_signature sg ->
       let mty = Mty_signature(nondep_sig env va ids sg) in
       pres, mty
-  | Mty_functor(Unit, res) ->
-      pres, Mty_functor(Unit, nondep_mty env va ids res)
-  | Mty_functor(Named (param, arg), res) ->
+  | Mty_functor(k, Unit, res) ->
+      pres, Mty_functor(k, Unit, nondep_mty env va ids res)
+  | Mty_functor(k, Named (param, arg), res) ->
       let var_inv =
         match va with Co -> Contra | Contra -> Co | Strict -> Strict in
       let res_env =
@@ -217,7 +217,7 @@ let rec nondep_mty_with_presence env va ids pres mty =
         | Some param -> Env.add_module ~noalias:true param Mp_present arg env
       in
       let mty =
-        Mty_functor(Named (param, nondep_mty env var_inv ids arg),
+        Mty_functor(k, Named (param, nondep_mty env var_inv ids arg),
                     nondep_mty res_env va ids res)
       in
       pres, mty
@@ -361,6 +361,98 @@ and no_code_needed_sig env sg =
 
 let no_code_needed env mty = no_code_needed_mod env Mp_present mty
 
+type range = { lo : staging_level; hi : staging_level }
+
+let range_of_level n = { lo = n; hi = n }
+
+let range_union r1 r2 = { lo = min r1.lo r2.lo; hi = max r1.hi r2.hi }
+
+let ranges_over r n = r.lo <= n && n <= r.hi
+
+let no_macro_range = range_of_level 0
+
+let template_param_range = { lo = -1; hi = 0 }
+
+let rec range ~expand_aliases env mty =
+  let range = range ~expand_aliases in
+  match scrape env mty with
+  | Mty_signature sg -> range_sig ~expand_aliases env sg
+  | Mty_functor (Template, param, body) ->
+      range_union template_param_range
+        (range (env_with_functor_param env param) body)
+  | Mty_functor (Plain, param, body) ->
+      let param_range =
+        match param with
+        | Unit -> no_macro_range
+        | Named (_, arg) -> range env arg
+      in
+      range_union param_range (range (env_with_functor_param env param) body)
+  | Mty_ident _ ->
+      no_macro_range
+  | Mty_alias p ->
+      if not expand_aliases then no_macro_range
+      else begin match Env.find_module p env with
+      | md -> range env md.md_type
+      | exception Not_found -> no_macro_range
+      end
+
+and env_with_functor_param env = function
+  | Unit | Named (None, _) -> env
+  | Named (Some id, arg) -> Env.add_module ~noalias:true id Mp_present arg env
+
+and range_sig ~expand_aliases env sg =
+  let env =
+    List.fold_left
+      (fun env item ->
+         match item with
+         | Sig_module (id, pres, md, _, _) ->
+             Env.add_module_declaration ~check:false id pres md env
+         | Sig_modtype (id, decl, _) -> Env.add_modtype id decl env
+         | Sig_value _ | Sig_type _ | Sig_typext _
+         | Sig_class _ | Sig_class_type _ -> env)
+      env sg
+  in
+  List.fold_left
+    (fun acc item ->
+       range_union acc (range_sig_item ~expand_aliases env item))
+    no_macro_range sg
+
+and range_sig_item ~expand_aliases env = function
+  | Sig_value (_, vd, _) -> range_of_level vd.val_staging_level
+  | Sig_module (_, _, md, _, _) -> range ~expand_aliases env md.md_type
+  | Sig_type _ | Sig_typext _ | Sig_modtype _
+  | Sig_class _ | Sig_class_type _ -> no_macro_range
+
+let has_macro_components ?(expand_aliases = true) env mty =
+  ranges_over (range ~expand_aliases env mty) (-1)
+
+let rec contains_mixed_functor ?(deep_templates = true) env mty =
+  let recurse = contains_mixed_functor ~deep_templates in
+  match scrape env mty with
+  | Mty_functor (Plain, param, body) ->
+      has_macro_components (env_with_functor_param env param) body
+      || (match param with
+          | Unit -> false
+          | Named (_, arg) -> recurse env arg)
+      || recurse (env_with_functor_param env param) body
+  | Mty_functor (Template, param, body) ->
+      (match param with
+       | Unit -> false
+       | Named (_, arg) -> recurse env arg)
+      || (deep_templates
+          && recurse (env_with_functor_param env param) body)
+  | Mty_signature sg ->
+      List.exists
+        (function
+          | Sig_module (_, _, md, _, _) -> recurse env md.md_type
+          | _ -> false)
+        sg
+  | Mty_ident _ -> false
+  | Mty_alias p ->
+      (match Env.find_module p env with
+       | md -> recurse env md.md_type
+       | exception Not_found -> false)
+
 (* Check whether a module type may return types *)
 
 let rec contains_type env = function
@@ -372,7 +464,7 @@ let rec contains_type env = function
       end
   | Mty_signature sg ->
       contains_type_sig env sg
-  | Mty_functor (_, body) ->
+  | Mty_functor (_, _, body) ->
       contains_type env body
   | Mty_alias _ ->
       ()

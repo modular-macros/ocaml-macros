@@ -1,0 +1,6 @@
+macro m : unit -> int expr = <fun>
+val q : int = 3
+val p : int = 4
+q=3 p=4
+- : unit = ()
+

@@ -179,6 +179,7 @@ lambda_SOURCES = $(addprefix lambda/, \
   translobj.mli translobj.ml \
   translattribute.mli translattribute.ml \
   translprim.mli translprim.ml \
+  translquote.mli translquote.ml \
   translcore.mli translcore.ml \
   translclass.mli translclass.ml \
   translmod.mli translmod.ml \
@@ -217,7 +218,11 @@ ocamlbytecomp_SOURCES = \
   bytecomp/bytelink.mli bytecomp/bytelink.ml \
   bytecomp/bytelibrarian.mli bytecomp/bytelibrarian.ml \
   bytecomp/bytepackager.mli bytecomp/bytepackager.ml \
+  bytecomp/emit_cmo.mli bytecomp/emit_cmo.ml \
+  bytecomp/static_simplif.mli bytecomp/static_simplif.ml \
+  bytecomp/static_report.mli bytecomp/static_report.ml \
   driver/errors.mli driver/errors.ml \
+  driver/static_link.mli driver/static_link.ml \
   driver/compile.mli driver/compile.ml \
   driver/maindriver.mli driver/maindriver.ml
 
@@ -273,6 +278,7 @@ asmcomp_SOURCES = \
   asmcomp/emitaux.mli asmcomp/emitaux.ml \
   asmcomp/emit.mli asmcomp/emit.ml \
   asmcomp/asmgen.mli asmcomp/asmgen.ml \
+  asmcomp/emit_cmx.mli asmcomp/emit_cmx.ml \
   asmcomp/asmlink.mli asmcomp/asmlink.ml \
   asmcomp/asmlibrarian.mli asmcomp/asmlibrarian.ml \
   asmcomp/asmpackager.mli asmcomp/asmpackager.ml \
@@ -568,6 +574,7 @@ $(foreach PROGRAM, $(OCAML_PROGRAMS),\
 # We have to use dedicated rules to build it
 
 OCAML_BYTECODE_PROGRAMS = expunge \
+  staticrun \
   $(TOOLS_BYT_PROGRAMS) \
   $(addprefix tools/, cvt_emit make_opcodes ocamltex) \
   debugger/ocamldebug \
@@ -810,7 +817,7 @@ endif
 	$(MAKE) otherlibrariesopt
 	$(MAKE) ocamllex.opt ocamltoolsopt ocamltoolsopt.opt \
 	  $(OCAMLDOC_OPT_TARGET) \
-	  $(OCAMLTEST_OPT_TARGET) othertools ocamlnat
+	  $(OCAMLTEST_OPT_TARGET) othertools ocamlnat staticrun$(EXE)
 ifeq "$(build_libraries_manpages)" "true"
 	$(MAKE) manpages
 endif
@@ -850,7 +857,7 @@ all: coreall
 	$(MAKE) ocaml
 	$(MAKE) otherlibraries $(WITH_DEBUGGER) $(OCAMLDOC_TARGET) \
          $(OCAMLTEST_TARGET)
-	$(MAKE) othertools
+	$(MAKE) othertools staticrun$(EXE)
 ifeq "$(build_libraries_manpages)" "true"
 	$(MAKE) manpages
 endif
@@ -995,7 +1002,11 @@ partialclean::
 
 # The native-code compiler
 
-ocamlopt_LIBRARIES = $(addprefix compilerlibs/,ocamlcommon ocamloptcomp)
+# ocamlbytecomp is linked in because compiling a module with macros builds a
+# bytecode static program (see driver/optcompile.ml): the native compiler
+# reuses Emit_cmo, Bytelink and Symtable to write, link and run it.
+ocamlopt_LIBRARIES = \
+  $(addprefix compilerlibs/,ocamlcommon ocamlbytecomp ocamloptcomp)
 
 ocamlopt_SOURCES = driver/optmain.mli driver/optmain.ml
 
@@ -1199,6 +1210,25 @@ expunge_SOURCES = toplevel/expunge.mli toplevel/expunge.ml
 
 partialclean::
 	rm -f expunge expunge.exe
+
+# The static-program runner (driver/static_link.ml): the fixed prefix
+# of every compile-time evaluation -- stdlib, compiler-libs, Dynlink --
+# linked once here rather than once per macro-using unit.  -linkall
+# because the Dynlinked tail may reference any module of the prefix;
+# ocamloptcomp because the native driver's static programs call Asmgen.
+
+staticrun_LIBRARIES = \
+  $(addprefix compilerlibs/,ocamlcommon ocamlbytecomp ocamloptcomp) \
+  otherlibs/dynlink/dynlink
+
+staticrun_SOURCES = driver/staticrun.mli driver/staticrun.ml
+
+staticrun_BYTECODE_LINKFLAGS = -linkall
+
+driver/staticrun.cm%: VPATH += otherlibs/dynlink
+
+partialclean::
+	rm -f staticrun staticrun.exe
 
 # The runtime system
 
@@ -2588,9 +2618,11 @@ endif
 
 # The native toplevel
 
+# ocamlbytecomp precedes ocamloptcomp since Optcompile depends on
+# Static_link (as ocamlopt's own link line already does).
 ocamlnat_LIBRARIES = \
-  compilerlibs/ocamlcommon compilerlibs/ocamloptcomp \
-  compilerlibs/ocamlbytecomp otherlibs/dynlink/dynlink \
+  compilerlibs/ocamlcommon compilerlibs/ocamlbytecomp \
+  compilerlibs/ocamloptcomp otherlibs/dynlink/dynlink \
   compilerlibs/ocamltoplevel
 
 ocamlnat_SOURCES = $(ocaml_SOURCES)
@@ -2853,6 +2885,7 @@ common-install::
 	    runtime/caml/domain_state.tbl runtime/caml/*.h, \
 	  lib, $(INSTALL_LIBDIR_CAML))
 	$(call INSTALL_ITEMS, ocaml$(EXE), bin)
+	$(call INSTALL_ITEMS, staticrun$(EXE), bin)
 ifeq "$(INSTALL_BYTECODE_PROGRAMS)" "true"
 	$(call STRIP_BYTE_PROG, ocamlc$(EXE))
 ifeq "$(NATIVE_COMPILER)" "true"

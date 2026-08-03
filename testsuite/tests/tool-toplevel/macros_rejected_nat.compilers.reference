@@ -1,0 +1,15 @@
+val ok : int = 1
+Line 1:
+Error: Macros are not supported by the native toplevel.
+module T : [X : sig val v : int end] sig val w : int end
+module V : sig val v : int end
+Line 1, characters 0-15:
+1 | module M = T[V];;
+    ^^^^^^^^^^^^^^^
+Error: A template functor can only be applied where the compiler evaluates
+       compile-time code: at the top level of a module, or inside another
+       template functor's body.
+Cannot #static_use foo.cmo: macros are not supported by the native toplevel.
+ok = 1
+- : unit = ()
+

@@ -1,0 +1,4 @@
+File "scope_extrusion_unused_error.ml", line 21, characters 9-15:
+21 | let w = $(m ()) 10
+              ^^^^^^
+Error: The code built by this splice has a variable escaping a quotation's scope: x.

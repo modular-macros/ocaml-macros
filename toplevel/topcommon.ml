@@ -68,7 +68,7 @@ let find_eval_phrase str =
   let open Typedtree in
   match str.str_items with
   | [ { str_desc = Tstr_eval (e, attrs) ; str_loc = loc } ]
-  | [ { str_desc = Tstr_value (Asttypes.Nonrecursive,
+  | [ { str_desc = Tstr_value (Asttypes.Nonrecursive, 0,
                                 [{ vb_expr = e
                                  ; vb_pat = { pat_desc = Tpat_any; _ }
                                  ; vb_attributes = attrs }])
@@ -418,9 +418,35 @@ let loading_hint_printer ppf cu =
   let open Format_doc in
   let global = Symtable.Global.Glob_compunit (Cmo_format.Compunit cu) in
   Symtable.report_error_doc ppf (Symtable.Undefined_global global);
-  let find_with_ext ext =
-    try Some (Load_path.find_normalized (cu ^ ext)) with Not_found -> None
+  let find_with_ext base ext =
+    try Some (Load_path.find_normalized (base ^ ext))
+    with Not_found -> None
   in
+  if Filename.check_suffix cu Translmod.static_unit_suffix then begin
+    let base = Filename.chop_suffix cu Translmod.static_unit_suffix in
+    fprintf ppf
+      "@.Hint: @[\
+       %a is the compile-time world's incarnation of %a \
+       @,(a shifted import), whose implementation is not loaded.@ "
+      Style.inline_code cu Style.inline_code base;
+    begin match List.find_map (find_with_ext base) [".cma"; ".cmo"] with
+    | Some path ->
+        let use ppf path =
+          Format_doc.fprintf ppf "#static_use \"%s\"" path
+        in
+        fprintf ppf
+          "Found %a @,in the load paths. \
+           @,Did you mean to register it using @,%a?"
+          Style.inline_code path
+          (Style.as_inline_code use) (Filename.basename path)
+    | None ->
+        fprintf ppf
+          "Did you mean to load its library using %a?"
+          Style.inline_code "#static_use"
+    end;
+    fprintf ppf "@]"
+  end else begin
+  let find_with_ext ext = find_with_ext cu ext in
   fprintf ppf
     "@.Hint: @[\
      This means that the interface of a module is loaded, \
@@ -444,6 +470,7 @@ let loading_hint_printer ppf cu =
       Style.inline_code "#load"
   end;
   fprintf ppf "@]"
+  end
 
 let () =
   Location.register_error_of_exn

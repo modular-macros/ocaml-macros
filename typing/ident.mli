@@ -40,6 +40,8 @@ val rename: t -> t
             stamp, and no scope.
             @raise [Fatal_error] if called on a persistent / predef ident. *)
 
+val reserve_stamp: t -> unit
+
 val name: t -> string
 val unique_name: t -> string
 val unique_toplevel_name: t -> string

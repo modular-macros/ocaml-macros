@@ -130,13 +130,13 @@ module Ast = struct
       let self = add_item ~f path inherits in
       match ty.pmty_desc with
       | Pmty_signature lst -> List.fold_left self map lst
-      | Pmty_functor ((Named ({txt = Some txt0},_)),m) ->
+      | Pmty_functor (_, (Named ({txt = Some txt0},_)),m) ->
           let ident = Ident.create_persistent txt0 in
           let path = Path.Papply(path, Path.Pident ident) in
           add_module_type path m (inherits, map)
       | Pmty_ident _ | Pmty_with _ | Pmty_typeof _| Pmty_extension _
-      | Pmty_alias _ | Pmty_functor (Named ({txt=None; _ }, _), _)
-      | Pmty_functor (Unit, _) -> map
+      | Pmty_alias _ | Pmty_functor (_, Named ({txt=None; _ }, _), _)
+      | Pmty_functor (_, Unit, _) -> map
     in
     let enter_path path name ty attrs map =
       let path = Path.Pdot (path, name.txt) in

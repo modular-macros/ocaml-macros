@@ -1,0 +1,9 @@
+File "template_functor_variance.ml", line 19, characters 27-33:
+19 | module Bad : [X : S] BIG = Narrow
+                                ^^^^^^
+Error: Signature mismatch:
+       Modules do not match: [X : S] SMALL is not included in [X : S] BIG
+       Modules do not match: SMALL is not included in BIG
+       The value w is required but not provided
+       File "template_functor_variance.ml", line 14, characters 34-45:
+         Expected declaration

@@ -1,0 +1,17 @@
+File splice_object_flags.cmo
+Unit name: Splice_object_flags
+Interfaces imported:
+	00000000000000000000000000000000	Stdlib__Printexc
+	00000000000000000000000000000000	Stdlib__Obj
+	00000000000000000000000000000000	Stdlib__Int32
+	00000000000000000000000000000000	Stdlib__Effect
+	00000000000000000000000000000000	Stdlib
+	00000000000000000000000000000000	Splice_object_flags_lib
+	00000000000000000000000000000000	Splice_object_flags
+	00000000000000000000000000000000	CamlinternalQuote
+	00000000000000000000000000000000	CamlinternalFormatBasics
+Required globals:
+Uses unsafe features: YES
+Primitives declared in this module:
+	%identity
+Force link: YES

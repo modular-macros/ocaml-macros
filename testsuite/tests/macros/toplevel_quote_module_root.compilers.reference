@@ -1,0 +1,17 @@
+val ( let* ) : 'a -> ('a -> 'b) -> 'b = <fun>
+val ( and* ) : 'a -> 'b -> 'a * 'b = <fun>
+macro mlet : unit -> int expr = <fun>
+macro mand : unit -> int expr = <fun>
+val a : int = 4
+val b : int = 7
+module M : sig val v : int end
+module type S = sig val v : int end
+macro mmod : unit -> int expr = <fun>
+macro mpack : unit -> (module S) expr = <fun>
+macro mchain : unit -> int expr = <fun>
+val c : int = 5
+val d : int = 5
+val e : int = 5
+a=4 b=7 c=5 d=5 e=5
+- : unit = ()
+

@@ -1,0 +1,4 @@
+File toplevel_corrupt_object_trunc.cmo is corrupt or truncated: it is not a readable bytecode object file.
+File toplevel_corrupt_object_trunc.cmo is corrupt or truncated: it is not a readable bytecode object file.
+val survived : int = 2
+

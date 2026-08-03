@@ -52,11 +52,13 @@ type token =
   | METAOCAML_BRACKET_OPEN
   | METAOCAML_BRACKET_CLOSE
   | MATCH
+  | MACRO
   | LPAREN
   | LIDENT of (string)
   | LETOP of (string)
   | LET
   | LESSMINUS
+  | LESSLESS
   | LESS
   | LBRACKETPERCENTPERCENT
   | LBRACKETPERCENT
@@ -86,6 +88,7 @@ type token =
   | HASH
   | GREATERRBRACKET
   | GREATERRBRACE
+  | GREATERGREATER
   | GREATER
   | FUNCTOR
   | FUNCTION
@@ -106,6 +109,7 @@ type token =
   | DOTDOT
   | DOT
   | DONE
+  | DOLLAR
   | DOCSTRING of (Docstrings.docstring)
   | DO
   | CONSTRAINT

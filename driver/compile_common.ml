@@ -112,6 +112,7 @@ let implementation info ~backend =
   Misc.try_finally ?always:None ~exceptionally (fun () ->
     let parsed = parse_impl info in
     if Clflags.(should_stop_after Compiler_pass.Parsing) then () else begin
+      Env.set_tlsplice_count 0;
       let typed = typecheck_impl info parsed in
       if Clflags.(should_stop_after Compiler_pass.Typing) then () else begin
         backend info typed

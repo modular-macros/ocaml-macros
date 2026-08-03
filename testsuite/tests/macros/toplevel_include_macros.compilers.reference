@@ -1,0 +1,23 @@
+macro two : unit -> int expr = <fun>
+val z : int = 2
+val w : int = 4
+macro three : unit -> int expr = <fun>
+val t : int = 3
+macro four : unit -> int expr = <fun>
+val f4 : int = 4
+val a : int = 10
+macro five : unit -> int expr = <fun>
+val f5 : int = 5
+val b : int = 15
+exception E
+macro six : unit -> int expr = <fun>
+val s : int = 6
+module M : sig macro seven : unit -> int expr end
+macro seven : unit -> int expr = <fun>
+val s7 : int = 7
+module N : sig val unused : int macro eight : unit -> int expr end
+val e : int = 8
+macro nine : unit -> int expr = <fun>
+val n9 : int = 9
+- : int = 9
+

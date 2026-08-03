@@ -453,11 +453,15 @@ module VarSet : Set.S with type elt = string
 module Meths : Map.S with type key = string
 module Vars  : Map.S with type key = string
 
+type staging_level = int
+type staging_mode = M_C | M_Q | M_S
+
 (* Value descriptions *)
 
 type value_description =
   { val_type: type_expr;                (* Type of the value *)
     val_kind: value_kind;
+    val_staging_level: staging_level;
     val_loc: Location.t;
     val_attributes: Parsetree.attributes;
     val_uid: Uid.t;
@@ -486,6 +490,9 @@ and method_privacy =
   | Mpublic
   | Mprivate of field_kind
     (* The [field_kind] is always [Fabsent] in a complete class type. *)
+
+val val_is_macro: value_description -> bool
+val mark_macro: value_description -> value_description
 
 (* Variance *)
 
@@ -680,7 +687,7 @@ type visibility =
 type module_type =
     Mty_ident of Path.t
   | Mty_signature of signature
-  | Mty_functor of functor_parameter * module_type
+  | Mty_functor of functor_kind * functor_parameter * module_type
   | Mty_alias of Path.t
 
 and functor_parameter =

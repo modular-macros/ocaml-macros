@@ -1,6 +1,6 @@
 [
   structure_item 
-    Pstr_value Rec
+    Pstr_value Rec Value
     [
       <def>
         pattern 

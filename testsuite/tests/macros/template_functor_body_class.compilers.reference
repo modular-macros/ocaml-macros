@@ -1,0 +1,4 @@
+File "template_functor_body_class.ml", line 22, characters 2-37:
+22 |   class c = object method m = X.v end
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Classes are not yet supported in a template functor body.

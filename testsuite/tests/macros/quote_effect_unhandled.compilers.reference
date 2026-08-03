@@ -1,0 +1,4 @@
+File "quote_effect_unhandled.ml", line 16, characters 9-15:
+16 | let f = $(m ())
+              ^^^^^^
+Error: Compile-time evaluation of this splice raised Stdlib.Effect.Unhandled(Quote_effect_unhandled.U).

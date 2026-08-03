@@ -451,7 +451,9 @@ let to_file outchan artifact_info ~required_globals code =
         (Ident.Set.elements required_globals);
       cu_force_link = !Clflags.link_everything;
       cu_debug = pos_debug;
-      cu_debugsize = size_debug } in
+      cu_debugsize = size_debug;
+      cu_static_archives =
+        List.rev_map Filename.basename !Clflags.static_use } in
   let pos_compunit = pos_out outchan in
   let () =
     (* Remove any cached abbreviation expansion before marshaling.

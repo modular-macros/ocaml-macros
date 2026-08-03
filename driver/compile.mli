@@ -26,11 +26,7 @@ val implementation:
 val to_bytecode :
   Compile_common.info ->
   Typedtree.implementation ->
-  Instruct.instruction list * Ident.Set.t
-(** [to_bytecode info typed] takes a typechecked implementation
-    and returns its bytecode.
-*)
+  Lambda.lambda * Ident.Set.t
 
 val emit_bytecode :
-  Compile_common.info -> Instruct.instruction list * Ident.Set.t -> unit
-(** [emit_bytecode bytecode] output the bytecode executable. *)
+  Compile_common.info -> Lambda.lambda * Ident.Set.t -> unit

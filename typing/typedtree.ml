@@ -146,6 +146,8 @@ and expression_desc =
       body : value case;
       partial : partial;
     }
+  | Texp_quote of expression
+  | Texp_splice of splice_desc
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
   | Texp_struct_item of structure_item * expression
@@ -284,9 +286,9 @@ and functor_parameter =
 and module_expr_desc =
     Tmod_ident of Path.t * Longident.t loc
   | Tmod_structure of structure
-  | Tmod_functor of functor_parameter * module_expr
-  | Tmod_apply of module_expr * module_expr * module_coercion
-  | Tmod_apply_unit of module_expr
+  | Tmod_functor of functor_kind * functor_parameter * module_expr
+  | Tmod_apply of functor_kind * module_expr * module_expr * module_coercion
+  | Tmod_apply_unit of functor_kind * module_expr
   | Tmod_constraint of
       module_expr * Types.module_type * module_type_constraint * module_coercion
   | Tmod_unpack of expression * Types.module_type
@@ -305,7 +307,7 @@ and structure_item =
 
 and structure_item_desc =
     Tstr_eval of expression * attributes
-  | Tstr_value of rec_flag * value_binding list
+  | Tstr_value of rec_flag * Types.staging_level * value_binding list
   | Tstr_primitive of value_description
   | Tstr_type of rec_flag * type_declaration list
   | Tstr_typext of type_extension
@@ -339,11 +341,17 @@ and value_binding =
     vb_loc: Location.t;
   }
 
+and functor_coercion_face =
+    Fcf_plain
+  | Fcf_mixed
+  | Fcf_template
+
 and module_coercion =
     Tcoerce_none
   | Tcoerce_structure of (int * module_coercion) list *
                          (Ident.t * int * module_coercion) list
-  | Tcoerce_functor of module_coercion * module_coercion
+  | Tcoerce_functor of
+      functor_coercion_face * module_coercion * module_coercion
   | Tcoerce_primitive of primitive_coercion
   | Tcoerce_alias of Env.t * Path.t * module_coercion
 
@@ -358,7 +366,7 @@ and module_type =
 and module_type_desc =
     Tmty_ident of Path.t * Longident.t loc
   | Tmty_signature of signature
-  | Tmty_functor of functor_parameter * module_type
+  | Tmty_functor of functor_kind * functor_parameter * module_type
   | Tmty_with of module_type * (Path.t * Longident.t loc * with_constraint) list
   | Tmty_typeof of module_expr
   | Tmty_alias of Path.t * Longident.t loc
@@ -665,6 +673,11 @@ and 'a class_infos =
     ci_attributes: attribute list;
    }
 
+and splice_desc =
+  { spl_exp: expression;
+    spl_index: int option;
+  }
+
 type implementation = {
   structure: structure;
   coercion: module_coercion;
@@ -915,7 +928,8 @@ exception Not_a_path
 let rec path_of_module mexp =
   match mexp.mod_desc with
   | Tmod_ident (p,_) -> p
-  | Tmod_apply(funct, arg, _coercion) when !Clflags.applicative_functors ->
+  | Tmod_apply(Plain, funct, arg, _coercion)
+    when !Clflags.applicative_functors ->
       Path.Papply(path_of_module funct, path_of_module arg)
   | Tmod_constraint (mexp, _, _, _) ->
       path_of_module mexp

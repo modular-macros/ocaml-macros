@@ -1,0 +1,8 @@
+File "quoted_compile_time_module.ml", line 15, characters 37-40:
+15 | macro m () = let module N = Mv in << N.v >>
+                                          ^^^
+Error: The module N is bound in compile-time code, so the code this
+       quotation builds cannot name it: that code runs in another
+       program, which has no such module.
+       Bind the module outside the macro or splice body, or move the
+       reference into a splice.

@@ -1,0 +1,30 @@
+macro m_state : unit -> int expr = <fun>
+Line 1:
+Error: The code built by this phrase's compile-time part has
+       a variable escaping its quotation's scope.
+type _ Stdlib.Effect.t += R : int expr -> int expr Effect.t
+macro m_effect : unit -> (int -> int) expr = <fun>
+Line 1:
+Error: The code built by this phrase's compile-time part has
+       a variable escaping its quotation's scope.
+exception E of int expr
+macro m_exn : unit -> int expr = <fun>
+Line 1:
+Error: The code built by this phrase's compile-time part has
+       a variable escaping its quotation's scope.
+Line 9, characters 6-41:
+9 |       Effect.Deep.continue k << $z + 1 >> ;
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Warning 10 [non-unit-statement]: this expression should have type unit.
+
+macro m_multi : unit -> (int -> int) expr = <fun>
+Line 1:
+Error: Compile-time evaluation of this phrase raised
+       Stdlib.Effect.Continuation_already_resumed.
+macro m_ok : unit -> ('a -> 'a) expr = <fun>
+val ok : int = 42
+val helper : int -> int = <fun>
+macro m_mixed : unit -> (int -> int) expr = <fun>
+val ok2 : int = 42
+val alive : int = 84
+

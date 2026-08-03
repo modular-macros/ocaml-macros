@@ -396,6 +396,7 @@ let process_file_as process_fun def source_file =
       (!Clflags.hidden_include_dirs @
        !Compenv.last_include_dirs @
        !Clflags.include_dirs @
+       !Clflags.static_include_dirs @
        !Compenv.first_include_dirs @
        cwd
       ));
@@ -587,6 +588,11 @@ let run_main argv =
         "<dir>  Add <dir> to the list of include directories";
       "-H", Arg.String (prepend_to_list Clflags.hidden_include_dirs),
         "<dir>  Add <dir> to the list of include directories";
+      "-I-static", Arg.String (prepend_to_list Clflags.static_include_dirs),
+        "<dir>  Add <dir> to the list of include directories serving \
+         staging level -1";
+      "-static-use", Arg.String (fun _ -> ()),
+        "<file>  Ignored (no dependency of a source is recorded through it)";
       "-nocwd", Arg.Set nocwd,
         " Do not add current working directory to \
           the list of include directories";

@@ -1,0 +1,6 @@
+File "macro_exit.ml", line 1:
+Error: Compile-time evaluation ended without emitting macro_exit.cmo.
+       The static program exited with status 0 before writing it;
+       a macro calling exit would do this.
+       Its object macro_exit$static.cmo and object list macro_exit$static.objs
+       were kept for inspection.

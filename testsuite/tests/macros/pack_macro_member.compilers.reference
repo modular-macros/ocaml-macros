@@ -1,0 +1,5 @@
+File "pack_macro_member_a.cmo", line 1:
+Error: pack_macro_member_a.cmo defines macros or template functors,
+       and -pack copies only run-time objects,
+       so the packed unit's compile-time components could never be resolved.
+       A macro-bearing unit cannot be a member of a pack.

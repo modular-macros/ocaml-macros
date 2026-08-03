@@ -1,0 +1,18 @@
+val helper : int -> int = <fun>
+macro g : unit -> int expr = <fun>
+val y : int = 6
+val twice : int -> int = <fun>
+macro h : unit -> (int -> int) expr = <fun>
+val f : int -> int = <fun>
+- : int = 16
+macro outer : unit -> int expr = <fun>
+val w : int = 16
+val helper : int -> int = <fun>
+val shadowed : int = 6
+val helper : string -> string = <fun>
+val still_an_int : int = 7
+val r : int ref = {contents = 10}
+macro reads_r : unit -> int expr = <fun>
+- : unit = ()
+val sees_increment : int = 11
+

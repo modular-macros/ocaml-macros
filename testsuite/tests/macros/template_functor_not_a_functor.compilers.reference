@@ -1,0 +1,5 @@
+File "template_functor_not_a_functor.ml", line 16, characters 28-29:
+16 | module Bad : (X : S) -> S = T
+                                 ^
+Error: Signature mismatch:
+       A template functor is not an ordinary functor

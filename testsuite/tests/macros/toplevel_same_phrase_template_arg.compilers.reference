@@ -1,0 +1,16 @@
+module F :
+  [X : sig val r : int macro g : unit -> int expr end] sig val s : int end
+module V : sig val r : int macro g : unit -> int expr end
+module M1 : sig val s : int end
+a=3
+- : unit = ()
+module W : sig val r : int macro g : unit -> int expr end
+module M2 : sig val s : int end
+b=80
+- : unit = ()
+module U : sig val r : int macro g : unit -> int expr end
+module M3 : sig val s : int end
+val z : int = 20
+c=20
+- : unit = ()
+

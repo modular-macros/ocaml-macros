@@ -1,0 +1,10 @@
+ref: 1 3 3
+shadowed: 222
+rebound: 10 10 20
+mixed: 7 2.5 cap 3 p 20
+exn: 33 8
+constructor: 11
+qualified: 506 65
+stdlib: 5 8
+recursive: true false
+far: 78 1 two 3 4

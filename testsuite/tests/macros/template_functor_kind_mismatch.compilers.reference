@@ -1,0 +1,4 @@
+File "template_functor_kind_mismatch.ml", line 17, characters 13-14:
+17 | module Bad = T(struct type t = int end)
+                  ^
+Error: This is a template functor. It must be applied as F[M].

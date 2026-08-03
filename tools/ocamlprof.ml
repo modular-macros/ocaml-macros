@@ -300,6 +300,8 @@ and rw_exp iflag sexp =
       rewrite_exp iflag let_.pbop_exp;
       List.iter (fun {pbop_exp; _} -> rewrite_exp iflag pbop_exp) ands;
       rewrite_exp iflag body
+  | Pexp_quote expr -> rewrite_exp iflag expr
+  | Pexp_splice expr -> rewrite_exp iflag expr
   | Pexp_extension _ -> ()
   | Pexp_unreachable -> ()
   | Pexp_struct_item (si, exp) ->
@@ -392,11 +394,11 @@ and rewrite_mod iflag smod =
   match smod.pmod_desc with
     Pmod_ident _ -> ()
   | Pmod_structure sstr -> List.iter (rewrite_str_item iflag) sstr
-  | Pmod_functor(_param, sbody) -> rewrite_mod iflag sbody
-  | Pmod_apply(smod1, smod2) ->
+  | Pmod_functor(_, _param, sbody) -> rewrite_mod iflag sbody
+  | Pmod_apply(_, smod1, smod2) ->
       rewrite_mod iflag smod1;
       rewrite_mod iflag smod2
-  | Pmod_apply_unit smod1 ->
+  | Pmod_apply_unit (_, smod1) ->
       rewrite_mod iflag smod1
   | Pmod_constraint(smod, _smty) -> rewrite_mod iflag smod
   | Pmod_unpack(sexp) -> rewrite_exp iflag sexp
@@ -405,7 +407,7 @@ and rewrite_mod iflag smod =
 and rewrite_str_item iflag item =
   match item.pstr_desc with
     Pstr_eval (exp, _attrs) -> rewrite_exp iflag exp
-  | Pstr_value(_, exps)
+  | Pstr_value(_, _, exps)
      -> List.iter (fun x -> rewrite_exp iflag x.pvb_expr) exps
   | Pstr_module x -> rewrite_mod iflag x.pmb_expr
         (* todo: Pstr_recmodule?? *)

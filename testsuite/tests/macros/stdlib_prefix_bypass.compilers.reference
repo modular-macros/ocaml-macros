@@ -1,0 +1,4 @@
+File "stdlib_prefix_bypass.ml", line 17, characters 21-30:
+17 | macro m () = let _ = Stdlibx.v in << 1 >>
+                          ^^^^^^^^^
+Error: Stdlibx.v is bound at run time, but this use is in compile-time code.

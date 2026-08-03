@@ -1,0 +1,37 @@
+macro m : unit -> int expr = <fun>
+class initialiser
+class c : object method v : int end
+val x : int = 3
+val base : int = 39
+class d : object method v : int end
+val y : int = 3
+42
+class e : object method v : int end
+42
+module G : () -> sig macro g : unit -> int expr end
+module A : sig macro g : unit -> int expr end
+7
+module Alias = A
+Line 2, characters 18-58:
+2 | module Ascribed = (A : sig macro g : unit -> int expr end)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This rebinds a module whose macros or template functors are held
+       under the name it was bound to, which a constraint or an include
+       inside a structure cannot carry across.
+       Bind it with a plain alias (module B = A), or refer to its members
+       through their original path.
+Line 2, characters 25-34:
+2 | module Included = struct include A end
+                             ^^^^^^^^^
+Error: This rebinds a module whose macros or template functors are held
+       under the name it was bound to, which a constraint or an include
+       inside a structure cannot carry across.
+       Bind it with a plain alias (module B = A), or refer to its members
+       through their original path.
+Line 6, characters 37-63:
+6 | module rec R : sig val v : int end = struct let v = $(m ()) end
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: A top-level splice is not yet supported inside a recursive module
+       binding in the toplevel.  Compiling the same code with ocamlc works;
+       so does binding the spliced value outside the recursive group.
+

@@ -58,6 +58,12 @@ let init_path ?(standard_library=Config.standard_library)
     List.rev_map (Misc.expand_directory standard_library)
       !Clflags.hidden_include_dirs
   in
+  let static =
+    List.rev_map (Misc.expand_directory standard_library)
+      !Clflags.static_include_dirs
+  in
+  Load_path.set_stage_paths ~static ~run:visible;
+  let visible = visible @ static in
   Load_path.init ~auto_include ~visible ~hidden;
   Env.reset_cache ()
 

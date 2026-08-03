@@ -1,0 +1,61 @@
+module type S = sig val base : int macro gen : unit -> int expr end
+val scale : int = 3
+module F :
+  [X : S]
+    sig
+      val v : int
+      macro m : unit -> int expr
+      val w : int
+      val r : int ref
+    end
+module V : sig val base : int macro gen : unit -> int expr end
+module V2 : sig val base : int macro gen : unit -> int expr end
+[body splice]
+module M :
+  sig val v : int macro m : unit -> int expr val w : int val r : int ref end
+[body splice]
+module M2 :
+  sig val v : int macro m : unit -> int expr val w : int val r : int ref end
+- : int * int * int * int = (30, 35, 300, 308)
+- : int * int = (31, 300)
+val y : int = 332
+[body splice]
+module Ma :
+  sig val v : int macro m : unit -> int expr val w : int val r : int ref end
+val s : int = 31
+- : int = 31
+module G : [] sig val u : int end
+module MG : sig val u : int end
+- : int = 5
+module type S2 = sig val b : int macro h : int expr -> int expr end
+module C :
+  [X : S] [Y : S2]
+    sig val cv : int macro k : unit -> int expr val cw : int end
+module H :
+  [Y : S2] sig val cv : int macro k : unit -> int expr val cw : int end
+module W : sig val b : int macro h : int expr -> int expr end
+module MC : sig val cv : int macro k : unit -> int expr val cw : int end
+- : int * int * int = (20, 60, 60)
+module type SM = sig macro gen : unit -> int expr end
+module Inc : [X : SM] sig macro gen : unit -> int expr end
+module I1 : sig macro gen : unit -> int expr end
+module I2 : sig macro gen : unit -> int expr end
+- : int = 6
+module Use :
+  [X : SM]
+    sig module M0 : sig macro gen : unit -> int expr end val a : int end
+module U :
+  sig module M0 : sig macro gen : unit -> int expr end val a : int end
+- : int * int = (10, 5)
+module B : sig val u : int end
+module B : sig macro gen : unit -> int expr end
+[body splice]
+module Mixed : sig val base : int macro gen : unit -> int expr end
+module Bad :
+  sig val v : int macro m : unit -> int expr val w : int val r : int ref end
+module D : sig module N : [X : SM] sig val v : int end end
+Line 2, characters 29-35:
+2 | module E = struct module N = Inc[V] end
+                                 ^^^^^^
+Error: Template functors are not yet supported here.
+
