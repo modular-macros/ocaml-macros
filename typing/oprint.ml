@@ -557,8 +557,8 @@ let out_functor_parameters =
    that should be printed in long form. *)
 
 let rec collect_functor_args acc = function
-  | Omty_functor (param, mty_res) ->
-      collect_functor_args (param :: acc) mty_res
+  | Omty_functor (kind, param, mty_res) ->
+      collect_functor_args ((kind, param) :: acc) mty_res
   | non_functor -> (acc, non_functor)
 let collect_functor_args mty =
   let l, rest = collect_functor_args [] mty in
@@ -596,17 +596,37 @@ and print_out_functor_parameters ppf l =
           (Option.value param ~default:"_")
           print_out_module_type mty
   in
-  let rec print_args ppf = function
+  let print_template_arg ppf = function
+    | None ->
+        fprintf ppf "[]"
+    | Some (None, mty) ->
+        fprintf ppf "[%a]" print_out_module_type mty
+    | Some (Some param, mty) ->
+        fprintf ppf "[%s : %a]" param print_out_module_type mty
+  in
+  let rec print_plain_args ppf = function
     | [] -> ()
     | Some (None, mty_arg) :: l ->
         fprintf ppf "%a ->@ %a"
           print_simple_out_module_type mty_arg
-          print_args l
+          print_plain_args l
     | _ :: _ as non_anonymous_functor ->
         let args, anons = split_anon_functor_arguments non_anonymous_functor in
         fprintf ppf "@[%a@]@ ->@ %a"
           (pp_print_list ~pp_sep:pp_print_space print_nonanon_arg) args
-          print_args anons
+          print_plain_args anons
+  in
+  let rec span_plain acc = function
+    | (Asttypes.Plain, param) :: l -> span_plain (param :: acc) l
+    | rest -> List.rev acc, rest
+  in
+  let rec print_args ppf = function
+    | [] -> ()
+    | (Asttypes.Template, param) :: l ->
+        fprintf ppf "%a@ %a" print_template_arg param print_args l
+    | (Asttypes.Plain, _) :: _ as l ->
+        let plain, rest = span_plain [] l in
+        fprintf ppf "%a%a" print_plain_args plain print_args rest
   in
   print_args ppf l
 
@@ -693,7 +713,9 @@ and print_out_sig_item ppf =
            | Orec_next  -> "and")
           ppf td
   | Osig_value vd ->
-      let kwd = if vd.oval_prims = [] then "val" else "external" in
+      let kwd = if vd.oval_level = -1 then "macro"
+                else if vd.oval_prims = [] then "val"
+                else "external" in
       let pr_prims ppf =
         function
           [] -> ()

@@ -105,9 +105,11 @@ let implementation ~backend ~start_from ~source_file ~output_prefix =
   let backend info typed =
     Compilenv.reset ?packname:!Clflags.for_package
       (Unit_info.modname info.target);
-    if Config.flambda
-    then flambda info backend typed
-    else clambda info backend typed
+    Static_link.implementation ~native:true info typed
+      ~fallback:(fun () ->
+        if Config.flambda
+        then flambda info backend typed
+        else clambda info backend typed)
   in
   let unit_info = Unit_info.make ~source_file Impl output_prefix in
   with_info ~dump_ext:"cmx" unit_info @@ fun info ->

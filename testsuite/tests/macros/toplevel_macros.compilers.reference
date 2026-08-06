@@ -1,0 +1,15 @@
+macro pow : int -> int expr -> int expr = <fun>
+val cube : int -> int = <fun>
+- : int = 27
+macro succ_of : int expr -> int expr = <fun>
+val a : int = 11
+val b : int = 21
+- : int * int = (11, 21)
+macro seven : unit -> int expr = <fun>
+val v : int = 7
+module F : sig macro five : unit -> int expr val x : int end
+- : int = 5
+macro noisy : unit -> int expr = <fun>
+[compile-time]
+val n : int = 3
+

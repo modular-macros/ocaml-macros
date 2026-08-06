@@ -1,0 +1,6 @@
+File "macro_body_splice.ml", line 14, characters 13-25:
+14 | macro m () = $( << 1 >> )
+                  ^^^^^^^^^^^^
+Error: A splice outside a quotation is evaluated at compile time,
+       which is meaningful only at the top level of a module.
+       This one is in compile-time code.

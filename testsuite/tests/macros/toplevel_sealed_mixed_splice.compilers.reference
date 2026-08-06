@@ -1,0 +1,5 @@
+module M : sig macro mm : unit -> int expr val v : int end
+val x : int = 12
+x=12
+- : unit = ()
+

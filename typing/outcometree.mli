@@ -123,7 +123,9 @@ and out_class_sig_item =
 
 type out_module_type =
   | Omty_abstract
-  | Omty_functor of (string option * out_module_type) option * out_module_type
+  | Omty_functor of
+      Asttypes.functor_kind
+      * (string option * out_module_type) option * out_module_type
   | Omty_ident of out_ident
   | Omty_signature of out_sig_item list
   | Omty_alias of out_ident
@@ -162,6 +164,7 @@ and out_type_extension =
     otyext_private: Asttypes.private_flag }
 and out_val_decl =
   { oval_name: string;
+    oval_level: int;
     oval_type: out_type;
     oval_prims: string list;
     oval_attributes: out_attribute list }

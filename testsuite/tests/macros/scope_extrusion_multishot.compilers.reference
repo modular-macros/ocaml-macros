@@ -1,0 +1,9 @@
+File "scope_extrusion_multishot.ml", line 17, characters 21-56:
+17 |   | effect R z, k -> Effect.Deep.continue k << $z + 1 >> ; Effect.Deep.continue k << $z + 2 >>
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Warning 10 [non-unit-statement]: this expression should have type unit.
+
+File "scope_extrusion_multishot.ml", line 19, characters 9-15:
+19 | let w = $(m ()) 10
+              ^^^^^^
+Error: Compile-time evaluation of this splice raised Stdlib.Effect.Continuation_already_resumed.

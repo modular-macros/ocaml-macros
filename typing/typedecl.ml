@@ -62,6 +62,7 @@ type error =
       Longident.t * Env.t * Errortrace.unification_error
   | Rebind_mismatch of Longident.t * Path.t * Path.t
   | Rebind_private of Longident.t
+  | Quoted_local_extension_rebind of Path.t
   | Variance of Typedecl_variance.error
   | Unavailable_type_constructor of Path.t
   | Unbound_type_var_ext of type_expr * extension_constructor
@@ -1344,6 +1345,13 @@ let transl_extension_constructor ~scope env type_path type_params
             Cstr_extension(path, _) -> path
           | _ -> assert false
         in
+        if Env.get_env_mode env = Types.M_Q
+        && (let root = Path.head path in
+            not (Ident.global root || Ident.is_predef root))
+        && (match Env.constructor_staging_level path env with
+            | l -> l <> Env.get_env_level env
+            | exception Not_found -> true)
+        then raise (Error (lid.loc, Quoted_local_extension_rebind path));
         let args =
           match cdescr.cstr_inlined with
           | None ->
@@ -1664,10 +1672,15 @@ let transl_value_decl env loc valdecl =
   let v =
   match valdecl.pval_prim with
     [] when Env.is_in_signature env ->
-      { val_type = ty; val_kind = Val_reg; Types.val_loc = loc;
-        val_attributes = valdecl.pval_attributes;
-        val_uid = Uid.mk ~current_unit:(Env.get_current_unit ());
-      }
+      let l = if valdecl.pval_macro = Asttypes.Value then 0 else -1 in
+      let vd =
+        { val_type = ty; val_kind = Val_reg; Types.val_loc = loc;
+          val_staging_level = l;
+          val_attributes = valdecl.pval_attributes;
+          val_uid = Uid.mk ~current_unit:(Env.get_current_unit ());
+        }
+      in
+      if l < 0 then Types.mark_macro vd else vd
   | [] ->
       raise (Error(valdecl.pval_loc, Val_in_structure))
   | _ ->
@@ -1695,6 +1708,7 @@ let transl_value_decl env loc valdecl =
       then raise(Error(valdecl.pval_type.ptyp_loc, Missing_native_external));
       check_unboxable env loc ty;
       { val_type = ty; val_kind = Val_prim prim; Types.val_loc = loc;
+        val_staging_level = 0;
         val_attributes = valdecl.pval_attributes;
         val_uid = Uid.mk ~current_unit:(Env.get_current_unit ());
       }
@@ -2250,6 +2264,13 @@ let report_error ~loc = function
         (doc_printf "The constructor %a@ has type"
              quoted_constr lid)
         (Doc.msg "but was expected to be of type")
+  | Quoted_local_extension_rebind path ->
+      Location.errorf ~loc
+        "Bad staging mode. The extension constructor %a cannot be \
+         rebound inside this quotation: the world the built code runs \
+         in has no incarnation of it, so the rebinding would capture \
+         the building world's allocation."
+        (Style.as_inline_code Printtyp.path) path
   | Rebind_mismatch (lid, p, p') ->
       Location.errorf ~loc
         "The constructor@ %a@ extends type@ %a@ \

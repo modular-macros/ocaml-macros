@@ -370,13 +370,16 @@ type forward_decl = {
   mutable check_package_with_type_constraints :
     'a. Location.t -> Env.t -> Types.module_type ->
         'a maybe_compute_mty ->
-        (Longident.t Asttypes.loc * Typedtree.core_type) list -> 'a
+        (Longident.t Asttypes.loc * Typedtree.core_type) list -> 'a;
+  mutable check_package_level :
+    Location.t -> Env.t -> Types.module_type -> unit;
 }
 
 let transl_modtype_longident = ref (fun _ -> assert false)
 let transl_modtype = ref (fun _ -> assert false)
 let forward_decl = {
     check_package_with_type_constraints = (fun _ -> assert false);
+    check_package_level = (fun _ -> assert false);
   }
 
 let sort_constraints_no_duplicates loc env l =
@@ -846,6 +849,7 @@ and transl_package
   let l = sort_constraints_no_duplicates loc env ptyp.ppt_constraints in
   let mty = Ast_helper.Mty.mk ~loc (Pmty_ident ptyp.ppt_path) in
   let mty = TyVarEnv.with_local_scope (fun () -> !transl_modtype env mty) in
+  forward_decl.check_package_level loc env mty.mty_type;
   let ptys =
     List.map (fun (s, pty) -> s, transl_type env ~policy ~row_context pty) l
   in

@@ -63,6 +63,8 @@ let lax_modname_from_source source_file =
 (* Check validity of module name *)
 let is_unit_name name = Misc.Utf8_lexeme.is_valid_identifier name
 
+let macros_modname name = name ^ "$macros"
+
 let check_unit_name file =
   if not (is_unit_name (modname file)) then
     Location.prerr_warning (Location.in_file (source_file file))

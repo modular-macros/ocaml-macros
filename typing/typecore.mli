@@ -255,6 +255,13 @@ type error =
   | Optional_poly_param of string
   | Cannot_unify_tfunctor_to_tarrow of Errortrace.unification_error
   | Cannot_omit_tfunctor_argument of Ident.Unscoped.t * type_expr
+  | Value_level_mismatch of
+      { path : Path.t; bound : int; used : int; in_quotation : bool }
+  | Splice_outside_quotation of int
+  | Quotation_in_quotation
+  | Splice_in_splice
+  | Quoted_local_extension_constructor of Path.t
+  | Compile_time_module_in_runtime_code of Ident.t
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

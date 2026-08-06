@@ -44,6 +44,9 @@ exception Error of error * Location.t
 
 let all_keywords =
   let v5_3 = Some (5,3) in
+  (* [macro] became a keyword in this fork, on top of 5.5; real 5.3 and
+     5.4 accept it as an identifier, so [-keywords 5.3] must too. *)
+  let v5_5 = Some (5,5) in
   let v1_0 = Some (1,0) in
   let v1_6 = Some (1,6) in
   let v4_2 = Some (4,2) in
@@ -75,6 +78,7 @@ let all_keywords =
     "initializer", INITIALIZER, v1_0;
     "lazy", LAZY, v1_6;
     "let", LET, always;
+    "macro", MACRO, v5_5;
     "match", MATCH, always;
     "method", METHOD, v1_0;
     "module", MODULE, always;
@@ -85,7 +89,7 @@ let all_keywords =
     "of", OF, always;
     "open", OPEN, always;
     "or", OR, always;
-(*  "parser", PARSER; *)
+  (*  "parser", PARSER; *)
     "private", PRIVATE, v1_0;
     "rec", REC, always;
     "sig", SIG, always;
@@ -447,7 +451,6 @@ let () =
       | _ ->
           None
     )
-
 }
 
 let newline = ('\013'* '\010')
@@ -512,6 +515,12 @@ rule token = parse
       { token lexbuf }
   | "_"
       { UNDERSCORE }
+  | "<<"
+      { LESSLESS }
+  | ">>"
+      { GREATERGREATER }
+  | "$"
+      { DOLLAR }
   | "~"
       { TILDE }
   | ".~"

@@ -159,8 +159,9 @@ let structure_item sub item =
   let desc =
     match item.str_desc with
       Tstr_eval (exp, attrs) -> Pstr_eval (sub.expr sub exp, attrs)
-    | Tstr_value (rec_flag, list) ->
-        Pstr_value (rec_flag, List.map (sub.value_binding sub) list)
+    | Tstr_value (rec_flag, level, list) ->
+        let mac_flag : macro_flag = if level < 0 then Macro else Value in
+        Pstr_value (rec_flag, mac_flag, List.map (sub.value_binding sub) list)
     | Tstr_primitive vd ->
         Pstr_primitive (sub.value_description sub vd)
     | Tstr_type (rec_flag, list) ->
@@ -199,6 +200,7 @@ let value_description sub v =
   let attrs = sub.attributes sub v.val_attributes in
   Val.mk ~loc ~attrs
     ~prim:v.val_prim
+    (if v.val_val.val_staging_level = 0 then Value else Macro)
     (map_loc sub v.val_name)
     (sub.typ sub v.val_desc)
 
@@ -558,6 +560,8 @@ let expression sub exp =
         let ands = List.map2 (sub.binding_op sub) ands and_pats in
         let body = sub.expr sub body.c_rhs in
         Pexp_letop {let_; ands; body }
+    | Texp_quote exp -> Pexp_quote (sub.expr sub exp)
+    | Texp_splice { spl_exp = exp } -> Pexp_splice (sub.expr sub exp)
     | Texp_unreachable ->
         Pexp_unreachable
     | Texp_extension_constructor (lid, _) ->
@@ -680,8 +684,9 @@ let module_type (sub : mapper) mty =
       Tmty_ident (_path, lid) -> Pmty_ident (map_loc sub lid)
     | Tmty_alias (_path, lid) -> Pmty_alias (map_loc sub lid)
     | Tmty_signature sg -> Pmty_signature (sub.signature sub sg)
-    | Tmty_functor (arg, mtype2) ->
-        Pmty_functor (functor_parameter sub arg, sub.module_type sub mtype2)
+    | Tmty_functor (kind, arg, mtype2) ->
+        Pmty_functor
+          (kind, functor_parameter sub arg, sub.module_type sub mtype2)
     | Tmty_with (mtype, list) ->
         Pmty_with (sub.module_type sub mtype,
           List.map (sub.with_constraint sub) list)
@@ -717,14 +722,16 @@ let module_expr (sub : mapper) mexpr =
         let desc = match mexpr.mod_desc with
             Tmod_ident (_p, lid) -> Pmod_ident (map_loc sub lid)
           | Tmod_structure st -> Pmod_structure (sub.structure sub st)
-          | Tmod_functor (arg, mexpr) ->
+          | Tmod_functor (kind, arg, mexpr) ->
               Pmod_functor
-                (functor_parameter sub arg, sub.module_expr sub mexpr)
-          | Tmod_apply (mexp1, mexp2, _) ->
-              Pmod_apply (sub.module_expr sub mexp1,
+                (kind, functor_parameter sub arg,
+                 sub.module_expr sub mexpr)
+          | Tmod_apply (kind, mexp1, mexp2, _) ->
+              Pmod_apply (kind,
+                          sub.module_expr sub mexp1,
                           sub.module_expr sub mexp2)
-          | Tmod_apply_unit mexp1 ->
-              Pmod_apply_unit (sub.module_expr sub mexp1)
+          | Tmod_apply_unit (kind, mexp1) ->
+              Pmod_apply_unit (kind, sub.module_expr sub mexp1)
           | Tmod_constraint (mexpr, _, Tmodtype_explicit mtype, _) ->
               Pmod_constraint (sub.module_expr sub mexpr,
                 sub.module_type sub mtype)

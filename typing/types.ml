@@ -117,12 +117,15 @@ module VarSet = Misc.Stdlib.String.Set
 module Meths = Misc.Stdlib.String.Map
 module Vars = Misc.Stdlib.String.Map
 
+type staging_level = int
+type staging_mode = M_C | M_Q | M_S
 
 (* Value descriptions *)
 
 type value_description =
   { val_type: type_expr;                (* Type of the value *)
     val_kind: value_kind;
+    val_staging_level: staging_level;
     val_loc: Location.t;
     val_attributes: Parsetree.attributes;
     val_uid: Uid.t;
@@ -151,6 +154,24 @@ and class_signature =
 and method_privacy =
   | Mpublic
   | Mprivate of field_kind
+
+let macro_attribute_name = "macrocaml.macro"
+
+let val_is_macro vd =
+  List.exists
+    (fun (a : Parsetree.attribute) ->
+       a.attr_name.txt = macro_attribute_name)
+    vd.val_attributes
+
+let mark_macro vd =
+  if val_is_macro vd then vd
+  else
+    let attr : Parsetree.attribute =
+      { attr_name = { txt = macro_attribute_name; loc = Location.none };
+        attr_payload = Parsetree.PStr [];
+        attr_loc = Location.none }
+    in
+    { vd with val_attributes = attr :: vd.val_attributes }
 
 (* Variance *)
 (* Variance forms a product lattice of the following partial orders:
@@ -379,7 +400,7 @@ type visibility =
 type module_type =
     Mty_ident of Path.t
   | Mty_signature of signature
-  | Mty_functor of functor_parameter * module_type
+  | Mty_functor of functor_kind * functor_parameter * module_type
   | Mty_alias of Path.t
 
 and functor_parameter =

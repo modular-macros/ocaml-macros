@@ -1668,6 +1668,7 @@ let tree_of_value_description id decl =
   let ty = tree_of_typexp Type_scheme decl.val_type in
   let vd =
     { oval_name = id;
+      oval_level = decl.val_staging_level;
       oval_type = ty;
       oval_prims = [];
       oval_attributes = [] }
@@ -1895,12 +1896,12 @@ let rec tree_of_modtype ?(ellipsis=false) = function
   | Mty_signature sg ->
       Omty_signature (if ellipsis then [Osig_ellipsis]
                       else tree_of_signature sg)
-  | Mty_functor(param, ty_res) ->
+  | Mty_functor(k, param, ty_res) ->
       let param, env =
         tree_of_functor_parameter param
       in
       let res = wrap_env env (tree_of_modtype ~ellipsis) ty_res in
-      Omty_functor (param, res)
+      Omty_functor (k, param, res)
   | Mty_alias p ->
       Omty_alias (tree_of_path (Some Module) p)
 

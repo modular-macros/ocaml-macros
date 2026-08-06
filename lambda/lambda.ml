@@ -328,6 +328,7 @@ type lambda =
   | Lsend of meth_kind * lambda * lambda * lambda list * scoped_location
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
+  | Lsplice of lambda
 
 and rec_binding = {
   id : Ident.t;
@@ -435,6 +436,13 @@ let default_stub_attribute =
 
 let max_raw = 32
 
+let thunk x body = Lfunction({kind=Curried;
+                              params=[(x, Pgenval)];
+                              return=Pgenval;
+                              body;
+                              attr=default_function_attribute;
+                              loc=Loc_unknown})
+
 let make_key e =
   let exception Not_simple in
   let count = ref 0   (* Used for controlling size *)
@@ -495,7 +503,7 @@ let make_key e =
         Lsend (m,tr_rec env e1,tr_rec env e2,tr_recs env es,Loc_unknown)
     | Lifused (id,e) -> Lifused (id,tr_rec env e)
     | Lletrec _|Lfunction _
-    | Lfor _ | Lwhile _
+    | Lfor _ | Lwhile _ | Lsplice _
 (* Beware: (PR#6412) the event argument to Levent
    may include cyclic structure of type Type.typexpr *)
     | Levent _  ->
@@ -592,6 +600,8 @@ let shallow_iter ~tail ~non_tail:f = function
       tail e
   | Lifused (_v, e) ->
       tail e
+  | Lsplice e ->
+      f e
 
 let iter_head_constructor f l =
   shallow_iter ~tail:f ~non_tail:f l
@@ -679,6 +689,10 @@ let rec free_variables = function
   | Lifused (_v, e) ->
       (* Shouldn't v be considered a free variable ? *)
       free_variables e
+  | Lsplice (Lapply { ap_args; _ }) ->
+      free_variables_list Ident.Set.empty ap_args
+  | Lsplice _ ->
+      Ident.Set.empty
 
 and free_variables_list set exprs =
   List.fold_left (fun set expr -> Ident.Set.union (free_variables expr) set)
@@ -690,6 +704,9 @@ let raise_count = ref 0
 let next_raise_count () =
   incr raise_count ;
   !raise_count
+
+let reserve_raise_count n =
+  if n > !raise_count then raise_count := n
 
 (* Anticipated staticraise, for guards *)
 let staticfail = Lstaticraise (0,[])
@@ -711,10 +728,12 @@ let rec patch_guarded patch = function
 
 (* Translate an access path *)
 
+let persistent_address_hook = ref (Fun.id : Ident.t -> Ident.t)
+
 let rec transl_address loc = function
   | Env.Aident id ->
       if Ident.global id
-      then Lprim(Pgetglobal id, [], loc)
+      then Lprim(Pgetglobal (!persistent_address_hook id), [], loc)
       else Lvar id
   | Env.Adot(addr, pos) ->
       Lprim(Pfield(pos, Pointer, Immutable),
@@ -731,8 +750,14 @@ let transl_path find loc env path =
 let transl_module_path loc env path =
   transl_path Env.find_module_address loc env path
 
+let transl_module_macros_path loc env path =
+  transl_path Env.find_module_macros_address loc env path
+
 let transl_value_path loc env path =
   transl_path Env.find_value_address loc env path
+
+let transl_value_env_path loc env path =
+  transl_path Env.find_value_env_address loc env path
 
 let transl_extension_path loc env path =
   transl_path Env.find_constructor_address loc env path
@@ -891,6 +916,11 @@ let build_substs update_env ?(freshen_bound_variables = false) s =
     | Lifused (id, e) ->
         let id = try Ident.Map.find id l with Not_found -> id in
         Lifused (id, subst s l e)
+    | Lsplice (Lapply app) ->
+        Lsplice (Lapply { app with ap_args = subst_list s l app.ap_args })
+    | Lsplice _ as lam ->
+        lam
+
   and subst_list s l li = List.map (subst s l) li
   and subst_decl s l decl = { decl with def = subst_lfun s l decl.def }
   and subst_lfun s l lf =
@@ -992,6 +1022,8 @@ let shallow_map f = function
       Levent (f l, ev)
   | Lifused (v, e) ->
       Lifused (v, f e)
+  | Lsplice e ->
+      Lsplice (f e)
 
 let map f =
   let rec g lam = f (shallow_map g lam) in

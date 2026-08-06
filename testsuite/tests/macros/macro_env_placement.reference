@@ -1,0 +1,10 @@
+depth: 1111 1311 1341
+self: 42
+bottom: 100
+rec-nested: 10
+rec-union: 11 11
+rec-different: 30 500 500 30
+rec-deep: 40
+rec-alias: 6
+functor: 27 25 4 6
+template: 23 78

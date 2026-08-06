@@ -1,0 +1,34 @@
+module M : sig val a : int macro m1 : unit -> int expr end
+val x : int = 11
+val b : int = 5
+module M1 : sig macro m : unit -> int expr end
+val v1 : int = 6
+val b : string = "rebound"
+val v2 : int = 6
+module M3 :
+  sig val a : int module Inner : sig macro m : unit -> int expr end end
+val v3 : int = 31
+module M4 :
+  sig
+    module Inner : sig val c : int end
+    val d : int
+    macro m : unit -> int expr
+  end
+val v4 : int = 42
+module M5 :
+  sig
+    val base : int
+    macro even : int -> int expr
+    macro odd : int -> int expr
+  end
+val v5 : int = 51
+module M6 : sig macro m : unit -> int expr end
+val v6 : int = 61
+module M7 : sig macro m : unit -> int expr val a : int end
+val v7 : int = 70
+module Src : sig val inc : int end
+module M8 : sig val inc : int macro m : unit -> int expr end
+val v8 : int = 81
+11 6 6 31 42 51 61 70 81
+- : unit = ()
+

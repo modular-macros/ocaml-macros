@@ -58,6 +58,8 @@ META
 /libtool
 /ocamlc.opt
 /expunge
+/staticrun
+/staticrun.exe
 /ocaml
 /ocamlopt
 /ocamlopt.opt

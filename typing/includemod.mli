@@ -67,6 +67,7 @@ module Error: sig
   and functor_symptom =
     | Params of functor_params_diff
     | Result of module_type_diff
+    | Kind_mismatch of Asttypes.functor_kind * Asttypes.functor_kind
 
   and ('arg,'path) functor_param_symptom =
     | Incompatible_params of 'arg * Types.functor_parameter
@@ -104,7 +105,7 @@ module Error: sig
     | Not_less_than of module_type_diff
     | Incomparable of
         {less_than:module_type_diff; greater_than: module_type_diff}
-
+    | Macro_components
 
   type all =
     | In_Compilation_unit of (string, signature_symptom) diff

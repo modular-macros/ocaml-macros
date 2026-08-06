@@ -117,14 +117,74 @@ let pr_item =
       | _ -> None
     )
 
+exception Macro_quotes_runtime_binding
+
+exception Compile_time_eval_raised of exn
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Macro_quotes_runtime_binding ->
+          let loc = Location.in_file !Location.input_name in
+          Some
+            (Location.errorf ~loc
+               "The code built by this phrase's compile-time part has@ \
+                a variable escaping its quotation's scope.")
+      | Compile_time_eval_raised exn ->
+          let loc = Location.in_file !Location.input_name in
+          Some
+            (Location.errorf ~loc
+               "Compile-time evaluation of this phrase raised@ %s."
+               (Printexc.to_string exn))
+      | _ -> None)
+
+let run_static_lambda ppf slam =
+  let slam = Simplif.simplify_lambda slam in
+  if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
+  let instrs, can_free = Bytegen.compile_phrase slam in
+  let (code, reloc, events) = Emitcode.to_memory instrs in
+  let initial_symtable = Symtable.current_state () in
+  Symtable.patch_object code reloc;
+  Symtable.check_global_initialized reloc;
+  Symtable.update_global_table ();
+  let bytecode, closure = Meta.reify_bytecode code [| events |] None in
+  match closure () with
+  | retval ->
+      if can_free then Meta.release_bytecode bytecode;
+      retval
+  | exception exn ->
+      if can_free then Meta.release_bytecode bytecode;
+      Symtable.restore_state initial_symtable;
+      match exn with
+      | Effect.Unhandled (CamlinternalQuote.Identifier.FreeVar _) ->
+          raise Macro_quotes_runtime_binding
+      | Sys.Break -> raise exn
+      | _ -> raise (Compile_time_eval_raised exn)
+
+let translate_phrase ppf str =
+  Translmod.reset_toplevel_phrase ();
+  if Env.get_tlsplice_count () = 0
+     && not (Translmod.toplevel_has_template_applications str) then begin
+    Translcore.set_splice_source None;
+    Translmod.transl_toplevel_definition str
+  end else begin
+    Translcore.set_splice_source
+      (Some (Translcore.Splices_in_slots Translmod.toplevel_splice_hole));
+    let run_term = Translmod.transl_toplevel_definition str in
+    let s_lam = Translmod.transl_toplevel_phrase_static ~run_term str in
+    let term = run_static_lambda ppf s_lam in
+    Translmod.toplevel_subst_table_reads (Obj.obj term : Lambda.lambda)
+  end
+
 (* Execute a toplevel phrase *)
 
 let execute_phrase print_outcome ppf phr =
   match phr with
   | Ptop_def sstr ->
       let oldenv = !toplevel_env in
+      Env.set_tlsplice_count 0;
       let (str, sg', newenv) = typecheck_phrase ppf oldenv sstr in
-      let lam = Translmod.transl_toplevel_definition str in
+      let lam = translate_phrase ppf str in
       Warnings.check_fatal ();
       begin try
         toplevel_env := newenv;
@@ -240,6 +300,12 @@ let load_compunit ic filename ppf compunit =
     raise Load_failed
   end
 
+let report_corrupt ppf name =
+  fprintf ppf
+    "File %s is corrupt or truncated: it is not a readable bytecode \
+     object file.@." name;
+  false
+
 let rec load_file recursive ppf name =
   let filename =
     try Some (Load_path.find name) with Not_found -> None
@@ -252,9 +318,21 @@ let rec load_file recursive ppf name =
         ~always:(fun () -> close_in ic)
         (fun () -> really_load_file recursive ppf name filename ic)
 
+and load_macros_twin ppf compunit_name =
+  let name = Symtable.Compunit.name compunit_name in
+  if not (Filename.check_suffix name "$macros")
+     && not (Symtable.is_global_defined
+               (Symtable.Global.Glob_compunit (Compunit (name ^ "$macros"))))
+  then
+    match Load_path.find_normalized (name ^ "$macros.cmo") with
+    | exception Not_found -> ()
+    | file -> if not (load_file true ppf file) then raise Load_failed
+
 and really_load_file recursive ppf name filename ic =
-  let buffer = really_input_string ic (String.length Config.cmo_magic_number) in
   try
+    let buffer =
+      really_input_string ic (String.length Config.cmo_magic_number)
+    in
     if buffer = Config.cmo_magic_number then begin
       let compunit_pos = input_binary_int ic in  (* Go to descriptor *)
       seek_in ic compunit_pos;
@@ -277,6 +355,7 @@ and really_load_file recursive ppf name filename ic =
           )
           cu.cu_reloc;
       load_compunit ic filename ppf cu;
+      load_macros_twin ppf cu.cu_name;
       true
     end else
       if buffer = Config.cma_magic_number then begin
@@ -294,12 +373,89 @@ and really_load_file recursive ppf name filename ic =
               raise Load_failed)
           lib.lib_dllibs;
         List.iter (load_compunit ic filename ppf) lib.lib_units;
+        List.iter (fun cu -> load_macros_twin ppf cu.cu_name)
+          lib.lib_units;
         true
       end else begin
         fprintf ppf "File %s is not a bytecode object file.@." name;
         false
       end
-  with Load_failed -> false
+  with
+  | Load_failed -> false
+  | End_of_file | Failure _ | Sys_error _ -> report_corrupt ppf name
+
+let rename_static_reloc members ((reloc : Cmo_format.reloc_info), pos) =
+  let rename cu =
+    let name = Symtable.Compunit.name cu in
+    if Misc.Stdlib.String.Set.mem name members
+    then Cmo_format.Compunit (name ^ Translmod.static_unit_suffix)
+    else cu
+  in
+  (match reloc with
+   | Cmo_format.Reloc_getcompunit cu ->
+       Cmo_format.Reloc_getcompunit (rename cu)
+   | Cmo_format.Reloc_setcompunit cu ->
+       Cmo_format.Reloc_setcompunit (rename cu)
+   | (Cmo_format.Reloc_literal _ | Cmo_format.Reloc_getpredef _
+     | Cmo_format.Reloc_primitive _) as r -> r),
+  pos
+
+let load_static_file ppf name =
+  match Load_path.find name with
+  | exception Not_found ->
+      fprintf ppf "Cannot find file %s.@." name; false
+  | filename ->
+      let ic = open_in_bin filename in
+      Misc.try_finally ~always:(fun () -> close_in ic) @@ fun () ->
+      try
+        let buffer =
+          really_input_string ic (String.length Config.cmo_magic_number)
+        in
+        let units =
+          if buffer = Config.cmo_magic_number then begin
+            let compunit_pos = input_binary_int ic in
+            seek_in ic compunit_pos;
+            [ (input_value ic : compilation_unit) ]
+          end
+          else if buffer = Config.cma_magic_number then begin
+            let toc_pos = input_binary_int ic in
+            seek_in ic toc_pos;
+            let lib = (input_value ic : library) in
+            List.iter
+              (fun dllib ->
+                 let name = Dll.extract_dll_name dllib in
+                 try Dll.open_dlls Dll.For_execution [name]
+                 with Failure reason ->
+                   fprintf ppf
+                     "Cannot load required shared library %s.@.\
+                      Reason: %s.@." name reason;
+                   raise Load_failed)
+              lib.lib_dllibs;
+            lib.lib_units
+          end
+          else begin
+            fprintf ppf "File %s is not a bytecode object file.@." name;
+            raise Load_failed
+          end
+        in
+        let members =
+          List.fold_left
+            (fun s cu ->
+               Misc.Stdlib.String.Set.add
+                 (Symtable.Compunit.name cu.cu_name) s)
+            Misc.Stdlib.String.Set.empty units
+        in
+        List.iter
+          (fun cu ->
+             load_compunit ic filename ppf
+               { cu with
+                 cu_reloc =
+                   List.map (rename_static_reloc members) cu.cu_reloc })
+          units;
+        true
+      with
+      | Load_failed -> false
+      | End_of_file | Failure _ | Sys_error _ -> report_corrupt ppf name
 
 let init () =
   let crc_intfs = Symtable.init_toplevel() in

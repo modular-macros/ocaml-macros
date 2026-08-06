@@ -23,6 +23,8 @@ module type Common_options = sig
   val _i_variance : unit -> unit
   val _I : string -> unit
   val _H : string -> unit
+  val _I_static : string -> unit
+  val _static_use : string -> unit
   val _labels : unit -> unit
   val _alias_deps : unit -> unit
   val _no_alias_deps : unit -> unit
@@ -95,6 +97,7 @@ module type Compiler_options = sig
   val _g : unit -> unit
   val _no_g : unit -> unit
   val _stop_after : string -> unit
+  val _macros_object : string -> unit
   val _i : unit -> unit
   val _i_variance : unit -> unit
   val _impl : string -> unit

@@ -1,0 +1,109 @@
+module Outer :
+  sig
+    macro pm : int expr -> int expr
+    module F :
+      (X : sig val v : int end) ->
+        sig macro m : int expr -> int expr val run : int end
+    module Inner :
+      sig
+        module G :
+          (X : sig val v : int end) -> sig macro m : int expr -> int expr end
+      end
+    module M0 : sig macro m : int expr -> int expr val run : int end
+  end
+module M : sig macro m : int expr -> int expr val run : int end
+val a : int = 1116
+module MD : sig macro m : int expr -> int expr end
+val b : int = 134
+module GF = Outer.F
+module G2 = Outer
+module M2 : sig macro m : int expr -> int expr val run : int end
+module M3 : sig macro m : int expr -> int expr val run : int end
+val c : int = 55
+module Outer2 :
+  sig
+    module F :
+      (X : sig val v : int end) -> sig macro m : int expr -> int expr end
+  end
+module M4 : sig macro m : int expr -> int expr end
+val d : int = 44
+module Outer3 :
+  sig
+    module F :
+      (X : sig val v : int end) -> sig macro m : int expr -> int expr end
+  end
+module M5 : sig macro m : int expr -> int expr end
+val e : int = 55
+module MI : sig macro m : int expr -> int expr val run : int end
+module FG : () -> sig macro g : int expr -> int expr end
+module MG : sig macro g : int expr -> int expr end
+val f : int = 252
+module F6 :
+  (X : sig val v : int end) ->
+    sig macro m6 : int expr -> int expr val w6 : int end
+macro m6 : int expr -> int expr = <fun>
+val w6 : int = 70
+val g : int = 78
+module F7 :
+  (X : sig val v : int end) -> sig macro m7 : int expr -> int expr end
+macro m7 : int expr -> int expr = <fun>
+val h : int = 20
+macro m8 : int expr -> int expr = <fun>
+val i : int = 7
+macro bm : int expr -> int expr = <fun>
+val bv : int = 5
+val j : int = 106
+module T :
+  [X : sig val b : int end]
+    sig
+      val base : int
+      module G :
+        (Y : sig val z : int end) ->
+          sig macro gm : int expr -> int expr val gr : int end
+    end
+module TA :
+  sig
+    val base : int
+    module G :
+      (Y : sig val z : int end) ->
+        sig macro gm : int expr -> int expr val gr : int end
+  end
+module MT : sig macro gm : int expr -> int expr val gr : int end
+module GA = TA.G
+module MT2 : sig macro gm : int expr -> int expr val gr : int end
+module TB :
+  sig
+    val base : int
+    module G :
+      (Y : sig val z : int end) ->
+        sig macro gm : int expr -> int expr val gr : int end
+  end
+module MT3 : sig macro gm : int expr -> int expr val gr : int end
+val k : int = 275
+forms: a=1116 b=134 c=55 d=44 e=55 f=252 g=78 h=20 i=7 j=106 k=275
+- : unit = ()
+Lines 5-9, characters 11-3:
+5 | ...........struct
+6 |   module F (X : sig val v : int end) = struct
+7 |     macro m e = << $e + X.v >>
+8 |   end
+9 | end
+Error: In the toplevel, a mixed functor (one producing a structure with
+       macro or template functor components) is reached through the name
+       it is bound to, and this phrase gives it none.
+       Bind it to a name of its own (module M = ...).
+Line 1, characters 5-7:
+1 | open F6 (struct let v = 1 end)
+         ^^
+Error: In the toplevel, a mixed functor (one producing a structure with
+       macro or template functor components) is reached through the name
+       it is bound to, and this phrase gives it none.
+       Bind it to a name of its own (module M = ...).
+Line 1, characters 8-13:
+1 | include Outer
+            ^^^^^
+Error: In the toplevel, a mixed functor (one producing a structure with
+       macro or template functor components) is reached through the name
+       it is bound to, and this phrase gives it none.
+       Bind it to a name of its own (module M = ...).
+

@@ -46,6 +46,10 @@ type override_flag = Override | Fresh
 
 type closed_flag = Closed | Open
 
+type macro_flag = Macro | Value
+
+type functor_kind = Template | Plain
+
 type label = string
 
 type arg_label =

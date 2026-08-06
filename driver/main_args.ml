@@ -121,6 +121,15 @@ let mk_stop_after ~native f =
   "-stop-after", Arg.Symbol (pass_names, f),
   " Stop after the given compilation pass."
 
+let mk_macros_object f =
+  "-macros-object", Arg.Symbol (["auto"; "always"; "none"], f),
+  " Whether to emit the module's macros object (m$macros.cmo):\n\
+  \     auto (default) emits when the module has compile-time content;\n\
+  \     always also emits an empty object otherwise, so build systems\n\
+  \     can declare the file as an unconditional target; none\n\
+  \     suppresses emission (for the second of two pipelines\n\
+  \     compiling the same module)."
+
 let mk_save_ir_after ~native f =
   let pass_names =
     Clflags.Compiler_pass.(available_pass_names
@@ -167,6 +176,18 @@ let mk_H f =
   "-H", Arg.String f,
   "<dir>  Add <dir> to the list of \"hidden\" include directories\n\
  \     (Like -I, but the program can not directly reference these dependencies)"
+
+let mk_I_static f =
+  "-I-static", Arg.String f,
+  "<dir>  Add <dir> to the include directories searched by compile-time\n\
+    \     code (macro and splice bodies); use with -I on the same\n\
+    \     directory to make a library available to both"
+
+let mk_static_use f =
+  "-static-use", Arg.String f,
+  "<file>  Link <file> (.cma or .cmo) into the compile-time static\n\
+    \     programs of the units being compiled (the archive for a library\n\
+    \     imported with -I-static)"
 
 let mk_set_runtime_default f =
   "-set-runtime-default", Arg.String f, "<param>=<value>  Set the default for \
@@ -824,6 +845,8 @@ module type Common_options = sig
   val _i_variance : unit -> unit
   val _I : string -> unit
   val _H : string -> unit
+  val _I_static : string -> unit
+  val _static_use : string -> unit
   val _labels : unit -> unit
   val _alias_deps : unit -> unit
   val _no_alias_deps : unit -> unit
@@ -897,6 +920,7 @@ module type Compiler_options = sig
   val _g : unit -> unit
   val _no_g : unit -> unit
   val _stop_after : string -> unit
+  val _macros_object : string -> unit
   val _i : unit -> unit
   val _i_variance : unit -> unit
   val _impl : string -> unit
@@ -1106,10 +1130,13 @@ struct
     mk_g_byt F._g;
     mk_no_g F._no_g;
     mk_stop_after ~native:false F._stop_after;
+    mk_macros_object F._macros_object;
     mk_i F._i;
     mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
+    mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_impl F._impl;
     mk_intf F._intf;
     mk_intf_suffix F._intf_suffix;
@@ -1218,6 +1245,8 @@ struct
     mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
+    mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_init F._init;
     mk_labels F._labels;
     mk_alias_deps F._alias_deps;
@@ -1316,11 +1345,14 @@ struct
     mk_no_g F._no_g;
     mk_function_sections F._function_sections;
     mk_stop_after ~native:true F._stop_after;
+    mk_macros_object F._macros_object;
     mk_save_ir_after ~native:true F._save_ir_after;
     mk_i F._i;
     mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
+    mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_impl F._impl;
     mk_inline F._inline;
     mk_inline_toplevel F._inline_toplevel;
@@ -1467,6 +1499,8 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
+    mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_init F._init;
     mk_inline F._inline;
     mk_inline_toplevel F._inline_toplevel;
@@ -1578,6 +1612,8 @@ struct
     mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
+    mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_impl F._impl;
     mk_intf F._intf;
     mk_intf_suffix F._intf_suffix;
@@ -1709,6 +1745,8 @@ module Default = struct
     include Common
     let _I dir = include_dirs := dir :: (!include_dirs)
     let _H dir = hidden_include_dirs := dir :: (!hidden_include_dirs)
+    let _I_static dir = static_include_dirs := dir :: (!static_include_dirs)
+    let _static_use f = static_use := f :: (!static_use)
     let _color = Misc.set_or_ignore color_reader.parse color
     let _dlambda = set dump_lambda
     let _dparsetree = set dump_parsetree
@@ -1877,6 +1915,11 @@ module Default = struct
     let _pp s = preprocessor := (Some s)
     let _runtime_variant s = runtime_variant := s
     let _set_runtime_default s = Compenv.parse_runtime_parameter s
+    let _macros_object mode =
+      macros_object := (match mode with
+        | "always" -> Macros_object_always
+        | "none" -> Macros_object_none
+        | _ -> Macros_object_auto)
     let _stop_after pass =
       let module P = Compiler_pass in
         match P.of_string pass with
@@ -1973,6 +2016,8 @@ module Default = struct
          Odoc_global.hidden_include_dirs :=
            (s :: (!Odoc_global.hidden_include_dirs))
       *) ()
+    let _I_static(_:string) = ()
+    let _static_use(_:string) = ()
     let _impl (_:string) =
       (* placeholder:
          Odoc_global.files := ((!Odoc_global.files) @ [Odoc_global.Impl_file s])

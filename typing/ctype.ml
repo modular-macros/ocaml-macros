@@ -3053,25 +3053,30 @@ let add_gadt_equation uenv source destination =
   (* Format.eprintf "@[add_gadt_equation %s %a@]@."
     (Path.name source) !Btype.print_raw destination; *)
   let env = get_env uenv in
-  if has_free_univars env destination then
-    occur_univar_or_unscoped ~inj_only:true env destination
-  else if local_non_recursive_abbrev uenv source destination then begin
-    let destination = duplicate_type destination in
-    let expansion_scope =
-      Int.max (Path.scope source) (get_equations_scope uenv)
-    in
-    let type_origin =
-      match Env.find_type source env with
-      | decl -> type_origin decl
-      | exception Not_found -> assert false
-    in
-    let decl =
-      new_local_type
-        ~manifest_and_scope:(destination, expansion_scope)
-        type_origin
-    in
-    add_local_constraint uenv source decl;
-    cleanup_abbrev ()
+
+  let staging_mode = Env.get_env_mode env in
+
+  if staging_mode = M_C then begin
+    if has_free_univars env destination then
+      occur_univar_or_unscoped ~inj_only:true env destination
+    else if local_non_recursive_abbrev uenv source destination then begin
+      let destination = duplicate_type destination in
+      let expansion_scope =
+        Int.max (Path.scope source) (get_equations_scope uenv)
+      in
+      let type_origin =
+        match Env.find_type source env with
+        | decl -> type_origin decl
+        | exception Not_found -> assert false
+      in
+      let decl =
+        new_local_type
+          ~manifest_and_scope:(destination, expansion_scope)
+          type_origin
+      in
+      add_local_constraint uenv source decl;
+      cleanup_abbrev ()
+    end
   end
 
 let eq_package_path env p1 p2 =

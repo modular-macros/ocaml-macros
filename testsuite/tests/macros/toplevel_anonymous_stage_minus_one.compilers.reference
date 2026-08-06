@@ -1,0 +1,10 @@
+after-macro
+- : unit = ()
+module type S = sig val v : int end
+Line 2, characters 27-59:
+2 | module _ = struct module F [X : S] = struct let w = X.v end end;;
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Template functors are not yet supported here.
+after-template
+- : unit = ()
+

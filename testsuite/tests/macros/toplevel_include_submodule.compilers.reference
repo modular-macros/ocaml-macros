@@ -1,0 +1,6 @@
+module N = Toplevel_include_submodule_lib.N
+macro g : unit -> int expr = <fun>
+val x : int = 9
+val y : int = 4
+13
+

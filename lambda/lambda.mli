@@ -323,6 +323,7 @@ type lambda =
   | Lsend of meth_kind * lambda * lambda * lambda list * scoped_location
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
+  | Lsplice of lambda
 
 and rec_binding = {
   id : Ident.t;
@@ -446,8 +447,12 @@ val is_evaluated : lambda -> bool
 
 val free_variables: lambda -> Ident.Set.t
 
+val persistent_address_hook : (Ident.t -> Ident.t) ref
+
 val transl_module_path: scoped_location -> Env.t -> Path.t -> lambda
+val transl_module_macros_path: scoped_location -> Env.t -> Path.t -> lambda
 val transl_value_path: scoped_location -> Env.t -> Path.t -> lambda
+val transl_value_env_path: scoped_location -> Env.t -> Path.t -> lambda
 val transl_extension_path: scoped_location -> Env.t -> Path.t -> lambda
 val transl_class_path: scoped_location -> Env.t -> Path.t -> lambda
 
@@ -469,6 +474,8 @@ val subst:
     [freshen_bound_variables], which defaults to [false], freshens
     the bound variables within [lt].
  *)
+
+val thunk: Ident.t -> lambda -> lambda
 
 val rename : Ident.t Ident.Map.t -> lambda -> lambda
 (** A version of [subst] specialized for the case where we're just renaming
@@ -518,6 +525,8 @@ val tag_of_lazy_tag : lazy_block_tag -> int
 
 (* Get a new static failure ident *)
 val next_raise_count : unit -> int
+
+val reserve_raise_count : int -> unit
 
 val staticfail : lambda (* Anticipated static failure *)
 

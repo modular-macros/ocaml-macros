@@ -82,6 +82,16 @@ let fmt_rec_flag f x =
   | Nonrecursive -> fprintf f "Nonrec"
   | Recursive -> fprintf f "Rec"
 
+let fmt_mac_flag f x =
+  match x with
+  | Macro -> fprintf f "Macro"
+  | Value -> fprintf f "Value"
+
+let fmt_functor_kind f x =
+  match x with
+  | Template -> fprintf f "Template"
+  | Plain -> fprintf f "Plain"
+
 let fmt_direction_flag f x =
   match x with
   | Upto -> fprintf f "Up"
@@ -394,6 +404,12 @@ and expression i ppf x =
       binding_op i ppf let_;
       list i binding_op ppf ands;
       expression i ppf body
+  | Pexp_quote arg ->
+      line i ppf "Pexp_quote\n";
+      expression i ppf arg
+  | Pexp_splice arg ->
+      line i ppf "Pexp_splice\n";
+      expression i ppf arg
   | Pexp_extension (s, arg) ->
       line i ppf "Pexp_extension \"%s\"\n" s.txt;
       payload i ppf arg
@@ -435,8 +451,8 @@ and type_constraint i ppf constraint_ =
       core_type (i+1) ppf ty2
 
 and value_description i ppf x =
-  line i ppf "value_description %a %a\n" fmt_string_loc
-       x.pval_name fmt_location x.pval_loc;
+  line i ppf "value_description %a %a %a\n" fmt_string_loc
+       x.pval_name fmt_mac_flag x.pval_macro fmt_location x.pval_loc;
   attributes i ppf x.pval_attributes;
   core_type (i+1) ppf x.pval_type;
   list (i+1) string ppf x.pval_prim
@@ -711,11 +727,11 @@ and module_type i ppf x =
   | Pmty_signature (s) ->
       line i ppf "Pmty_signature\n";
       signature i ppf s;
-  | Pmty_functor (Unit, mt2) ->
-      line i ppf "Pmty_functor ()\n";
+  | Pmty_functor (k, Unit, mt2) ->
+      line i ppf "Pmty_functor %a ()\n" fmt_functor_kind k;
       module_type i ppf mt2;
-  | Pmty_functor (Named (s, mt1), mt2) ->
-      line i ppf "Pmty_functor %a\n" fmt_str_opt_loc s;
+  | Pmty_functor (k, Named (s, mt1), mt2) ->
+      line i ppf "Pmty_functor %a %a\n" fmt_functor_kind k fmt_str_opt_loc s;
       module_type i ppf mt1;
       module_type i ppf mt2;
   | Pmty_with (mt, l) ->
@@ -829,19 +845,19 @@ and module_expr i ppf x =
   | Pmod_structure (s) ->
       line i ppf "Pmod_structure\n";
       structure i ppf s;
-  | Pmod_functor (Unit, me) ->
-      line i ppf "Pmod_functor ()\n";
+  | Pmod_functor (k, Unit, me) ->
+      line i ppf "Pmod_functor %a ()\n" fmt_functor_kind k;
       module_expr i ppf me;
-  | Pmod_functor (Named (s, mt), me) ->
-      line i ppf "Pmod_functor %a\n" fmt_str_opt_loc s;
+  | Pmod_functor (k, Named (s, mt), me) ->
+      line i ppf "Pmod_functor %a %a\n" fmt_functor_kind k fmt_str_opt_loc s;
       module_type i ppf mt;
       module_expr i ppf me;
-  | Pmod_apply (me1, me2) ->
-      line i ppf "Pmod_apply\n";
+  | Pmod_apply (k, me1, me2) ->
+      line i ppf "Pmod_apply %a\n" fmt_functor_kind k;
       module_expr i ppf me1;
       module_expr i ppf me2;
-  | Pmod_apply_unit me1 ->
-      line i ppf "Pmod_apply_unit\n";
+  | Pmod_apply_unit (k, me1) ->
+      line i ppf "Pmod_apply_unit %a\n" fmt_functor_kind k;
       module_expr i ppf me1
   | Pmod_constraint (me, mt) ->
       line i ppf "Pmod_constraint\n";
@@ -864,8 +880,8 @@ and structure_item i ppf x =
       line i ppf "Pstr_eval\n";
       attributes i ppf attrs;
       expression i ppf e;
-  | Pstr_value (rf, l) ->
-      line i ppf "Pstr_value %a\n" fmt_rec_flag rf;
+  | Pstr_value (rf, mf, l) ->
+      line i ppf "Pstr_value %a %a\n" fmt_rec_flag rf fmt_mac_flag mf;
       list i value_binding ppf l;
   | Pstr_primitive vd ->
       line i ppf "Pstr_primitive\n";

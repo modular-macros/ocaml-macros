@@ -1,0 +1,18 @@
+File "abstract_modtype_macro_instantiation.ml", line 29, characters 11-28:
+29 | module S = Make (Monoid_ops)
+                ^^^^^^^^^^^^^^^^^
+Error: Modules do not match:
+       (X : TYPE) -> sig module type OP = sig macro one : unit -> X.t end end
+     is not included in (X : TYPE) -> sig module type OP end
+     Modules do not match:
+       sig module type OP = sig macro one : unit -> X.t end end
+     is not included in
+       sig module type OP end
+     Module type declarations do not match:
+       module type OP = sig macro one : unit -> X.t end
+     does not match
+       module type OP
+     The module type given for OP has macro or template functor
+     components, so it cannot match its abstract declaration.
+     An abstract module type may only be instantiated with a module type
+     whose components all exist at run time.

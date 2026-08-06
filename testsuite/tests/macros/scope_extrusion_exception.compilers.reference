@@ -1,0 +1,4 @@
+File "scope_extrusion_exception.ml", line 19, characters 9-16:
+19 | let z = $(m2 ())
+              ^^^^^^^
+Error: The code built by this splice has a variable escaping a quotation's scope: x.

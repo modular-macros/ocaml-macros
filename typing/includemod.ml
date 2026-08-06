@@ -90,6 +90,7 @@ module Error = struct
   and functor_symptom =
     | Params of functor_params_diff
     | Result of module_type_diff
+    | Kind_mismatch of Asttypes.functor_kind * Asttypes.functor_kind
 
   and ('arg,'path) functor_param_symptom =
     | Incompatible_params of 'arg * functor_parameter
@@ -125,7 +126,7 @@ module Error = struct
     | Not_less_than of module_type_diff
     | Incomparable of
         {less_than:module_type_diff; greater_than: module_type_diff}
-
+    | Macro_components
 
   type all =
     | In_Compilation_unit of (string, signature_symptom) diff
@@ -385,7 +386,7 @@ let rec print_coercion ppf c =
       pr "@[<2>struct@ %a@ %a@]"
         (print_list print_coercion2) fl
         (print_list print_coercion3) nl
-  | Tcoerce_functor (inp, out) ->
+  | Tcoerce_functor (_, inp, out) ->
       pr "@[<2>functor@ (%a)@ (%a)@]"
         print_coercion inp
         print_coercion out
@@ -439,7 +440,7 @@ let retrieve_functor_params env mty =
         | Ok mty ->  retrieve_functor_params before env mty
         | Error _ -> { Error.params = List.rev before; res }
         end
-    | Mty_functor (p, res) -> retrieve_functor_params (p :: before) env res
+    | Mty_functor (_, p, res) -> retrieve_functor_params (p :: before) env res
     | Mty_signature _ as res -> { Error.params = List.rev before; res }
   in
   retrieve_functor_params [] env mty
@@ -583,7 +584,8 @@ and try_modtypes ~core ~direction ~loc env subst mty1 mty2 orig_shape =
       | Ok _ as ok -> ok
       | Error e -> Error (Error.Signature e)
       end
-  | Mty_functor (param1, res1), Mty_functor (param2, res2) ->
+  | Mty_functor (kind1, param1, res1), Mty_functor (kind2, param2, res2)
+    when kind1 = kind2 ->
       let cc_arg, env, subst =
         let direction = Directionality.negate direction in
         functor_param ~core ~direction ~loc env
@@ -620,7 +622,14 @@ and try_modtypes ~core ~direction ~loc env subst mty1 mty2 orig_shape =
             then orig_shape
             else Shape.abs var final_res_shape
           in
-          Ok (Tcoerce_functor(cc_arg, cc_res), final_shape)
+          let face =
+            match kind1 with
+            | Template -> Fcf_template
+            | Plain ->
+                if Mtype.has_macro_components env res1
+                then Fcf_mixed else Fcf_plain
+          in
+          Ok (Tcoerce_functor(face, cc_arg, cc_res), final_shape)
       | _, Error {Error.symptom = Error.Functor Error.Params res; _} ->
           let got = Error.cons_arg param1 res.got in
           let expected = Error.cons_arg param2 res.expected in
@@ -633,6 +642,8 @@ and try_modtypes ~core ~direction ~loc env subst mty1 mty2 orig_shape =
       | Ok _, Error res ->
           Error Error.(Functor (Result res))
       end
+  | Mty_functor (kind1, _, _), Mty_functor (kind2, _, _) ->
+      Error Error.(Functor (Kind_mismatch (kind1, kind2)))
   | Mty_functor _, _
   | _, Mty_functor _ ->
      Error.functor_params
@@ -981,7 +992,10 @@ and modtype_infos ~core ~loc env ~direction subst id info1 info2 =
   let r =
     match (info1.mtd_type, info2.mtd_type) with
       (None, None) -> Ok Tcoerce_none
-    | (Some _, None) -> Ok Tcoerce_none
+    | (Some mty1, None) ->
+        if Mtype.has_macro_components env mty1 then
+          Error Error.Macro_components
+        else Ok Tcoerce_none
     | (Some mty1, Some mty2) ->
         check_modtype_equiv ~core ~direction ~loc env mty1 mty2
     | (None, Some mty2) ->

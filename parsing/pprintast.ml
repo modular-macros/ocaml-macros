@@ -880,7 +880,7 @@ and expression ctxt f x =
            (*no indentation here, a new line*) *)
         (*   rec_flag rf *)
         pp f "@[<2>%a in@;<1 -2>%a@]"
-          (bindings reset_ctxt) (rf,l)
+          (bindings "let" reset_ctxt) (rf,l)
           (expression ctxt) e
     | Pexp_apply (e, l) ->
         begin if not (sugar_expr ctxt f x) then
@@ -978,6 +978,10 @@ and expression ctxt f x =
           (binding_op ctxt) let_
           (list ~sep:"@," (binding_op ctxt)) ands
           (expression ctxt) body
+    | Pexp_quote e ->
+        pp f "@[<2><<@ %a@ >>@]" (expression ctxt)  e
+    | Pexp_splice e ->
+        pp f "@[<2>$%a@]" (simple_expr ctxt) e
     | Pexp_extension e -> extension ctxt f e
     | Pexp_unreachable -> pp f "."
     | Pexp_struct_item (si, e) ->
@@ -1260,7 +1264,7 @@ and class_expr ctxt f x =
           (class_expr ctxt) e
     | Pcl_let (rf, l, ce) ->
         pp f "%a@ in@ %a"
-          (bindings ctxt) (rf,l)
+          (bindings "let" ctxt) (rf,l)
           (class_expr ctxt) ce
     | Pcl_apply (ce, l) ->
         pp f "((%a)@ %a)" (* Cf: #7200 *)
@@ -1288,15 +1292,26 @@ and module_type ctxt f x =
       (attributes ctxt) x.pmty_attributes
   end else
     match x.pmty_desc with
-    | Pmty_functor (Unit, mt2) ->
+    | Pmty_functor (Plain, Unit, mt2) ->
         pp f "@[<hov2>() ->@ %a@]" (module_type ctxt) mt2
-    | Pmty_functor (Named (s, mt1), mt2) ->
+    | Pmty_functor (Plain, Named (s, mt1), mt2) ->
         begin match s.txt with
         | None ->
             pp f "@[<hov2>%a@ ->@ %a@]"
               (module_type1 ctxt) mt1 (module_type ctxt) mt2
         | Some name ->
             pp f "@[<hov2>(%s@ :@ %a)@ ->@ %a@]" name
+              (module_type ctxt) mt1 (module_type ctxt) mt2
+        end
+    | Pmty_functor (Template, Unit, mt2) ->
+        pp f "@[<hov2>[]@ %a@]" (module_type ctxt) mt2
+    | Pmty_functor (Template, Named (s, mt1), mt2) ->
+        begin match s.txt with
+        | None ->
+            pp f "@[<hov2>[%a]@ %a@]"
+              (module_type ctxt) mt1 (module_type ctxt) mt2
+        | Some name ->
+            pp f "@[<hov2>[%s@ :@ %a]@ %a@]" name
               (module_type ctxt) mt1 (module_type ctxt) mt2
         end
     | Pmty_with (mt, []) -> module_type ctxt f mt
@@ -1357,7 +1372,10 @@ and signature_item ctxt f x : unit =
       *)
       type_def_list ctxt f (Recursive, false, l)
   | Psig_value vd ->
-      let intro = if vd.pval_prim = [] then "val" else "external" in
+      let intro =
+        if vd.pval_prim <> [] then "external"
+        else match vd.pval_macro with Macro -> "macro" | Value -> "val"
+      in
       pp f "@[<2>%s@ %a@ :@ %a@]%a" intro
         ident_of_name vd.pval_name.txt
         (value_description ctxt) vd
@@ -1462,17 +1480,27 @@ and module_expr ctxt f x =
           (module_type ctxt) mt
     | Pmod_ident (li) ->
         pp f "%a" longident_loc li;
-    | Pmod_functor (Unit, me) ->
+    | Pmod_functor (Plain, Unit, me) ->
         pp f "functor ()@;->@;%a" (module_expr ctxt) me
-    | Pmod_functor (Named (s, mt), me) ->
+    | Pmod_functor (Plain, Named (s, mt), me) ->
         pp f "functor@ (%s@ :@ %a)@;->@;%a"
           (Option.value s.txt ~default:"_")
           (module_type ctxt) mt (module_expr ctxt) me
-    | Pmod_apply (me1, me2) ->
+    | Pmod_functor (Template, Unit, me) ->
+        pp f "functor []@;->@;%a" (module_expr ctxt) me
+    | Pmod_functor (Template, Named (s, mt), me) ->
+        pp f "functor@ [%s@ :@ %a]@;->@;%a"
+          (Option.value s.txt ~default:"_")
+          (module_type ctxt) mt (module_expr ctxt) me
+    | Pmod_apply (Plain, me1, me2) ->
         pp f "(%a)(%a)" (module_expr ctxt) me1 (module_expr ctxt) me2
         (* Cf: #7200 *)
-    | Pmod_apply_unit me1 ->
+    | Pmod_apply_unit (Plain, me1) ->
         pp f "(%a)()" (module_expr ctxt) me1
+    | Pmod_apply (Template, me1, me2) ->
+        pp f "(%a)[%a]" (module_expr ctxt) me1 (module_expr ctxt) me2
+    | Pmod_apply_unit (Template, me1) ->
+        pp f "(%a)[]" (module_expr ctxt) me1
     | Pmod_unpack e ->
         pp f "(val@ %a)" (expression ctxt) e
     | Pmod_extension e -> extension ctxt f e
@@ -1536,17 +1564,17 @@ and binding ?(is_method=false) ctxt f
     end
 
 (* [in] is not printed *)
-and bindings ctxt f (rf,l) =
+and bindings fst_kwd ctxt f (rf,l) =
   let binding kwd rf f x =
     pp f "@[<2>%s %a%a@]%a" kwd rec_flag rf
       (binding ctxt) x (item_attributes ctxt) x.pvb_attributes
   in
   match l with
   | [] -> ()
-  | [x] -> binding "let" rf f x
+  | [x] -> binding fst_kwd rf f x
   | x::xs ->
       pp f "@[<v>%a@,%a@]"
-        (binding "let" rf) x
+        (binding fst_kwd rf) x
         (list ~sep:"@," (binding "and" Nonrecursive)) xs
 
 and binding_op ctxt f x =
@@ -1567,18 +1595,25 @@ and structure_item ctxt f x =
         (item_attributes ctxt) attrs
   | Pstr_type (_, []) -> assert false
   | Pstr_type (rf, l)  -> type_def_list ctxt f (rf, true, l)
-  | Pstr_value (rf, l) ->
+  | Pstr_value (rf, Value, l) ->
       (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
-      pp f "@[<2>%a@]" (bindings ctxt) (rf,l)
+      pp f "@[<2>%a@]" (bindings "let" ctxt) (rf,l)
+  | Pstr_value (rf, Macro, l) ->
+      (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
+      pp f "@[<2>%a@]" (bindings "macro" ctxt) (rf,l)
   | Pstr_typext te -> type_extension ctxt f te
   | Pstr_exception ed -> exception_declaration ctxt f ed
   | Pstr_module x ->
       let rec module_helper = function
-        | {pmod_desc=Pmod_functor(arg_opt,me'); pmod_attributes = []} ->
-            begin match arg_opt with
-            | Unit -> pp f "()"
-            | Named (s, mt) ->
+        | {pmod_desc=Pmod_functor(kind,arg_opt,me'); pmod_attributes = []} ->
+            begin match kind, arg_opt with
+            | Plain, Unit -> pp f "()"
+            | Plain, Named (s, mt) ->
               pp f "(%s:%a)" (Option.value s.txt ~default:"_")
+                (module_type ctxt) mt
+            | Template, Unit -> pp f "[] "
+            | Template, Named (s, mt) ->
+              pp f "[%s:%a] " (Option.value s.txt ~default:"_")
                 (module_type ctxt) mt
             end;
             module_helper me'

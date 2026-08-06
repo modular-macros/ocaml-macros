@@ -29,10 +29,222 @@ open Debuginfo.Scoped_location
 type error =
     Free_super_var
   | Unreachable_reached
+  | Objects_in_staged_code
 
 exception Error of Location.t * error
 
+let check_no_objects (e : Typedtree.expression) =
+  let expr iter (e : Typedtree.expression) =
+    (match e.exp_desc with
+     | Texp_object _ | Texp_new _ | Texp_instvar _
+     | Texp_setinstvar _ | Texp_override _ ->
+         raise (Error (e.exp_loc, Objects_in_staged_code))
+     | _ -> ());
+    Tast_iterator.default_iterator.expr iter e
+  in
+  let iter = { Tast_iterator.default_iterator with expr } in
+  iter.expr iter e
+
 let use_dup_for_constant_mutable_arrays_bigger_than = 4
+
+type splice_source =
+  | Splices_in_place of (Typedtree.expression -> lambda)
+  | Splices_in_slots of (int -> Typedtree.expression -> lambda)
+
+let splice_source = ref (None : splice_source option)
+
+let set_splice_source src =
+  splice_source := src
+
+let with_splice_source src f =
+  let saved = !splice_source in
+  splice_source := src;
+  Fun.protect ~finally:(fun () -> splice_source := saved) f
+
+type macro_env =
+  { me_param : Ident.t;
+    me_index : (Ident.t * int list) list }
+
+let macro_env = ref (None : macro_env option)
+
+let quotation_depth = ref 0
+let in_quotation () = !quotation_depth > 0
+let in_macro_body () = !macro_env <> None
+
+let with_macro_env me f =
+  let saved = !macro_env in
+  macro_env := me;
+  Fun.protect ~finally:(fun () -> macro_env := saved) f
+
+let defining_macros = ref Ident.Set.empty
+
+let defining_macro_fns = ref Ident.Map.empty
+
+let with_defining_macros ?(fns = Ident.Map.empty) ids f =
+  let saved = !defining_macros in
+  let saved_fns = !defining_macro_fns in
+  defining_macros := ids;
+  defining_macro_fns := fns;
+  Fun.protect
+    ~finally:(fun () ->
+      defining_macros := saved;
+      defining_macro_fns := saved_fns)
+    f
+
+let is_macro_ref path desc =
+  Types.val_is_macro desc
+  || (match (path : Path.t) with
+      | Pident id -> Ident.Set.mem id !defining_macros
+      | _ -> false)
+
+let toplevel_mode = ref false
+
+let with_toplevel_mode f =
+  let saved = !toplevel_mode in
+  toplevel_mode := true;
+  Fun.protect ~finally:(fun () -> toplevel_mode := saved) f
+
+let in_toplevel () = !toplevel_mode
+
+type native_slot_layout =
+  { nsl_module : Ident.t;
+    nsl_pos : Ident.t -> int option }
+
+let native_slot_layout = ref (None : native_slot_layout option)
+
+let with_native_slot_layout l f =
+  let saved = !native_slot_layout in
+  native_slot_layout := l;
+  Fun.protect ~finally:(fun () -> native_slot_layout := saved) f
+
+let current_native_slot_layout () = !native_slot_layout
+
+let rec name_slots_through_block nsl lam =
+  match lam with
+  | Lvar r ->
+      begin match nsl.nsl_pos r with
+      | Some pos ->
+          Lprim (Pfield (pos, Pointer, Immutable),
+                 [Lprim (Pgetglobal nsl.nsl_module, [], Loc_unknown)],
+                 Loc_unknown)
+      | None -> lam
+      end
+  | Lsplice _ ->
+      lam
+  | _ -> Lambda.shallow_map (name_slots_through_block nsl) lam
+
+let template_batch_idents = ref (None : Ident.Set.t option)
+
+let with_template_batch_idents s f =
+  let saved = !template_batch_idents in
+  template_batch_idents := s;
+  Fun.protect ~finally:(fun () -> template_batch_idents := saved) f
+
+let current_template_batch_idents () = !template_batch_idents
+
+let in_template_batch_set id =
+  match !template_batch_idents with
+  | Some s -> Ident.Set.mem id s
+  | None -> false
+
+let toplevel_template_modules = ref Ident.Set.empty
+
+let reset_toplevel_template_modules () =
+  toplevel_template_modules := Ident.Set.empty
+
+let register_toplevel_template_module id =
+  toplevel_template_modules :=
+    Ident.Set.add id !toplevel_template_modules
+
+let is_toplevel_template_module id =
+  Ident.Set.mem id !toplevel_template_modules
+
+let toplevel_template_macro_transl =
+  ref ((fun _ _ _ -> assert false)
+       : scoped_location -> Env.t -> Path.t -> lambda)
+
+let rec address_root = function
+  | Env.Aident id -> id
+  | Env.Adot (a, _) -> address_root a
+
+let value_address_root path env =
+  match Env.find_value_address path env with
+  | addr -> Some (address_root addr)
+  | exception Not_found -> None
+
+let toplevel_template_macro_root path env =
+  match value_address_root path env with
+  | Some r when Ident.Set.mem r !toplevel_template_modules -> Some r
+  | _ -> None
+
+let toplevel_table_macro_root path env =
+  !toplevel_mode
+  && toplevel_template_macro_root path env = None
+  && (match value_address_root path env with
+      | Some r ->
+          not (Ident.global r)
+          && (match !template_batch_idents with
+              | Some s -> not (Ident.Set.mem r s)
+              | None -> true)
+      | None ->
+          (match !template_batch_idents, (path : Path.t) with
+           | Some s, Pident id -> not (Ident.Set.mem id s)
+           | _ -> true))
+
+let batch_macro_context path env =
+  not !toplevel_mode
+  || (match value_address_root path env with
+      | Some r when Ident.global r -> true
+      | root ->
+          (match !template_batch_idents with
+           | None -> false
+           | Some s ->
+               (match root with
+                | Some r -> Ident.Set.mem r s
+                | None ->
+                    (match (path : Path.t) with
+                     | Pident id -> Ident.Set.mem id s
+                     | _ -> false))))
+
+let captured_index me h =
+  List.find_map
+    (fun (h', i) -> if Ident.same h h' then Some i else None)
+    me.me_index
+
+let rec project_captured me lam =
+  match lam with
+  | Lvar h ->
+      begin match captured_index me h with
+      | Some path ->
+          List.fold_right
+            (fun i acc ->
+               Lprim (Pfield (i, Pointer, Immutable), [acc], Loc_unknown))
+            path
+            (Lsplice (Lvar me.me_param))
+      | None -> lam
+      end
+  | Lsplice _ -> lam
+  | _ -> Lambda.shallow_map (project_captured me) lam
+
+let template_slot_index =
+  ref (None : (Ident.t * Ident.t) list option)
+
+let with_template_slot_index idx f =
+  let saved = !template_slot_index in
+  template_slot_index := idx;
+  Fun.protect ~finally:(fun () -> template_slot_index := saved) f
+
+let rec route_template_slots idx lam =
+  match lam with
+  | Lvar r ->
+      (match
+         List.find_map
+           (fun (r', c) -> if Ident.same r r' then Some c else None) idx
+       with
+       | Some code_param -> Lsplice (Lvar code_param)
+       | None -> lam)
+  | Lsplice _ -> lam
+  | _ -> Lambda.shallow_map (route_template_slots idx) lam
 
 (* Forward declaration -- to be filled in by Translmod.transl_module *)
 let transl_module =
@@ -175,6 +387,71 @@ let transl_ident loc env ty path desc =
       Translprim.transl_primitive loc p env ty (Some path)
   | Val_anc _ ->
       raise(Error(to_location loc, Free_super_var))
+  | Val_reg | Val_self _
+    when !toplevel_mode && is_macro_ref path desc
+         && toplevel_template_macro_root path env <> None ->
+      !toplevel_template_macro_transl loc env path
+  | Val_reg | Val_self _
+    when is_macro_ref path desc && toplevel_table_macro_root path env ->
+      let defining_group_call =
+        match !macro_env, (path : Path.t) with
+        | Some me, Pident id when Ident.Set.mem id !defining_macros ->
+            Some (Lvar (Ident.Map.find id !defining_macro_fns),
+                  Lvar me.me_param)
+        | _ -> None
+      in
+      let func, env_arg =
+        match defining_group_call with
+        | Some (func, env_arg) -> func, env_arg
+        | None ->
+            let pair = transl_value_path loc env path in
+            let func =
+              Lprim (Pfield (0, Pointer, Immutable), [pair], loc)
+            in
+            let access =
+              Lprim (Pfield (1, Pointer, Immutable), [pair], Loc_unknown)
+            in
+            let access =
+              match !macro_env with
+              | Some me -> project_captured me access
+              | None -> access
+            in
+            (func, Translquote.quote_access access)
+      in
+      Lapply { ap_func = func; ap_args = [env_arg]; ap_loc = loc;
+               ap_tailcall = Default_tailcall;
+               ap_inlined = Default_inline;
+               ap_specialised = Default_specialise }
+  | Val_reg | Val_self _
+    when batch_macro_context path env && is_macro_ref path desc ->
+      let func = transl_value_path loc env path in
+      let env_arg =
+        match !macro_env, (path : Path.t) with
+        | Some me, Pident id when Ident.Set.mem id !defining_macros ->
+            Lvar me.me_param
+        | (Some _ | None), _ ->
+            let access = transl_value_env_path Loc_unknown env path in
+            let access =
+              match !macro_env with
+              | Some me -> project_captured me access
+              | None -> access
+            in
+            let access =
+              match !template_slot_index with
+              | Some idx -> route_template_slots idx access
+              | None -> access
+            in
+            let access =
+              match !native_slot_layout with
+              | Some nsl -> name_slots_through_block nsl access
+              | None -> access
+            in
+            Translquote.quote_access access
+      in
+      Lapply { ap_func = func; ap_args = [env_arg]; ap_loc = loc;
+               ap_tailcall = Default_tailcall;
+               ap_inlined = Default_inline;
+               ap_specialised = Default_specialise }
   | Val_reg | Val_self _ ->
       transl_value_path loc env path
   |  _ -> fatal_error "Translcore.transl_exp: bad Texp_ident"
@@ -571,6 +848,41 @@ and transl_exp0 ~in_new_scope ~scopes e =
   | Texp_letop{let_; ands; param; body; partial} ->
       event_after ~scopes e
         (transl_letop ~scopes e.exp_loc e.exp_env let_ ands param body partial)
+  | Texp_quote e ->
+    check_no_objects e;
+    let body =
+      incr quotation_depth;
+      Fun.protect ~finally:(fun () -> decr quotation_depth)
+        (fun () -> transl_exp ~scopes e)
+    in
+    let body =
+      match !macro_env with
+      | Some me -> project_captured me body
+      | None -> body
+    in
+    let body =
+      match !native_slot_layout with
+      | Some nsl -> name_slots_through_block nsl body
+      | None -> body
+    in
+    Translquote.quote_expression body
+  | Texp_splice { spl_index = None; spl_exp = e } ->
+     Lsplice
+       (if !quotation_depth > 0 then begin
+          decr quotation_depth;
+          Fun.protect ~finally:(fun () -> incr quotation_depth)
+            (fun () -> transl_exp ~scopes e)
+        end
+        else transl_exp ~scopes e)
+  | Texp_splice { spl_exp; spl_index = Some idx } ->
+    begin
+      match !splice_source with
+      | Some (Splices_in_place thunk) ->
+          Lsplice (thunk spl_exp)
+      | Some (Splices_in_slots hole) ->
+          Lsplice (hole idx spl_exp)
+      | None -> Misc.fatal_error "Translcore: splice source is not initialized"
+    end
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
   | Texp_struct_item (si, e) ->
@@ -1329,6 +1641,10 @@ let report_error_doc ppf = function
         "Ancestor names can only be used to select inherited methods"
   | Unreachable_reached ->
       fprintf ppf "Unreachable expression was reached"
+  | Objects_in_staged_code ->
+      fprintf ppf
+        "Objects and classes are not yet supported in quotations,@ \
+         or in compile-time code (the body of a macro or of a splice)."
 
 let () =
   Location.register_error_of_exn

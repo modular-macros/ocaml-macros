@@ -33,8 +33,18 @@ type error =
   | Not_an_object_file of string
   | Illegal_renaming of compunit * string * compunit
   | File_not_found of string
+  | Macro_member of string
 
 exception Error of error
+
+let check_no_macro_members initial_env files =
+  List.iter
+    (fun file ->
+       let artifact = Unit_info.Artifact.from_filename file in
+       let sg = Env.read_signature (Unit_info.companion_cmi artifact) in
+       if Mtype.has_macro_components initial_env (Types.Mty_signature sg) then
+         raise (Error (Macro_member file)))
+    files
 
 type mapped_compunit = {
   packed_modname : compunit; (** qualified name of the compilation unit *)
@@ -317,7 +327,9 @@ let package_object_files ~ppf_dump files target coercion =
           (Compunit.Set.elements required_compunits);
         cu_force_link = force_link;
         cu_debug = if pos_final > pos_debug then pos_debug else 0;
-        cu_debugsize = pos_final - pos_debug } in
+        cu_debugsize = pos_final - pos_debug;
+        cu_static_archives =
+          List.rev_map Filename.basename !Clflags.static_use } in
     Emitcode.marshal_to_channel_with_possibly_32bit_compat
       ~filename:targetfile ~kind:"bytecode unit"
       oc compunit;
@@ -334,6 +346,7 @@ let package_files ~ppf_dump initial_env files targetfile =
          with Not_found -> raise(Error(File_not_found f)))
       files in
   let target = Unit_info.Artifact.from_filename targetfile in
+  check_no_macro_members initial_env files;
   Misc.try_finally (fun () ->
       let coercion =
         Typemod.package_units initial_env files (Unit_info.companion_cmi target)
@@ -368,10 +381,21 @@ let report_error_doc ppf = function
   | File_not_found file ->
       fprintf ppf "File %a not found"
         Style.inline_code file
+  | Macro_member file ->
+      fprintf ppf
+        "%a defines macros or template functors,@ and %a copies only \
+         run-time objects,@ so the packed unit's compile-time components \
+         could never be resolved.@ A macro-bearing unit cannot be a \
+         member of a pack."
+        Location.Doc.quoted_filename file
+        Style.inline_code "-pack"
 
 let () =
   Location.register_error_of_exn
     (function
+      | Error (Macro_member file as err) ->
+          Some (Location.error_of_printer ~loc:(Location.in_file file)
+                  report_error_doc err)
       | Error err -> Some (Location.error_of_printer_file report_error_doc err)
       | _ -> None
     )
