@@ -519,8 +519,12 @@ rule token = parse
       { LESSLESS }
   | ">>"
       { GREATERGREATER }
-  | "$"
-      { DOLLAR }
+  | "$("
+      { DOLLARLPAREN }
+  | "$" (lowercase identchar * as name)
+      { DOLLARLIDENT name }
+  | "$" (uppercase identchar * as name)
+      { DOLLARUIDENT name }
   | "~"
       { TILDE }
   | ".~"

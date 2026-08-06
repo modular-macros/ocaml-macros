@@ -981,7 +981,7 @@ and expression ctxt f x =
     | Pexp_quote e ->
         pp f "@[<2><<@ %a@ >>@]" (expression ctxt)  e
     | Pexp_splice e ->
-        pp f "@[<2>$%a@]" (simple_expr ctxt) e
+        pp f "@[<2>$(%a)@]" (expression ctxt) e
     | Pexp_extension e -> extension ctxt f e
     | Pexp_unreachable -> pp f "."
     | Pexp_struct_item (si, e) ->

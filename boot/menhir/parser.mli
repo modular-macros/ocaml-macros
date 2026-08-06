@@ -109,7 +109,9 @@ type token =
   | DOTDOT
   | DOT
   | DONE
-  | DOLLAR
+  | DOLLARUIDENT of (string)
+  | DOLLARLPAREN
+  | DOLLARLIDENT of (string)
   | DOCSTRING of (Docstrings.docstring)
   | DO
   | CONSTRAINT
