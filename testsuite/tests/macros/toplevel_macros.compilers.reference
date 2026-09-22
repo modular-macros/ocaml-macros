@@ -1,0 +1,15 @@
+$gen pow : int -> int expr -> int expr = <fun>
+val cube : int -> int = <fun>
+- : int = 27
+$gen succ_of : int expr -> int expr = <fun>
+val a : int = 11
+val b : int = 21
+- : int * int = (11, 21)
+$gen seven : unit -> int expr = <fun>
+val v : int = 7
+module F : sig $gen five : unit -> int expr val x : int end
+- : int = 5
+$gen noisy : unit -> int expr = <fun>
+[compile-time]
+val n : int = 3
+

@@ -90,6 +90,7 @@ STDLIB_MODULE_BASENAMES = \
   format \
   scanf \
   callback \
+  camlinternalLam \
   camlinternalOO \
   oo \
   camlinternalMod \
@@ -104,7 +105,9 @@ STDLIB_MODULE_BASENAMES = \
   stringLabels \
   moreLabels \
   stdLabels \
-  effect
+  effect \
+  camlinternalQuote \
+  expr
 
 STDLIB_PREFIXED_MODULES = \
   $(filter-out stdlib camlinternal%, $(STDLIB_MODULE_BASENAMES))

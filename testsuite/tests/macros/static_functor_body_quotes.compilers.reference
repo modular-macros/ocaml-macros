@@ -1,0 +1,9 @@
+File "static_functor_body_quotes.ml", line 13, characters 2-24:
+13 |   $let q = << X.v + 1 >>
+       ^^^^^^^^^^^^^^^^^^^^^^
+Error: The quotations in this static binding capture X,
+       a run-time name of the enclosing module or functor.
+       A static value's quotations may only name run-time values
+       of other compilation units (global values).
+       To close over local run-time names, use a generator ($gen):
+       its environment is delivered wherever the generator is called.

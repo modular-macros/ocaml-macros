@@ -203,6 +203,10 @@ let stamp = function
   | Unscoped us -> Unscoped.stamp us
   | _ -> 0
 
+let reserve_stamp id =
+  let s = stamp id in
+  if s > !currentstamp then currentstamp := s
+
 let equiv id_pairs i1 i2 =
   match i1, i2 with
   | Local { stamp = s1; _ }, Local { stamp = s2; _ }

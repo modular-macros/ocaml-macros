@@ -32,35 +32,30 @@ let to_bytecode i Typedtree.{structure; coercion; _} =
   (structure, coercion)
   |> Profile.(record transl)
     (Translmod.transl_implementation (Unit_info.modname i.target))
-  |> Profile.(record ~accumulate:true generate)
-    (fun { Lambda.code = lambda; required_globals } ->
+  |> (fun { Lambda.code = lambda; required_globals } ->
        lambda
        |> print_if i.ppf_dump Clflags.dump_rawlambda Printlambda.lambda
        |> Simplif.simplify_lambda
        |> print_if i.ppf_dump Clflags.dump_lambda Printlambda.lambda
-       |> Bytegen.compile_implementation (Unit_info.modname i.target)
-       |> print_if i.ppf_dump Clflags.dump_instr Printinstr.instrlist
-       |> fun bytecode -> bytecode, required_globals
+       |> fun lambda -> lambda, required_globals
     )
 
-let emit_bytecode i (bytecode, required_globals) =
-  let cmo = Unit_info.cmo i.target in
-  let oc = open_out_bin (Unit_info.Artifact.filename cmo) in
-  Misc.try_finally
-    ~always:(fun () -> close_out oc)
-    ~exceptionally:(fun () ->
-       Misc.remove_file (Unit_info.Artifact.filename cmo)
-    )
+let emit_bytecode i (lambda, required_globals) =
+  Profile.(record ~accumulate:true generate)
     (fun () ->
-       bytecode
-       |> Profile.(record ~accumulate:true generate)
-         (Emitcode.to_file oc cmo ~required_globals);
-    )
+       Emit_cmo.to_cmo
+         ~source_file:(Unit_info.source_file i.target)
+         ~prefix:(Unit_info.prefix i.target)
+         ~imports:(Env.imports ())
+         ~flags:(Clflags.emitter_flags ())
+         ~primitives:!Translmod.primitive_declarations
+         ~required_globals lambda)
+    ()
 
 let implementation ~start_from ~source_file ~output_prefix =
   let backend info typed =
-    let bytecode = to_bytecode info typed in
-    emit_bytecode info bytecode
+    Static_link.implementation ~native:false info typed
+      ~fallback:(fun () -> emit_bytecode info (to_bytecode info typed))
   in
   let unit_info = Unit_info.make ~source_file Impl output_prefix in
   with_info ~dump_ext:"cmo" unit_info @@ fun info ->

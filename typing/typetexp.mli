@@ -112,6 +112,8 @@ type forward_decl = {
     'a. Location.t -> Env.t -> Types.module_type ->
         'a maybe_compute_mty ->
         (Longident.t Asttypes.loc * Typedtree.core_type) list -> 'a;
+  mutable check_package_level : (* from Typemod *)
+    Location.t -> Env.t -> Types.module_type -> unit;
 }
 
 val forward_decl : forward_decl

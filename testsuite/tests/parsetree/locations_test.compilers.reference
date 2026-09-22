@@ -107,11 +107,11 @@ Ptop_def
     structure_item (//toplevel//[4,17+0]..[4,17+50])
       Pstr_modtype "F" (//toplevel//[4,17+12]..[4,17+13])
         module_type (//toplevel//[4,17+24]..[4,17+50])
-          Pmty_functor "A" (//toplevel//[4,17+25]..[4,17+26])
+          Pmty_functor Plain "A" (//toplevel//[4,17+25]..[4,17+26])
           module_type (//toplevel//[4,17+29]..[4,17+30])
             Pmty_ident "S" (//toplevel//[4,17+29]..[4,17+30])
           module_type (//toplevel//[4,17+32]..[4,17+50])
-            Pmty_functor "B" (//toplevel//[4,17+33]..[4,17+34])
+            Pmty_functor Plain "B" (//toplevel//[4,17+33]..[4,17+34])
             module_type (//toplevel//[4,17+37]..[4,17+38])
               Pmty_ident "S" (//toplevel//[4,17+37]..[4,17+38])
             module_type (//toplevel//[4,17+43]..[4,17+50])
@@ -126,11 +126,11 @@ Ptop_def
       Pstr_module
       "F" (//toplevel//[2,1+7]..[2,1+8])
         module_expr (//toplevel//[2,1+19]..[2,1+48])
-          Pmod_functor "A" (//toplevel//[2,1+20]..[2,1+21])
+          Pmod_functor Plain "A" (//toplevel//[2,1+20]..[2,1+21])
           module_type (//toplevel//[2,1+24]..[2,1+25])
             Pmty_ident "S" (//toplevel//[2,1+24]..[2,1+25])
           module_expr (//toplevel//[2,1+27]..[2,1+48])
-            Pmod_functor "B" (//toplevel//[2,1+28]..[2,1+29])
+            Pmod_functor Plain "B" (//toplevel//[2,1+28]..[2,1+29])
             module_type (//toplevel//[2,1+32]..[2,1+33])
               Pmty_ident "S" (//toplevel//[2,1+32]..[2,1+33])
             module_expr (//toplevel//[2,1+38]..[2,1+48])
@@ -221,7 +221,7 @@ module type T1 = sig end
 Ptop_def
   [
     structure_item (//toplevel//[4,29+0]..[4,29+15])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[4,29+4]..[4,29+5])
@@ -240,7 +240,7 @@ val x : int = 3
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[2,1+35])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -275,7 +275,7 @@ val x : 'a -> 'a = <fun>
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[5,61+3])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -336,7 +336,7 @@ Ptop_def
 Ptop_def
   [
     structure_item (//toplevel//[4,17+0]..[4,17+29])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[4,17+4]..[4,17+5])
@@ -367,7 +367,7 @@ val x : 'a -> 'a ref = <fun>
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[2,1+30])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -394,7 +394,7 @@ val x : int ref = {contents = 3}
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[2,1+35])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -430,7 +430,7 @@ val x : int -> int ref = <fun>
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[2,1+41])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -459,7 +459,7 @@ val x : 'a ref -> 'a = <fun>
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[2,1+47])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -493,7 +493,7 @@ val x : int ref -> int = <fun>
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[2,1+44])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -527,7 +527,7 @@ val x : int ref -> int = <fun>
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[3,9+50])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -579,7 +579,7 @@ Ptop_def
 Ptop_def
   [
     structure_item (//toplevel//[4,19+0]..[4,19+26])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[4,19+4]..[4,19+5])
@@ -607,7 +607,7 @@ val x : int ref = {contents = 3}
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[2,1+18])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -654,7 +654,7 @@ val x : int list = [3; 4]
 Ptop_def
   [
     structure_item (//toplevel//[2,1+0]..[2,1+18])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[2,1+4]..[2,1+5])
@@ -687,7 +687,7 @@ val x : int = 4
 Ptop_def
   [
     structure_item (//toplevel//[6,56+0]..[6,56+24])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[6,56+4]..[6,56+12])
@@ -724,7 +724,7 @@ Ptop_def
                 ]
       ]
     structure_item (//toplevel//[7,81+0]..[7,81+32])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[7,81+4]..[7,81+14])
@@ -778,7 +778,7 @@ Ptop_def
                 ]
       ]
     structure_item (//toplevel//[8,114+0]..[8,114+25])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[8,114+4]..[8,114+13])
@@ -815,7 +815,7 @@ Ptop_def
                 ]
       ]
     structure_item (//toplevel//[9,140+0]..[9,140+33])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[9,140+4]..[9,140+15])
@@ -869,7 +869,7 @@ Ptop_def
                 ]
       ]
     structure_item (//toplevel//[10,174+0]..[10,174+25])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[10,174+4]..[10,174+13])
@@ -906,7 +906,7 @@ Ptop_def
                 ]
       ]
     structure_item (//toplevel//[11,200+0]..[11,200+33])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[11,200+4]..[11,200+15])
@@ -1126,7 +1126,7 @@ Ptop_def
 Ptop_def
   [
     structure_item (//toplevel//[4,28+0]..[4,28+37])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[4,28+4]..[4,28+5])
@@ -1200,7 +1200,7 @@ class type ct = object  end
 Ptop_def
   [
     structure_item (//toplevel//[5,56+0]..[6,64+4])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
             attribute "ocaml.doc"
@@ -1234,7 +1234,7 @@ val x : int = 42
 Ptop_def
   [
     structure_item (//toplevel//[3,56+0]..[3,56+31])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[3,56+4]..[3,56+5])
@@ -1264,7 +1264,7 @@ val x : < f : int > = <obj>
 Ptop_def
   [
     structure_item (//toplevel//[1,0+0]..[1,0+35])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[1,0+4]..[1,0+5])
@@ -1296,7 +1296,7 @@ val x : int = 1
 Ptop_def
   [
     structure_item (//toplevel//[1,0+0]..[1,0+36])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[1,0+4]..[1,0+5])
@@ -1329,7 +1329,7 @@ val x : < f : int > option = Some <obj>
 Ptop_def
   [
     structure_item (//toplevel//[1,0+0]..[1,0+40])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[1,0+4]..[1,0+5])
@@ -1457,7 +1457,7 @@ Ptop_def
 Ptop_def
   [
     structure_item (//toplevel//[3,66+0]..[5,98+12])
-      Pstr_value Nonrec
+      Pstr_value Nonrec Value
       [
         <def>
           pattern (//toplevel//[3,66+4]..[3,66+5])

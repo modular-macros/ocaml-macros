@@ -44,6 +44,10 @@ exception Error of error * Location.t
 
 let all_keywords =
   let v5_3 = Some (5,3) in
+  (* The fork's binding keywords are $-prefixed single tokens
+     ($let/$val/$gen), lexed above the keyword table, so the table
+     carries no fork-specific entries: every spelling here is either
+     an upstream keyword or an ordinary identifier at every version. *)
   let v1_0 = Some (1,0) in
   let v1_6 = Some (1,6) in
   let v4_2 = Some (4,2) in
@@ -85,7 +89,7 @@ let all_keywords =
     "of", OF, always;
     "open", OPEN, always;
     "or", OR, always;
-(*  "parser", PARSER; *)
+  (*  "parser", PARSER; *)
     "private", PRIVATE, v1_0;
     "rec", REC, always;
     "sig", SIG, always;
@@ -447,7 +451,6 @@ let () =
       | _ ->
           None
     )
-
 }
 
 let newline = ('\013'* '\010')
@@ -512,6 +515,28 @@ rule token = parse
       { token lexbuf }
   | "_"
       { UNDERSCORE }
+  | "<<"
+      { LESSLESS }
+  | ">>"
+      { GREATERGREATER }
+  | "$("
+      { DOLLARLPAREN }
+  | "$" (lowercase identchar * as s)
+      { (* Splices and the $-prefixed binding keywords are single
+           tokens, glued to the dollar: $x and $(e) splice, $let and
+           $val bind.  A dollar NOT glued to a letter or an opening
+           parenthesis falls through to the operator rules below, so
+           ( $ ) is an ordinary infix operator again, at the cost of
+           the whitespace sensitivity -- the Template Haskell
+           convention.  (After Olivier Nicole's 458833fb4a on the
+           ocaml-macros prototype.) *)
+        match s with
+        | "let" -> DOLLARLET
+        | "val" -> DOLLARVAL
+        | "gen" -> DOLLARGEN
+        | _ -> DOLLARLIDENT s }
+  | "$" (uppercase identchar * as s)
+      { DOLLARUIDENT s }
   | "~"
       { TILDE }
   | ".~"

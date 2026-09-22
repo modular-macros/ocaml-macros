@@ -32,8 +32,13 @@ type value_mismatch =
   | Primitive_mismatch of primitive_mismatch
   | Not_a_primitive
   | Type of Errortrace.moregen_error
+  | Staging_level_mismatch
+  | Staging_world_mismatch
+  | Runtime_value_in_compile_time_package
 
 exception Dont_match of value_mismatch
+
+val pack_relativity : (int * int) option ref
 
 (* Documents which kind of private thing would be revealed *)
 type privacy_mismatch =

@@ -4179,7 +4179,7 @@ let rec map_return f = function
           loc )
   | (Lstaticraise _ | Lprim (Praise _, _, _)) as l -> l
   | ( Lvar _ | Lmutvar _ | Lconst _ | Lapply _ | Lfunction _ | Lsend _ | Lprim _
-    | Lwhile _ | Lfor _ | Lassign _ | Lifused _ ) as l ->
+    | Lwhile _ | Lfor _ | Lassign _ | Lifused _ | Lsplice _ ) as l ->
       f l
 
 (* The 'opt' reference indicates if the optimization is worthy.

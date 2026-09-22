@@ -57,6 +57,7 @@ type token =
   | LETOP of (string)
   | LET
   | LESSMINUS
+  | LESSLESS
   | LESS
   | LBRACKETPERCENTPERCENT
   | LBRACKETPERCENT
@@ -86,6 +87,7 @@ type token =
   | HASH
   | GREATERRBRACKET
   | GREATERRBRACE
+  | GREATERGREATER
   | GREATER
   | FUNCTOR
   | FUNCTION
@@ -106,6 +108,12 @@ type token =
   | DOTDOT
   | DOT
   | DONE
+  | DOLLARVAL
+  | DOLLARUIDENT of (string)
+  | DOLLARLPAREN
+  | DOLLARLIDENT of (string)
+  | DOLLARLET
+  | DOLLARGEN
   | DOCSTRING of (Docstrings.docstring)
   | DO
   | CONSTRAINT

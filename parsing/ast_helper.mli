@@ -194,6 +194,8 @@ module Exp:
                -> expression
     val letop: ?loc:loc -> ?attrs:attrs -> binding_op
                -> binding_op list -> expression -> expression
+    val quote : ?loc:loc -> ?attrs:attrs -> expression -> expression
+    val splice : ?loc:loc -> ?attrs:attrs -> expression -> expression
     val extension: ?loc:loc -> ?attrs:attrs -> extension -> expression
     val unreachable: ?loc:loc -> ?attrs:attrs -> unit -> expression
     val struct_item: ?loc:loc -> ?attrs:attrs -> structure_item -> expression
@@ -207,7 +209,7 @@ module Exp:
 module Val:
   sig
     val mk: ?loc:loc -> ?attrs:attrs -> ?docs:docs ->
-      ?prim:string list -> str -> core_type -> value_description
+      ?prim:string list -> macro_flag -> str -> core_type -> value_description
   end
 
 (** Type declarations *)
@@ -260,7 +262,7 @@ module Mty:
     val alias: ?loc:loc -> ?attrs:attrs -> lid -> module_type
     val signature: ?loc:loc -> ?attrs:attrs -> signature -> module_type
     val functor_: ?loc:loc -> ?attrs:attrs ->
-      functor_parameter -> module_type -> module_type
+      functor_kind -> functor_parameter -> module_type -> module_type
     val with_: ?loc:loc -> ?attrs:attrs -> module_type ->
       with_constraint list -> module_type
     val typeof_: ?loc:loc -> ?attrs:attrs -> module_expr -> module_type
@@ -276,10 +278,11 @@ module Mod:
     val ident: ?loc:loc -> ?attrs:attrs -> lid -> module_expr
     val structure: ?loc:loc -> ?attrs:attrs -> structure -> module_expr
     val functor_: ?loc:loc -> ?attrs:attrs ->
-      functor_parameter -> module_expr -> module_expr
-    val apply: ?loc:loc -> ?attrs:attrs -> module_expr -> module_expr ->
+      functor_kind -> functor_parameter -> module_expr -> module_expr
+    val apply: ?loc:loc -> ?attrs:attrs -> functor_kind -> module_expr ->
+      module_expr -> module_expr
+    val apply_unit: ?loc:loc -> ?attrs:attrs -> functor_kind -> module_expr ->
       module_expr
-    val apply_unit: ?loc:loc -> ?attrs:attrs -> module_expr -> module_expr
     val constraint_: ?loc:loc -> ?attrs:attrs -> module_expr -> module_type ->
       module_expr
     val unpack: ?loc:loc -> ?attrs:attrs -> expression -> module_expr
@@ -316,7 +319,8 @@ module Str:
     val mk: ?loc:loc -> structure_item_desc -> structure_item
 
     val eval: ?loc:loc -> ?attrs:attributes -> expression -> structure_item
-    val value: ?loc:loc -> rec_flag -> value_binding list -> structure_item
+    val value: ?loc:loc -> rec_flag -> macro_flag -> value_binding list ->
+      structure_item
     val primitive: ?loc:loc -> value_description -> structure_item
     val type_: ?loc:loc -> rec_flag -> type_declaration list -> structure_item
     val type_extension: ?loc:loc -> type_extension -> structure_item

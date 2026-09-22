@@ -25,6 +25,7 @@ type error =
   | Not_an_object_file of string
   | Illegal_renaming of Cmo_format.compunit * string * Cmo_format.compunit
   | File_not_found of string
+  | Macro_member of string
 
 exception Error of error
 

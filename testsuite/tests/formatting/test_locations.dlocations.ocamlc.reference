@@ -1,6 +1,6 @@
 [
   structure_item (test_locations.ml[17,534+0]..[19,572+34])
-    Pstr_value Rec
+    Pstr_value Rec Value
     [
       <def>
         pattern (test_locations.ml[17,534+8]..[17,534+11])

@@ -69,6 +69,11 @@ let print_cmo_infos cu =
         printf "YES\n";
         printf "Primitives declared in this module:\n";
         List.iter print_line l);
+  (match cu.cu_static_archives with
+   | [] -> ()
+   | l ->
+       printf "Static archives:\n";
+       List.iter print_line l);
   printf "Force link: %a\n" yesno_of_bool cu.cu_force_link
 
 let print_spaced_string s =

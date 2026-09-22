@@ -147,7 +147,7 @@ let structure_item sub {str_loc; str_desc; str_env; _} =
   sub.env sub str_env;
   match str_desc with
   | Tstr_eval   (exp, attrs) -> sub.expr sub exp; sub.attributes sub attrs
-  | Tstr_value  (rec_flag, list) -> sub.value_bindings sub (rec_flag, list)
+  | Tstr_value  (rec_flag, _, list) -> sub.value_bindings sub (rec_flag, list)
   | Tstr_primitive v -> sub.value_description sub v
   | Tstr_type (rec_flag, list) -> sub.type_declarations sub (rec_flag, list)
   | Tstr_typext te -> sub.type_extension sub te
@@ -388,6 +388,8 @@ let expr sub {exp_loc; exp_extra; exp_desc; exp_env; exp_attributes; _} =
       sub.binding_op sub l;
       List.iter (sub.binding_op sub) ands;
       sub.case sub body
+  | Texp_quote exp -> sub.expr sub exp
+  | Texp_splice { spl_exp = exp } -> sub.expr sub exp
   | Texp_unreachable -> ()
   | Texp_extension_constructor (lid, _) -> iter_loc_lid sub lid
   | Texp_struct_item (si, e) ->
@@ -444,7 +446,7 @@ let module_type sub {mty_loc; mty_desc; mty_env; mty_attributes; _} =
   | Tmty_ident (_, lid) -> iter_loc_lid sub lid
   | Tmty_alias (_, lid) -> iter_loc_lid sub lid
   | Tmty_signature sg -> sub.signature sub sg
-  | Tmty_functor (arg, mtype2) ->
+  | Tmty_functor (_, arg, mtype2) ->
       functor_parameter sub arg;
       sub.module_type sub mtype2
   | Tmty_with (mtype, list) ->
@@ -476,7 +478,7 @@ let open_declaration sub {open_loc; open_expr; open_env; open_attributes; _} =
 
 let module_coercion sub = function
   | Tcoerce_none -> ()
-  | Tcoerce_functor (c1,c2) ->
+  | Tcoerce_functor (_,c1,c2) ->
       sub.module_coercion sub c1;
       sub.module_coercion sub c2
   | Tcoerce_alias (env, _, c1) ->
@@ -496,14 +498,14 @@ let module_expr sub {mod_loc; mod_desc; mod_env; mod_attributes; _} =
   match mod_desc with
   | Tmod_ident (_, lid) -> iter_loc_lid sub lid
   | Tmod_structure st -> sub.structure sub st
-  | Tmod_functor (arg, mexpr) ->
+  | Tmod_functor (_, arg, mexpr) ->
       functor_parameter sub arg;
       sub.module_expr sub mexpr
-  | Tmod_apply (mexp1, mexp2, c) ->
+  | Tmod_apply (_, mexp1, mexp2, c) ->
       sub.module_expr sub mexp1;
       sub.module_expr sub mexp2;
       sub.module_coercion sub c
-  | Tmod_apply_unit mexp1 ->
+  | Tmod_apply_unit (_, mexp1) ->
       sub.module_expr sub mexp1;
   | Tmod_constraint (mexpr, _, Tmodtype_implicit, c) ->
       sub.module_expr sub mexpr;

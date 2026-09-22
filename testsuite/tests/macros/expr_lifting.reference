@@ -1,0 +1,27 @@
+t: 8
+unit: true
+bool: true false
+char: q
+uchar: 1F42B
+int: 42 -7
+int32: -3
+int64: 9000000000
+nativeint: 5
+float: 3.5 -0.125 true true
+string: lifted text
+complex: 1.5 -0.5
+option: 9 true
+list: 6 true
+either: 4 right
+result: 6 boom
+pair: 1 two
+iarray: 3 0 10 20 0
+iarray float: 0.5 1.5 true
+iarray fv: 21 42
+iarray reject: rejected
+func: 42
+unsafe_lift_constant: 1 two 3.5
+unsafe_lift_constant blocks: true 1.5 -0.5
+unsafe_lift_constant floats: 1.5 2.5 true 0.25
+unsafe_lift_constant bytes: seq
+unsafe_lift_constant reject: rejected

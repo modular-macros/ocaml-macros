@@ -1,0 +1,4 @@
+File "template_functor_generative.ml", line 22, characters 33-34:
+22 | let generative (x : A.s) : B.s = x
+                                      ^
+Error: The value x has type A.s but an expression was expected of type B.s

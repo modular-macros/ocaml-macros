@@ -115,6 +115,7 @@ type t =
   | Generative_application_expects_unit     (* 73 *)
   | Degraded_to_partial_match               (* 74 *)
   | Unnecessarily_partial_tuple_pattern     (* 75 *)
+  | Shifted_unreachable_components of string
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
    the numbers of existing warnings.
@@ -198,12 +199,13 @@ let number = function
   | Generative_application_expects_unit -> 73
   | Degraded_to_partial_match -> 74
   | Unnecessarily_partial_tuple_pattern -> 75
+  | Shifted_unreachable_components _ -> 76
 ;;
 (* DO NOT REMOVE the ;; above: it is used by
    the testsuite/ests/warnings/mnemonics.mll test to determine where
    the  definition of the number function above ends *)
 
-let last_warning_number = 75
+let last_warning_number = 76
 
 type description =
   { number : int;
@@ -552,6 +554,11 @@ let descriptions = [
     description = "A tuple pattern ends in .. but fully matches its expected \
                    type.";
     since = since 5 4 };
+  { number = 76;
+    names = ["shifted-unreachable-components"];
+    description = "A unit imported at staging level -1 has compile-time \
+                   components, unreachable below level -1.";
+    since = since 5 5 };
 ]
 
 let name_to_number =
@@ -1262,6 +1269,11 @@ let message = function
         "This tuple pattern@ unnecessarily@ ends in %a,@ as@ it@ explicitly@ \
          matches@ all@ components@ of@ its@ expected@ type."
         Style.inline_code ".."
+  | Shifted_unreachable_components s ->
+      msg
+        "unit %a,@ imported@ at@ staging@ level@ -1,@ has@ compile-time@ \
+         components;@ shifted@ below@ level@ -1@ they@ are@ unreachable."
+        Style.inline_code s
 ;;
 
 let nerrors = ref 0

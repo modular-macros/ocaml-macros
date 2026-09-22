@@ -1,0 +1,4 @@
+macro_depend.cmo : \
+    macro_depend_dir/macro_depend_lib.cmo
+macro_depend.cmx : \
+    macro_depend_dir/macro_depend_lib.cmx
