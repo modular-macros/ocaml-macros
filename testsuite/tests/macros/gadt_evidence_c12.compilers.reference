@@ -1,0 +1,4 @@
+File "gadt_evidence_c12.ml", line 21, characters 19-68:
+21 | let s : string = $(c12 (<< assert false >> : (int, string) eql expr))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The code built by this splice has a variable escaping a quotation's scope: evidence_equal.

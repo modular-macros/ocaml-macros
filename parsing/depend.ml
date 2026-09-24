@@ -258,6 +258,8 @@ let rec add_expr bv exp =
       let bv' = add_binding_op bv bv let_ in
       let bv' = List.fold_left (add_binding_op bv) bv' ands in
       add_expr bv' body
+  | Pexp_quote e -> add_expr bv e
+  | Pexp_splice e -> add_expr bv e
   | Pexp_extension (({ txt = ("ocaml.extension_constructor"|
                               "extension_constructor"); _ },
                      PStr [item]) as e) ->
@@ -327,7 +329,7 @@ and add_modtype bv mty =
     Pmty_ident l -> add bv l
   | Pmty_alias l -> add_module_path bv l
   | Pmty_signature s -> add_signature bv s
-  | Pmty_functor(param, mty2) ->
+  | Pmty_functor(_, param, mty2) ->
       let bv =
         match param with
         | Unit -> bv
@@ -458,7 +460,7 @@ and add_module_expr bv modl =
   match modl.pmod_desc with
     Pmod_ident l -> add_module_path bv l
   | Pmod_structure s -> ignore (add_structure bv s)
-  | Pmod_functor(param, modl) ->
+  | Pmod_functor(_, param, modl) ->
       let bv =
         match param with
         | Unit -> bv
@@ -469,10 +471,10 @@ and add_module_expr bv modl =
           | Some name -> String.Map.add name bound bv
       in
       add_module_expr bv modl
-  | Pmod_apply (mod1, mod2) ->
+  | Pmod_apply (_, mod1, mod2) ->
       add_module_expr bv mod1;
       add_module_expr bv mod2
-  | Pmod_apply_unit mod1 ->
+  | Pmod_apply_unit (_, mod1) ->
       add_module_expr bv mod1
   | Pmod_constraint(modl, mty) ->
       add_module_expr bv modl; add_modtype bv mty
@@ -521,7 +523,7 @@ and add_struct_item (bv, m) item : _ String.Map.t * _ String.Map.t =
   match item.pstr_desc with
     Pstr_eval (e, _attrs) ->
       add_expr bv e; (bv, m)
-  | Pstr_value(rf, pel) ->
+  | Pstr_value(rf, _, pel) ->
       let bv = add_bindings rf bv pel in (bv, m)
   | Pstr_primitive vd ->
       add_type bv vd.pval_type; (bv, m)

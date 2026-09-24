@@ -118,3 +118,7 @@ val prepend_dir : Dir.t -> unit
 val get_visible : unit -> Dir.t list
 (** Same as [get_paths ()], except that it returns a [Dir.t list], and doesn't
     include the -H paths. *)
+
+val set_stage_paths : static:string list -> run:string list -> unit
+val is_static_path : string -> bool
+val is_run_path : string -> bool

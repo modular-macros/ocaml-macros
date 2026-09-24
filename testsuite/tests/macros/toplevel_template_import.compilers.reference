@@ -1,0 +1,5 @@
+module V : sig val base : int $gen gen : unit -> int expr end
+module M : sig val v : int $gen m : unit -> int expr val w : int end
+- : int * int = (30, 35)
+val y : int = 31
+

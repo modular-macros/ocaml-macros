@@ -1,0 +1,22 @@
+module type S = sig end
+module type A = sig end
+module type B = sig end
+module type C = sig end
+module type OBJ = sig type t end
+module F : (X : S) -> sig end
+module G : [] sig end
+Line 3, characters 13-14:
+3 | module M = F[F[struct end]]
+                 ^
+Error: This is an ordinary functor. It must be applied as F(M).
+Line 3, characters 11-12:
+3 | module M = F[struct end][struct end]
+               ^
+Error: This is an ordinary functor. It must be applied as F(M).
+module type T = [[A] B] C
+Line 4, characters 49-51:
+4 | module type T = [X : OBJ with type t = < m : int >] B
+                                                     ^^
+Error: Syntax error
+module type T = [X : sig type t = < m : int > end] B
+

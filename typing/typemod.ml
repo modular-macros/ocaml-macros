@@ -46,6 +46,14 @@ type hiding_error =
       user_loc: Location.t;
     }
 
+type staged_context =
+  | In_quotation
+  | In_compile_time_code
+
+type pack_subject =
+  | Pack_run_module of Path.t
+  | Pack_other
+
 type error =
     Cannot_apply of module_type
   | Not_included of Includemod.explanation
@@ -80,6 +88,21 @@ type error =
   | Non_packable_local_modtype_subst of Path.t
   | With_cannot_remove_packed_modtype of Path.t * module_type
   | Cannot_alias of Path.t
+  | Definition_in_staged_code of staged_context
+  | Macro_is_not_function
+  | Macro_binds_not_one_name
+  | Macro_in_functor_argument
+  | Functor_kind_mismatch of functor_kind
+  | Macro_in_package
+  | Macro_in_abstract_modtype
+  | Macro_in_local_module
+  | Pack_in_compile_time_code of pack_subject
+  | Functor_in_compile_time_package of Ident.t
+  | Runtime_module_in_compile_time_code of Path.t option
+  | Static_in_toplevel_module
+  | Mixed_functor_in_recmodule
+  | Mixed_functor_in_toplevel
+  | Template_application_in_local_module
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -112,8 +135,12 @@ let extract_sig_open env loc mty =
 (* Compute the environment after opening a module *)
 
 let type_open_ ?used_slot ?toplevel ovf env loc lid =
-  let path = Env.lookup_module_path ~load:true ~loc:lid.loc lid.txt env in
-  match Env.open_signature ~loc ?used_slot ?toplevel ovf path env with
+  let path, stage_shift =
+    Env.lookup_module_path_with_shift ~load:true ~loc:lid.loc lid.txt env
+  in
+  match
+    Env.open_signature ~loc ?used_slot ?toplevel ~stage_shift ovf path env
+  with
   | Ok env -> path, env
   | Error _ ->
       let md = Env.find_module path env in
@@ -122,6 +149,7 @@ let type_open_ ?used_slot ?toplevel ovf env loc lid =
 
 let initial_env ~loc ~initially_opened_module
     ~open_implicit_modules =
+  Env.reset_stage_units ();
   let env = Env.initial in
   let open_module env m =
     let open Asttypes in
@@ -138,9 +166,17 @@ let initial_env ~loc ~initially_opened_module
       units
       env
   in
-  let units =
-    List.map Env.persistent_structures_of_dir (Load_path.get_visible ())
-  in
+  let dirs = Load_path.get_visible () in
+  let units = List.map Env.persistent_structures_of_dir dirs in
+  List.iter2
+    (fun d us ->
+       let path = Load_path.Dir.path d in
+       let none = Misc.Stdlib.String.Set.empty in
+       if Load_path.is_static_path path then
+         Env.register_stage_units ~static:us ~run:none;
+       if Load_path.is_run_path path then
+         Env.register_stage_units ~static:none ~run:us)
+    dirs units;
   let env, units =
     match initially_opened_module with
     | None -> (env, units)
@@ -162,7 +198,14 @@ let initial_env ~loc ~initially_opened_module
           | None ->
               (env, units)
           | Some (units_containing_m, other_units) ->
+              Env.register_stage_units
+                ~static:units_containing_m ~run:units_containing_m;
               (add_units env units_containing_m, other_units)
+        in
+        let env =
+          match Env.open_pers_signature ~stage_shift:(-1) m env with
+          | Ok env -> env
+          | Error `Not_found -> env
         in
         (open_module env m, units)
   in
@@ -194,6 +237,61 @@ let type_module_type_of_fwd :
     (Env.t -> Parsetree.module_expr ->
       Typedtree.module_expr * Types.module_type) ref
   = ref (fun _env _m -> assert false)
+
+let check_functor_argument_range loc env mty =
+  if Mtype.has_macro_components env mty then
+    raise (Error (loc, env, Macro_in_functor_argument))
+
+let check_plain_functor_range loc env kind ~arg =
+  match kind with
+  | Template -> ()
+  | Plain ->
+      (match arg with
+       | Types.Unit -> ()
+       | Types.Named (_, mty) -> check_functor_argument_range loc env mty)
+
+let rec relative_signature ambient sg =
+  if ambient = 0 then sg else
+  List.map
+    (function
+      | Sig_value (id, vd, vis) ->
+          Sig_value (id, { vd with val_staging_level =
+                                  vd.val_staging_level - ambient }, vis)
+      | Sig_module (id, pres, md, rs, vis) ->
+          Sig_module (id, pres,
+                      { md with md_type = relative_modtype ambient md.md_type },
+                      rs, vis)
+      | item -> item)
+    sg
+and relative_modtype ambient = function
+  | Mty_signature sg -> Mty_signature (relative_signature ambient sg)
+  | mty -> mty
+
+let check_definition_stage ?(flag = Asttypes.Value) loc env =
+  let mode = Env.get_env_mode env in
+  let level = Env.get_env_level env in
+  if mode = Types.M_Q || (level <> 0 && flag <> Asttypes.Value) then
+    let ctx =
+      match mode with
+      | Types.M_Q -> In_quotation
+      | Types.M_C | Types.M_S -> In_compile_time_code
+    in
+    raise (Error (loc, env, Definition_in_staged_code ctx))
+
+let check_macros_are_arrows env valbinds =
+  List.iter
+    (fun {vb_pat; vb_expr} ->
+      (match let_bound_idents [{vb_pat; vb_expr;
+                                vb_rec_kind = Dynamic;
+                                vb_attributes = []; vb_loc = vb_pat.pat_loc}]
+       with
+       | [_] -> ()
+       | _ -> raise (Error (vb_pat.pat_loc, env, Macro_binds_not_one_name)));
+      match vb_expr.exp_desc with
+      | Texp_function _ -> ()
+      | _ -> raise(Error(vb_expr.exp_loc, env, Macro_is_not_function))
+    )
+    valbinds
 
 (* Additional validity checks on type definitions arising from
    recursive modules *)
@@ -281,7 +379,7 @@ let iterator_with_env super env =
       env := env_before
     );
     Btype.it_module_type = (fun self -> function
-    | Mty_functor (param, mty_body) ->
+    | Mty_functor (_, param, mty_body) ->
       let env_before = !env in
       begin match param with
       | Unit -> ()
@@ -305,7 +403,7 @@ let retype_applicative_functor_type ~loc env funct arg =
   let mty_arg = (Env.find_module arg env).md_type in
   let mty_param =
     match Env.scrape_alias env mty_functor with
-    | Mty_functor (Named (_, mty_param), _) -> mty_param
+    | Mty_functor (_, Named (_, mty_param), _) -> mty_param
     | _ -> assert false (* could trigger due to MPR#7611 *)
   in
   Includemod.check_modtype_inclusion ~loc env mty_arg arg mty_param
@@ -851,7 +949,10 @@ module Merge = struct
             | Some previous_mty, false ->
                 let sig_env = Env.add_signature sg_for_env sig_env in
                 Includemod.check_modtype_equiv ~loc sig_env id previous_mty mty
-            | _, _ -> ()
+            | None, _ ->
+                if Mtype.has_macro_components env mty then
+                  raise (Error (loc, env, Macro_in_abstract_modtype))
+            | Some _, true -> ()
           in
           (* Create replacement item *)
           let new_item =
@@ -917,6 +1018,12 @@ module Merge = struct
   let () =
     Typetexp.forward_decl.check_package_with_type_constraints <-
       check_package_with_type_constraints
+
+  let check_package_level loc env mty =
+    if Mtype.has_macro_components env mty then
+      raise (Error (loc, env, Macro_in_package))
+
+  let () = Typetexp.forward_decl.check_package_level <- check_package_level
 
   (* Helper for handling constraints on signatures: destructive constraints,
      written with ":=", actually remove the field from the signature, whereas
@@ -987,7 +1094,7 @@ let rec approx_modtype env smty =
       Mty_alias(path)
   | Pmty_signature ssg ->
       Mty_signature(approx_sig env ssg)
-  | Pmty_functor(param, sres) ->
+  | Pmty_functor(kind, param, sres) ->
       let (param, newenv) =
         match param with
         | Unit -> Types.Unit, env
@@ -1004,7 +1111,7 @@ let rec approx_modtype env smty =
             Types.Named (Some id, arg), newenv
       in
       let res = approx_modtype newenv sres in
-      Mty_functor(param, res)
+      Mty_functor(kind, param, res)
   | Pmty_with(sbody, constraints) ->
       (* the module type body is approximated and resolved to a signature.*)
       let approx_body = approx_modtype env sbody in
@@ -1498,7 +1605,7 @@ and transl_modtype_aux env smty =
       let sg = transl_signature env ssg in
       mkmty (Tmty_signature sg) (Mty_signature sg.sig_type) env loc
         smty.pmty_attributes
-  | Pmty_functor(sarg_opt, sres) ->
+  | Pmty_functor(kind, sarg_opt, sres) ->
       let t_arg, ty_arg, newenv =
         match sarg_opt with
         | Unit -> Unit, Types.Unit, env
@@ -1525,8 +1632,9 @@ and transl_modtype_aux env smty =
           Named (id, param, arg), Types.Named (id, arg.mty_type), newenv
       in
       let res = transl_modtype newenv sres in
-      mkmty (Tmty_functor (t_arg, res))
-        (Mty_functor(ty_arg, res.mty_type)) env loc
+      check_plain_functor_range smty.pmty_loc env kind ~arg:ty_arg;
+      mkmty (Tmty_functor (kind, t_arg, res))
+        (Mty_functor(kind, ty_arg, res.mty_type)) env loc
         smty.pmty_attributes
   | Pmty_with(sbody, constraints) ->
       let body = transl_modtype env sbody in
@@ -2034,7 +2142,7 @@ let rec nongen_modtype env = function
   | Mty_signature sg ->
       let env = Env.add_signature sg env in
       List.find_map (nongen_signature_item env) sg
-  | Mty_functor(arg_opt, body) ->
+  | Mty_functor(_, arg_opt, body) ->
       let env =
         match arg_opt with
         | Unit
@@ -2339,6 +2447,7 @@ type application_summary = {
   loc: Location.t;
   attributes: attributes;
   f_loc: Location.t; (* loc for F *)
+  kind: functor_kind;
   arg: argument_summary option (* None for () *)
 }
 
@@ -2358,6 +2467,116 @@ let check_package_closed ~loc ~env ~typ fl =
     raise (Error (loc, env, Incomplete_packed_module typ))
 
 let not_principal msg = Warnings.Not_principal (Format_doc.Doc.msg msg)
+
+let type_value_bindings ~names ~shape_map ~def_env ~rec_env ~record
+      rec_flag sdefs =
+  let (defs, newenv) = Typecore.type_binding def_env rec_flag sdefs in
+  let defs =
+    match rec_flag with
+    | Recursive -> Typecore.annotate_recursive_bindings rec_env defs
+    | Nonrecursive -> defs
+  in
+  let newenv = record defs newenv in
+  let items, shape_map =
+    List.fold_left
+      (fun (acc, shape_map) (id, { Asttypes.loc; _ }, _typ, _uid)->
+        Signature_names.check_value names loc id;
+        let vd =  Env.find_value (Pident id) newenv in
+        Sig_value(id, vd, Exported) :: acc,
+        Shape.Map.add_value shape_map id vd.val_uid
+      )
+      ([], shape_map)
+      (let_bound_idents_full defs)
+  in
+  defs, List.rev items, shape_map, newenv
+
+let rec mty_has_runtime_contents env mty =
+  match Mtype.scrape env mty with
+  | Mty_signature sg ->
+      List.exists
+        (function
+          | Sig_value _ | Sig_typext _ | Sig_class _ -> true
+          | Sig_module (_, Mp_absent, _, _, _) -> false
+          | Sig_module (_, Mp_present, md, _, _) ->
+              mty_has_runtime_contents env md.md_type
+          | Sig_type _ | Sig_modtype _ | Sig_class_type _ -> false)
+        sg
+  | Mty_functor _ -> true
+  | Mty_alias _ -> false
+  | Mty_ident _ -> true
+
+let rec peel_module_expr (m : Typedtree.module_expr) =
+  match m.mod_desc with
+  | Tmod_constraint (m, _, _, _) -> peel_module_expr m
+  | _ -> m
+
+let rec path_root : Path.t -> Ident.t option = function
+  | Pident id -> Some id
+  | Pdot (p, _) | Pextra_ty (p, _) -> path_root p
+  | Papply _ -> None
+
+let compile_time_world_shift env (modl : Typedtree.module_expr) =
+  match (peel_module_expr modl).mod_desc with
+  | Tmod_ident (p, _) ->
+      (match path_root p with
+       | Some id when Ident.persistent id ->
+           if Env.is_static_stage_unit (Ident.name id) then Some (-1)
+           else Some 0
+       | Some id when Env.is_compile_time_module id env -> Some (-1)
+       | Some _ -> Some 0
+       | None -> None)
+  | Tmod_unpack _ | Tmod_structure _ -> Some (-1)
+  | _ -> None
+
+let rec mty_has_run_world_contents env mty =
+  match Mtype.scrape env mty with
+  | Mty_signature sg ->
+      List.exists
+        (function
+          | Sig_value (_, vd, _) -> Types.val_serving_level vd >= 0
+          | Sig_typext _ | Sig_class _ -> true
+          | Sig_module (_, Mp_absent, _, _, _) -> false
+          | Sig_module (_, Mp_present, md, _, _) ->
+              mty_has_run_world_contents env md.md_type
+          | Sig_type _ | Sig_modtype _ | Sig_class_type _ -> false)
+        sg
+  | Mty_functor _ -> true
+  | Mty_alias _ -> false
+  | Mty_ident _ -> true
+
+let check_module_served_in_compile_time_code env
+      (modl : Typedtree.module_expr) =
+  if Env.get_env_level env < 0
+  && mty_has_run_world_contents env
+       (Env.scrape_alias env modl.mod_type) then
+    match compile_time_world_shift env modl with
+    | Some (-1) -> ()
+    | _ ->
+        let path =
+          match (peel_module_expr modl).mod_desc with
+          | Tmod_ident (p, _) -> Some p
+          | _ -> None
+        in
+        raise (Error (modl.mod_loc, env,
+                      Runtime_module_in_compile_time_code path))
+
+let check_no_functor_members env loc mty =
+  let rec walk mty =
+    match Mtype.scrape env mty with
+    | Mty_signature sg ->
+        List.iter
+          (function
+            | Sig_module (id, Mp_present, md, _, _) ->
+                (match Mtype.scrape env md.md_type with
+                 | Mty_functor _ ->
+                     raise (Error (loc, env,
+                                   Functor_in_compile_time_package id))
+                 | _ -> walk md.md_type)
+            | _ -> ())
+          sg
+    | _ -> ()
+  in
+  walk mty
 
 let rec type_module ?(alias=false) ~strengthen ~funct_body anchor env smod =
   Builtin_attributes.warning_scope smod.pmod_attributes
@@ -2407,6 +2626,7 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
   | Pmod_structure sstr ->
       let (str, sg, names, shape, _finalenv) =
         type_structure ~funct_body anchor env sstr in
+      let sg = relative_signature (Env.get_env_level env) sg in
       let md =
         { mod_desc = Tmod_structure str;
           mod_type = Mty_signature sg;
@@ -2418,7 +2638,7 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
       if List.length sg' = List.length sg then md, shape else
       wrap_constraint_with_shape env false md
         (Mty_signature sg') shape Tmodtype_implicit
-  | Pmod_functor(arg_opt, sbody) ->
+  | Pmod_functor(kind, arg_opt, sbody) ->
       let t_arg, ty_arg, newenv, funct_shape_param, funct_body =
         match arg_opt with
         | Unit ->
@@ -2451,8 +2671,9 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
       let body, body_shape =
         type_module ~strengthen:true ~funct_body None newenv sbody
       in
-      { mod_desc = Tmod_functor(t_arg, body);
-        mod_type = Mty_functor(ty_arg, body.mod_type);
+      check_plain_functor_range smod.pmod_loc env kind ~arg:ty_arg;
+      { mod_desc = Tmod_functor(kind, t_arg, body);
+        mod_type = Mty_functor(kind, ty_arg, body.mod_type);
         mod_env = env;
         mod_attributes = smod.pmod_attributes;
         mod_loc = smod.pmod_loc },
@@ -2509,7 +2730,7 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
 and type_application loc ~strengthen ~funct_body env smod =
   let rec extract_application ~funct_body env sargs smod =
     match smod.pmod_desc with
-    | Pmod_apply (f, sarg) ->
+    | Pmod_apply (kind, f, sarg) ->
         let arg, shape =
           type_module ~strengthen:true ~funct_body None env sarg
         in
@@ -2517,6 +2738,7 @@ and type_application loc ~strengthen ~funct_body env smod =
           loc = smod.pmod_loc;
           attributes = smod.pmod_attributes;
           f_loc = f.pmod_loc;
+          kind;
           arg = Some {
             is_syntactic_unit = sarg.pmod_desc = Pmod_structure [];
             arg;
@@ -2525,11 +2747,12 @@ and type_application loc ~strengthen ~funct_body env smod =
           }
         } in
         extract_application ~funct_body env (summary::sargs) f
-    | Pmod_apply_unit f ->
+    | Pmod_apply_unit (kind, f) ->
         let summary = {
           loc = smod.pmod_loc;
           attributes = smod.pmod_attributes;
           f_loc = f.pmod_loc;
+          kind;
           arg = None
         } in
         extract_application ~funct_body env (summary::sargs) f
@@ -2551,7 +2774,7 @@ and type_application loc ~strengthen ~funct_body env smod =
 and type_one_application ~ctx:(apply_loc,sfunct,md_f,args)
     funct_body env (funct, funct_shape) app_view =
   match Env.scrape_alias env funct.mod_type with
-  | Mty_functor (Unit, mty_res) ->
+  | Mty_functor (fkind, Unit, mty_res) when fkind = app_view.kind ->
       begin match app_view.arg with
         | None -> ()
         | Some arg ->
@@ -2568,13 +2791,14 @@ and type_one_application ~ctx:(apply_loc,sfunct,md_f,args)
       end;
       if funct_body && Mtype.contains_type env funct.mod_type then
         raise (Error (apply_loc, env, Not_allowed_in_functor_body));
-      { mod_desc = Tmod_apply_unit funct;
+      { mod_desc = Tmod_apply_unit (app_view.kind, funct);
         mod_type = mty_res;
         mod_env = env;
         mod_attributes = app_view.attributes;
         mod_loc = funct.mod_loc },
       Shape.app funct_shape ~arg:Shape.dummy_mod
-  | Mty_functor (Named (param, mty_param), mty_res) as mty_functor ->
+  | Mty_functor (fkind, Named (param, mty_param), mty_res) as mty_functor
+    when fkind = app_view.kind ->
       let apply_error () =
         let args = List.map simplify_app_summary args in
         let mty_f = md_f.mod_type in
@@ -2636,13 +2860,15 @@ and type_one_application ~ctx:(apply_loc,sfunct,md_f,args)
       in
       check_well_formed_module env apply_loc
         "the signature of this functor application" mty_appl;
-      { mod_desc = Tmod_apply(funct, arg, coercion);
+      { mod_desc = Tmod_apply(app_view.kind, funct, arg, coercion);
         mod_type = mty_appl;
         mod_env = env;
         mod_attributes = app_attributes;
         mod_loc = app_loc },
       Shape.app ~arg:arg_shape funct_shape
     end
+  | Mty_functor (fkind, _, _) ->
+      raise (Error (app_view.f_loc, env, Functor_kind_mismatch fkind))
   | Mty_alias path ->
       raise(Error(app_view.f_loc, env, Cannot_scrape_alias path))
   | Mty_ident _ | Mty_signature _  ->
@@ -2760,30 +2986,60 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
             (fun () -> Typecore.type_expression env sexpr)
         in
         Tstr_eval (expr, attrs), [], shape_map, env
-    | Pstr_value(rec_flag, sdefs) ->
-        let (defs, newenv) =
-          Typecore.type_binding env rec_flag sdefs in
-        let defs = match rec_flag with
-          | Recursive -> Typecore.annotate_recursive_bindings env defs
-          | Nonrecursive -> defs
+    | Pstr_value(rec_flag, Value, sdefs) ->
+        check_definition_stage ~flag:Value loc env;
+        let defs, items, shape_map, newenv =
+          type_value_bindings ~names ~shape_map ~def_env:env ~rec_env:env
+            ~record:(fun _defs newenv -> newenv) rec_flag sdefs
         in
-        (* Note: Env.find_value does not trigger the value_used event. Values
-           will be marked as being used during the signature inclusion test. *)
-        let items, shape_map =
-          List.fold_left
-            (fun (acc, shape_map) (id, { Asttypes.loc; _ }, _typ, _uid)->
-              Signature_names.check_value names loc id;
-              let vd =  Env.find_value (Pident id) newenv in
-              Sig_value(id, vd, Exported) :: acc,
-              Shape.Map.add_value shape_map id vd.val_uid
-            )
-            ([], shape_map)
-            (let_bound_idents_full defs)
-        in
-        Tstr_value(rec_flag, defs),
-        List.rev items,
+        Tstr_value(rec_flag, Value, defs),
+        items,
         shape_map,
         newenv
+    | Pstr_value (rec_flag, Macro, sdefs) ->
+        check_definition_stage ~flag:Macro loc env;
+        let original_level = Env.get_env_level env in
+        let static_level_env = Env.with_level_down env in
+        let record defs newenv =
+          check_macros_are_arrows static_level_env defs;
+          List.fold_left
+            (fun env (id, _, _, _) ->
+               let vd = Env.find_value (Pident id) env in
+               Env.add_value id (Types.mark_macro vd) env)
+            newenv (let_bound_idents_full defs)
+        in
+        let defs, items, shape_map, newenv =
+          type_value_bindings ~names ~shape_map ~def_env:static_level_env
+            ~rec_env:env ~record rec_flag sdefs
+        in
+        Tstr_value(rec_flag, Macro, defs),
+        items,
+        shape_map,
+        Env.with_level original_level newenv
+    | Pstr_value (rec_flag, Static, sdefs) ->
+        check_definition_stage ~flag:Static loc env;
+        let original_level = Env.get_env_level env in
+        let static_level_env =
+          Env.with_static_init true (Env.with_level_down env) in
+        let record defs newenv =
+          List.fold_left
+            (fun env (id, _, _, _) ->
+               let vd = Env.find_value (Pident id) env in
+               let vd =
+                 Types.mark_static
+                   { vd with val_staging_level = original_level }
+               in
+               Env.add_value id vd env)
+            newenv (let_bound_idents_full defs)
+        in
+        let defs, items, shape_map, newenv =
+          type_value_bindings ~names ~shape_map ~def_env:static_level_env
+            ~rec_env:env ~record rec_flag sdefs
+        in
+        Tstr_value(rec_flag, Static, defs),
+        items,
+        shape_map,
+        Env.with_static_init false (Env.with_level original_level newenv)
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
         Signature_names.check_value names desc.val_loc desc.val_id;
@@ -2855,6 +3111,7 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
                  (anchor_submodule name.txt anchor) env smodl
             )
         in
+        check_module_served_in_compile_time_code env modl;
         let pres =
           match modl.mod_type with
           | Mty_alias _ -> Mp_absent
@@ -2962,6 +3219,11 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         in
         let bindings2 =
           check_recmodule_inclusion newenv bindings1 in
+        List.iter
+          (fun (mb, _, _) ->
+             if Mtype.contains_mixed_functor newenv mb.mb_expr.mod_type
+             then raise (Error (mb.mb_loc, env, Mixed_functor_in_recmodule)))
+          bindings2;
         let mbs =
           List.filter_map (fun (mb, shape, uid) ->
             Option.map (fun id -> id, mb, uid, shape)  mb.mb_id
@@ -3060,6 +3322,7 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
           Builtin_attributes.warning_scope sincl.pincl_attributes
             (fun () -> type_module ~strengthen:true ~funct_body None env smodl)
         in
+        check_module_served_in_compile_time_code env modl;
         let scope = Ctype.create_scope () in
         (* Rename all identifiers bound by this signature to avoid clashes *)
         let sg, shape, new_env =
@@ -3083,9 +3346,101 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
   in
   { str_desc = desc; str_loc = loc; str_env = env }, sg, shape_map, new_env
 
+let check_no_toplevel_mixed_functor (str : Typedtree.structure) =
+  let module_expr (iter : Tast_iterator.iterator)
+        (me : Typedtree.module_expr) =
+    match me.mod_desc with
+    | Tmod_functor (Template, _, _) -> ()
+    | _ ->
+        if Mtype.contains_mixed_functor ~deep_templates:false
+             me.mod_env me.mod_type
+        then
+          raise (Error (me.mod_loc, me.mod_env,
+                        Mixed_functor_in_toplevel));
+        Tast_iterator.default_iterator.module_expr iter me
+  in
+  let iter = { Tast_iterator.default_iterator with module_expr } in
+  let admitted_mixed_functor (funct : Typedtree.module_expr) =
+    (let rec admitted (me : Typedtree.module_expr) =
+       match me.mod_desc with
+       | Tmod_ident _ -> true
+       | Tmod_functor (Plain, _, _) -> true
+       | Tmod_constraint (me', _, _, _) -> admitted me'
+       | _ -> false
+     in
+     admitted funct)
+    && Mtype.contains_mixed_functor ~deep_templates:false
+         funct.mod_env funct.mod_type
+  in
+  List.iter
+    (fun (item : Typedtree.structure_item) ->
+       match item.str_desc with
+       | Tstr_module ({ mb_expr; _ } as mb) ->
+           (match mb_expr.mod_desc with
+            | Tmod_functor (Template, _, _) -> ()
+            | (Tmod_functor (Plain, _, _) | Tmod_ident _)
+              when Mtype.contains_mixed_functor ~deep_templates:false
+                     mb_expr.mod_env mb_expr.mod_type ->
+                ()
+            | (Tmod_structure _
+              | Tmod_constraint
+                  ({mod_desc = Tmod_structure _; _}, _, _, _))
+              when mb.mb_id <> None
+                   && Mtype.contains_mixed_functor ~deep_templates:false
+                        mb_expr.mod_env mb_expr.mod_type ->
+                ()
+            | Tmod_apply (_, funct, arg, _)
+              when admitted_mixed_functor funct ->
+                iter.module_expr iter arg
+            | Tmod_apply_unit (_, funct)
+              when admitted_mixed_functor funct ->
+                ()
+            | Tmod_apply (_, funct, arg, _)
+              when (match Mtype.scrape funct.mod_env funct.mod_type with
+                    | Mty_functor (Template, _, _) -> true
+                    | _ -> false) ->
+                iter.module_expr iter funct;
+                iter.module_expr iter arg
+            | _ -> iter.module_expr iter mb_expr)
+       | Tstr_include incl ->
+           (match incl.incl_mod.mod_desc with
+            | Tmod_apply (_, funct, arg, _)
+              when admitted_mixed_functor funct
+                   && not (Mtype.contains_mixed_functor
+                             ~deep_templates:false
+                             incl.incl_mod.mod_env
+                             (Mty_signature incl.incl_type)) ->
+                iter.module_expr iter arg
+            | _ ->
+                Tast_iterator.default_iterator.structure_item iter item)
+       | _ -> Tast_iterator.default_iterator.structure_item iter item)
+    str.str_items
+
+let check_no_toplevel_nested_statics (str : Typedtree.structure) =
+  let structure_item (iter : Tast_iterator.iterator)
+        (it : Typedtree.structure_item) =
+    (match it.str_desc with
+     | Tstr_value (_, Static, _) ->
+         raise (Error (it.str_loc, Env.empty, Static_in_toplevel_module))
+     | _ -> ());
+    Tast_iterator.default_iterator.structure_item iter it
+  in
+  let iter = { Tast_iterator.default_iterator with structure_item } in
+  List.iter
+    (fun (item : Typedtree.structure_item) ->
+       match item.str_desc with
+       | Tstr_value _ -> ()
+       | _ -> Tast_iterator.default_iterator.structure_item iter item)
+    str.str_items
+
 let type_toplevel_phrase env s =
   Env.reset_required_globals ();
-  type_structure ~toplevel:true ~funct_body:false None env s
+  let (str, _, _, _, _) as res =
+    type_structure ~toplevel:true ~funct_body:false None env s
+  in
+  check_no_toplevel_mixed_functor str;
+  check_no_toplevel_nested_statics str;
+  res
 
 let type_module_alias =
   type_module ~alias:true ~strengthen:true ~funct_body:false None
@@ -3100,7 +3455,7 @@ let rec normalize_modtype = function
     Mty_ident _
   | Mty_alias _ -> ()
   | Mty_signature sg -> normalize_signature sg
-  | Mty_functor(_param, body) -> normalize_modtype body
+  | Mty_functor(_, _param, body) -> normalize_modtype body
 
 and normalize_signature sg = List.iter normalize_signature_item sg
 
@@ -3170,7 +3525,7 @@ let lookup_type_in_sig sg =
     | Ldot({ txt = m; _ }, { txt = name; _ }) -> Pdot(module_path m, name)
     | Lapply _ -> assert false
 
-let type_package env m pack =
+let type_package ?annotation env m pack =
   let modl, scope =
     Typetexp.TyVarEnv.with_local_scope begin fun () ->
       (* type the module and create a scope in a raised level *)
@@ -3232,7 +3587,36 @@ let type_package env m pack =
         let lid = Longident.unflatten n |> Option.get in
         raise (Error(modl.mod_loc, env, Scoping_pack (lid,ty))))
     fl';
-  let modl = wrap_constraint_package env true modl mty Tmodtype_implicit in
+  let ambient = Env.get_env_level env in
+  let relativity =
+    if ambient < 0 then begin
+      check_no_functor_members env modl.mod_loc mty;
+      match compile_time_world_shift env modl with
+      | Some shift -> Some (shift, ambient)
+      | None ->
+          if mty_has_runtime_contents env mty then
+            raise (Error (modl.mod_loc, env,
+                          Pack_in_compile_time_code Pack_other));
+          Some (0, ambient)
+    end else None
+  in
+  let ann_mty = Option.map (transl_modtype env) annotation in
+  let relative k =
+    Misc.protect_refs [Misc.R (Includecore.pack_relativity, relativity)] k
+  in
+  let modl =
+    match ann_mty with
+    | None ->
+        relative (fun () ->
+          wrap_constraint_package env true modl mty Tmodtype_implicit)
+    | Some tmty ->
+        let modl =
+          relative (fun () ->
+            wrap_constraint_package env true modl tmty.mty_type
+              (Tmodtype_explicit tmty))
+        in
+        wrap_constraint_package env true modl mty Tmodtype_implicit
+  in
   modl, {pack with pack_constraints = fl'}
 
 (* Fill in the forward declarations *)
@@ -3249,6 +3633,48 @@ let type_str_item env pstri =
     type_str_item
       ~toplevel:false ~funct_body:false ~names:(Signature_names.create ())
       None env Shape.Map.empty pstri
+  in
+  let check loc mty =
+    if Mtype.has_macro_components env mty then
+      raise (Error (loc, env, Macro_in_local_module))
+  in
+  let check_no_template_application (me : Typedtree.module_expr) =
+    let module_expr (iter : Tast_iterator.iterator)
+          (m : Typedtree.module_expr) =
+      (match m.mod_desc with
+       | Tmod_apply (Template, _, _, _) | Tmod_apply_unit (Template, _) ->
+           raise (Error (m.mod_loc, env,
+                         Template_application_in_local_module))
+       | _ -> ());
+      Tast_iterator.default_iterator.module_expr iter m
+    in
+    let iter = { Tast_iterator.default_iterator with module_expr } in
+    iter.module_expr iter me
+  in
+  let () =
+    match si.str_desc with
+    | Tstr_module mb ->
+        check si.str_loc mb.mb_expr.mod_type;
+        check_no_template_application mb.mb_expr
+    | Tstr_recmodule mbs ->
+        List.iter
+          (fun mb ->
+             check si.str_loc mb.mb_expr.mod_type;
+             check_no_template_application mb.mb_expr)
+          mbs
+    | Tstr_modtype mtd ->
+        Option.iter (fun mty -> check si.str_loc mty.mty_type) mtd.mtd_type
+    | Tstr_open od ->
+        check si.str_loc od.open_expr.mod_type;
+        check_no_template_application od.open_expr
+    | Tstr_include incl ->
+        check si.str_loc incl.incl_mod.mod_type;
+        check_no_template_application incl.incl_mod
+    | Tstr_value (_, (Macro | Static), _) ->
+        raise (Error (si.str_loc, env, Macro_in_local_module))
+    | Tstr_primitive vd when vd.val_val.val_staging_level < 0 ->
+        raise (Error (si.str_loc, env, Macro_in_local_module))
+    | _ -> ()
   in
   si, new_env
 
@@ -3289,7 +3715,8 @@ let type_implementation target initial_env ast =
       if !Clflags.print_types then (* #7656 *)
         ignore @@ Warnings.parse_options false "-32-34-37-38-60";
       let (str, sg, names, shape, finalenv) =
-        type_structure initial_env ast in
+        type_structure initial_env ast
+      in
       let shape =
         let id = Ident.create_persistent @@ Unit_info.modname target in
         Shape.set_uid_if_none shape (Uid.of_compilation_unit_id id)
@@ -3715,6 +4142,138 @@ let report_error ~loc _env = function
          for an anonymous module type.@ %a"
         Style.inline_code (Path.name p)
         Misc.print_see_manual manual_ref
+  | Definition_in_staged_code In_quotation ->
+      Location.errorf ~loc
+        "A module defined inside a quotation cannot define values or@ \
+         generators.@ \
+         Define the module outside the quotation and refer to it here."
+  | Definition_in_staged_code In_compile_time_code ->
+      Location.errorf ~loc
+        "A module defined in compile-time code (the body of a generator@ \
+         or of a splice) cannot define generators or static bindings:@ \
+         they would sit one further level down.@ \
+         Define them at the top level of a structure instead."
+  | Macro_binds_not_one_name ->
+      Location.errorf ~loc
+        "A generator must bind exactly one name.@ \
+         Its compile-time function occupies that name's position in the\
+       @ module's compile-time block, so a pattern binding none, or\
+       @ several, has nowhere to go."
+  | Macro_is_not_function ->
+      Location.errorf ~loc
+        "A generator must be defined as a function.\
+       @ It is called at compile time, so its definition has to be a\
+       @ literal function rather than an expression of function type."
+  | Macro_in_functor_argument ->
+      Location.errorf ~loc
+        "The argument of a functor cannot contain compile-time components\
+       @ (generators, template functors, or static bindings).\
+       @ Use a template functor, whose parameter is written %a,\
+       @ if the argument needs them."
+        Style.inline_code "[X : S]"
+  | Functor_kind_mismatch fkind ->
+      let (found, expected) = match fkind with
+        | Plain -> ("an ordinary functor", "F(M)")
+        | Template -> ("a template functor", "F[M]")
+      in
+      Location.errorf ~loc
+        "This is %s.@ It must be applied as %a."
+        found Style.inline_code expected
+  | Macro_in_package ->
+      Location.errorf ~loc
+        "This module type cannot be used as a first-class module:@ \
+         it has compile-time components (generators, template functors,@ \
+         or static bindings).  A package type is read relative to the@ \
+         package's own level, so all its members are at that level;@ \
+         a component marked for another world has no place in it."
+  | Macro_in_abstract_modtype ->
+      Location.errorf ~loc
+        "An abstract module type cannot be instantiated with this module@ \
+         type: it has compile-time components (generators, template@ \
+         functors, or static bindings)."
+  | Functor_in_compile_time_package id ->
+      Location.errorf ~loc
+        "This package type has a functor member, %a.@ \
+         Packing a functor in compile-time code@ \
+         (the body of a generator or of a splice) is not yet supported."
+        Style.inline_code (Ident.name id)
+  | Runtime_module_in_compile_time_code mpath ->
+      begin match mpath with
+      | Some p ->
+          Location.errorf ~loc
+            "The module %a is made at run time, so it cannot be bound@ \
+             or packed in compile-time code@ \
+             (the body of a generator or of a splice):@ \
+             its contents are not available there.@ \
+             Use a module from a compile-time library@ \
+             (a directory given to %a),@ \
+             or unpack a compile-time package."
+            (Style.as_inline_code path) p
+            Style.inline_code "-I-static"
+      | None ->
+          Location.errorf ~loc
+            "This module expression cannot be evaluated in compile-time@ \
+             code (the body of a generator or of a splice):@ \
+             only a module from a compile-time library,@ \
+             an unpacked compile-time package,@ \
+             or a literal structure can be."
+      end
+  | Static_in_toplevel_module ->
+      Location.errorf ~loc
+        "A static binding is not yet supported inside a module of a@ \
+         toplevel phrase.@ \
+         Bind it directly at the top level, or put the module in a@ \
+         compiled unit."
+  | Pack_in_compile_time_code subject ->
+      begin match subject with
+      | Pack_run_module p ->
+          Location.errorf ~loc
+            "The module %a cannot be packed here, in compile-time code@ \
+             (the body of a generator or of a splice):@ \
+             the module is made at run time,@ \
+             so its contents are not available to build the package.@ \
+             Pack a module from a compile-time library@ \
+             (a directory given to %a),@ \
+             or build the package inside a quotation."
+            (Style.as_inline_code path) p
+            Style.inline_code "-I-static"
+      | Pack_other ->
+          Location.errorf ~loc
+            "This module cannot be packed here, in compile-time code@ \
+             (the body of a generator or of a splice):@ \
+             the module is made at run time,@ \
+             so its contents are not available to build the package.@ \
+             Pack a module from a compile-time library@ \
+             (a directory given to %a),@ \
+             or build the package inside a quotation."
+            Style.inline_code "-I-static"
+      end
+  | Macro_in_local_module ->
+      Location.errorf ~loc
+        "A locally bound module cannot have compile-time components@ \
+         (generators, template functors, or static bindings).@ \
+         Bind it at the top level of a structure instead."
+  | Mixed_functor_in_recmodule ->
+      Location.errorf ~loc
+        "Mixed functors (functors producing structures with compile-time@ \
+         components) are not yet supported in@ \
+         recursive modules."
+  | Mixed_functor_in_toplevel ->
+      Location.errorf ~loc
+        "In the toplevel, a mixed functor (one producing a structure with\
+       @ compile-time components) is reached through the name\
+       @ it is bound to, and this phrase gives it none.\
+       @ Bind it to a name of its own (%a)."
+        Style.inline_code "module M = ..."
+  | Template_application_in_local_module ->
+      Location.errorf ~loc
+        "A template functor cannot be applied in a locally bound module:\
+       @ the application is evaluated at compile time, and a module bound\
+       @ inside an expression is made at run time.\
+       @ Apply it at the top level of a structure (%a)\
+       @ and refer to that module here."
+        Style.inline_code "module M = F[V]"
+
 
 let report_error env ~loc err =
   Printtyp.wrap_printing_env ~error:true env

@@ -295,6 +295,8 @@ and expression_desc =
       body : value case;
       partial : partial;
     }
+  | Texp_quote of expression * Ident.t list
+  | Texp_splice of splice_desc
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
   | Texp_struct_item of structure_item * expression
@@ -308,6 +310,7 @@ and 'k case =
     {
      c_lhs: 'k general_pattern;
      c_cont: Ident.t option;
+     c_evidence: Ident.t option;
      c_guard: expression option;
      c_rhs: expression;
     }
@@ -326,6 +329,7 @@ and function_param =
        [Total] otherwise.
     *)
     fp_kind: function_param_kind;
+    fp_evidence: Ident.t option;
     fp_newtypes: string loc list;
       (** [fp_newtypes] are the new type declarations that come *after* that
           parameter. The newtypes that come before the first parameter are
@@ -462,9 +466,9 @@ and functor_parameter =
 and module_expr_desc =
     Tmod_ident of Path.t * Longident.t loc
   | Tmod_structure of structure
-  | Tmod_functor of functor_parameter * module_expr
-  | Tmod_apply of module_expr * module_expr * module_coercion
-  | Tmod_apply_unit of module_expr
+  | Tmod_functor of functor_kind * functor_parameter * module_expr
+  | Tmod_apply of functor_kind * module_expr * module_expr * module_coercion
+  | Tmod_apply_unit of functor_kind * module_expr
   | Tmod_constraint of
       module_expr * Types.module_type * module_type_constraint * module_coercion
     (** ME          (constraint = Tmodtype_implicit)
@@ -486,7 +490,7 @@ and structure_item =
 
 and structure_item_desc =
     Tstr_eval of expression * attributes
-  | Tstr_value of rec_flag * value_binding list
+  | Tstr_value of rec_flag * macro_flag * value_binding list
   | Tstr_primitive of value_description
   | Tstr_type of rec_flag * type_declaration list
   | Tstr_typext of type_extension
@@ -520,11 +524,17 @@ and value_binding =
     vb_loc: Location.t;
   }
 
+and functor_coercion_face =
+    Fcf_plain
+  | Fcf_mixed
+  | Fcf_template
+
 and module_coercion =
     Tcoerce_none
   | Tcoerce_structure of (int * module_coercion) list *
                          (Ident.t * int * module_coercion) list
-  | Tcoerce_functor of module_coercion * module_coercion
+  | Tcoerce_functor of
+      functor_coercion_face * module_coercion * module_coercion
   | Tcoerce_primitive of primitive_coercion
   (** External declaration coerced to a regular value.
       {[
@@ -551,7 +561,7 @@ and module_type =
 and module_type_desc =
     Tmty_ident of Path.t * Longident.t loc
   | Tmty_signature of signature
-  | Tmty_functor of functor_parameter * module_type
+  | Tmty_functor of functor_kind * functor_parameter * module_type
   | Tmty_with of module_type * (Path.t * Longident.t loc * with_constraint) list
   | Tmty_typeof of module_expr
   | Tmty_alias of Path.t * Longident.t loc
@@ -858,6 +868,11 @@ and 'a class_infos =
     ci_loc: Location.t;
     ci_attributes: attributes;
    }
+
+and splice_desc =
+  { spl_exp: expression;
+    spl_index: int option;
+  }
 
 type implementation = {
   structure: structure;

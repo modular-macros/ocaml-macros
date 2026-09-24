@@ -53,3 +53,9 @@ val enrich_typedecl: Env.t -> Path.t -> Ident.t -> type_declaration ->
 val type_paths: Env.t -> Path.t -> module_type -> Path.t list
 val contains_type: Env.t -> module_type -> bool
 val lower_nongen: int -> module_type -> unit
+
+val has_macro_components:
+  ?expand_aliases:bool -> Env.t -> module_type -> bool
+
+val contains_mixed_functor:
+  ?deep_templates:bool -> Env.t -> module_type -> bool

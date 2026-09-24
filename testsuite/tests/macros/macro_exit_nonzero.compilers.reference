@@ -1,0 +1,4 @@
+File "macro_exit_nonzero.ml", line 1:
+Error: Compile-time evaluation failed: the static program exited with code 3.
+       Its object macro_exit_nonzero$static.cmo and object list macro_exit_nonzero$static.objs
+       were kept for inspection.

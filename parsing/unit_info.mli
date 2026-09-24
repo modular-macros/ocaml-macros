@@ -50,6 +50,8 @@ val strict_modname_from_source: filename -> modname
     valid module name. *)
 val is_unit_name : modname -> bool
 
+val macros_modname : modname -> modname
+
 
 (** {1:unit_info Metadata for compilation unit} *)
 

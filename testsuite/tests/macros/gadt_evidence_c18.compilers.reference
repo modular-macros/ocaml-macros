@@ -1,0 +1,4 @@
+File "gadt_evidence_c18.ml", line 22, characters 16-38:
+22 | let n : int = $(c18 << Refl >> << 1 >>)
+                     ^^^^^^^^^^^^^^^^^^^^^^
+Error: The code built by this splice has a variable escaping a quotation's scope: evidence_equal.

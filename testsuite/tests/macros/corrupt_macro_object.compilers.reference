@@ -1,0 +1,2 @@
+File "corrupt_macro_object.ml", line 1:
+Error: corrupt_macro_object_lib$macros.cmo is not a bytecode object file.

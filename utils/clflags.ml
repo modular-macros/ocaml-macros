@@ -52,6 +52,8 @@ let compile_only = ref false            (* -c *)
 and output_name = ref (None : string option) (* -o *)
 and include_dirs = ref ([] : string list) (* -I *)
 and hidden_include_dirs = ref ([] : string list) (* -H *)
+and static_include_dirs = ref ([] : string list)
+and static_use = ref ([] : string list)
 and standard_library_default = ref None (* -set-runtime-default *)
 and no_std_include = ref false          (* -nostdlib *)
 and no_cwd = ref false                  (* -nocwd *)
@@ -76,6 +78,12 @@ and match_context_rows = ref 32         (* -match-context-rows *)
 and safer_matching = ref false          (* -safer-matching *)
 and preprocessor = ref(None : string option) (* -pp *)
 and all_ppx = ref ([] : string list)        (* -ppx *)
+
+type macros_object_mode = Macros_object_auto
+                        | Macros_object_always
+                        | Macros_object_none
+let macros_object = ref Macros_object_auto
+
 let absname = ref false                 (* -absname *)
 let annotations = ref false             (* -annot *)
 let binary_annotations = ref false      (* -bin-annot *)
@@ -777,6 +785,30 @@ let parse_keyword_edition s =
   | [] -> None, []
   | [s] -> parse_version s, []
   | v :: rest -> parse_version v, rest
+
+type emitter_flags =
+  { ef_debug : bool;                    (* -g *)
+    ef_link_everything : bool;          (* -linkall *)
+    ef_for_package : string option;     (* -for-pack *)
+    ef_static_use : string list;
+    ef_bytecode_compatible_32 : bool;   (* -compat-32 *)
+    ef_dump_instr : bool }
+
+let emitter_flags () =
+  { ef_debug = !debug;
+    ef_link_everything = !link_everything;
+    ef_for_package = !for_package;
+    ef_static_use = !static_use;
+    ef_bytecode_compatible_32 = !bytecode_compatible_32;
+    ef_dump_instr = !dump_instr }
+
+let set_emitter_flags f =
+  debug := f.ef_debug;
+  link_everything := f.ef_link_everything;
+  for_package := f.ef_for_package;
+  static_use := f.ef_static_use;
+  bytecode_compatible_32 := f.ef_bytecode_compatible_32;
+  dump_instr := f.ef_dump_instr
 
 module String = Misc.Stdlib.String
 

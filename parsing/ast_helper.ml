@@ -229,6 +229,8 @@ module Exp = struct
   let pack ?loc ?attrs a b = mk ?loc ?attrs (Pexp_pack (a, b))
   let letop ?loc ?attrs let_ ands body =
     mk ?loc ?attrs (Pexp_letop {let_; ands; body})
+  let quote ?loc ?attrs a = mk ?loc ?attrs (Pexp_quote a)
+  let splice ?loc ?attrs a = mk ?loc ?attrs (Pexp_splice a)
   let extension ?loc ?attrs a = mk ?loc ?attrs (Pexp_extension a)
   let unreachable ?loc ?attrs () = mk ?loc ?attrs Pexp_unreachable
   let struct_item ?loc ?attrs si e = mk ?loc ?attrs (Pexp_struct_item (si, e))
@@ -257,7 +259,7 @@ module Mty = struct
   let ident ?loc ?attrs a = mk ?loc ?attrs (Pmty_ident a)
   let alias ?loc ?attrs a = mk ?loc ?attrs (Pmty_alias a)
   let signature ?loc ?attrs a = mk ?loc ?attrs (Pmty_signature a)
-  let functor_ ?loc ?attrs a b = mk ?loc ?attrs (Pmty_functor (a, b))
+  let functor_ ?loc ?attrs k a b = mk ?loc ?attrs (Pmty_functor (k, a, b))
   let with_ ?loc ?attrs a b = mk ?loc ?attrs (Pmty_with (a, b))
   let typeof_ ?loc ?attrs a = mk ?loc ?attrs (Pmty_typeof a)
   let extension ?loc ?attrs a = mk ?loc ?attrs (Pmty_extension a)
@@ -270,10 +272,10 @@ module Mod = struct
 
   let ident ?loc ?attrs x = mk ?loc ?attrs (Pmod_ident x)
   let structure ?loc ?attrs x = mk ?loc ?attrs (Pmod_structure x)
-  let functor_ ?loc ?attrs arg body =
-    mk ?loc ?attrs (Pmod_functor (arg, body))
-  let apply ?loc ?attrs m1 m2 = mk ?loc ?attrs (Pmod_apply (m1, m2))
-  let apply_unit ?loc ?attrs m1 = mk ?loc ?attrs (Pmod_apply_unit m1)
+  let functor_ ?loc ?attrs kind arg body =
+    mk ?loc ?attrs (Pmod_functor (kind, arg, body))
+  let apply ?loc ?attrs k m1 m2 = mk ?loc ?attrs (Pmod_apply (k, m1, m2))
+  let apply_unit ?loc ?attrs k m1 = mk ?loc ?attrs (Pmod_apply_unit (k, m1))
   let constraint_ ?loc ?attrs m mty = mk ?loc ?attrs (Pmod_constraint (m, mty))
   let unpack ?loc ?attrs e = mk ?loc ?attrs (Pmod_unpack e)
   let extension ?loc ?attrs a = mk ?loc ?attrs (Pmod_extension a)
@@ -309,7 +311,7 @@ module Str = struct
   let mk ?(loc = !default_loc) d = {pstr_desc = d; pstr_loc = loc}
 
   let eval ?loc ?(attrs = []) a = mk ?loc (Pstr_eval (a, attrs))
-  let value ?loc a b = mk ?loc (Pstr_value (a, b))
+  let value ?loc a b c = mk ?loc (Pstr_value (a, b, c))
   let primitive ?loc a = mk ?loc (Pstr_primitive a)
   let type_ ?loc rec_flag a = mk ?loc (Pstr_type (rec_flag, a))
   let type_extension ?loc a = mk ?loc (Pstr_typext a)
@@ -421,9 +423,10 @@ end
 
 module Val = struct
   let mk ?(loc = !default_loc) ?(attrs = []) ?(docs = empty_docs)
-        ?(prim = []) name typ =
+        ?(prim = []) mac_flag name typ =
     {
      pval_name = name;
+     pval_macro = mac_flag;
      pval_type = typ;
      pval_attributes = add_docs_attrs docs attrs;
      pval_loc = loc;

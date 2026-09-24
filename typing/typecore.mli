@@ -255,6 +255,14 @@ type error =
   | Optional_poly_param of string
   | Cannot_unify_tfunctor_to_tarrow of Errortrace.unification_error
   | Cannot_omit_tfunctor_argument of Ident.Unscoped.t * type_expr
+  | Value_level_mismatch of
+      { path : Path.t; bound : int; used : int; in_quotation : bool }
+  | Splice_outside_quotation of int
+  | Quotation_in_quotation
+  | Splice_in_splice
+  | Quoted_local_extension_constructor of Path.t
+  | Compile_time_module_in_runtime_code of Ident.t
+  | Generator_in_static_binding of Path.t
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -282,7 +290,8 @@ val type_object:
   (Env.t -> Location.t -> Parsetree.class_structure ->
    Typedtree.class_structure * string list) ref
 val type_package:
-  (Env.t -> Parsetree.module_expr -> package ->
+  (?annotation:Parsetree.module_type ->
+   Env.t -> Parsetree.module_expr -> package ->
    Typedtree.module_expr * package) ref
 (* Forward declaration, to be filled in by Typemod.check_package_closed.
    Ensures that the package type does not contain any type variable. *)

@@ -67,8 +67,13 @@ type value_mismatch =
   | Primitive_mismatch of primitive_mismatch
   | Not_a_primitive
   | Type of Errortrace.moregen_error
+  | Staging_level_mismatch
+  | Staging_world_mismatch
+  | Runtime_value_in_compile_time_package
 
 exception Dont_match of value_mismatch
+
+let pack_relativity : (int * int) option ref = ref None
 
 (* A value description [vd1] is consistent with the value description [vd2] if
    there is a context E such that [E |- vd1 <: vd2] for the ordinary subtyping.
@@ -101,7 +106,21 @@ let value_descriptions ~loc env name
     name;
   match Ctype.moregeneral env vd1.val_type vd2.val_type with
   | exception Ctype.Moregen err -> raise (Dont_match (Type err))
-  | () -> value_descriptions_consistency env vd1 vd2
+  | () ->
+  begin match !pack_relativity with
+  | Some (source_shift, ambient) ->
+      if Types.val_is_macro vd1 <> Types.val_is_macro vd2
+      then raise (Dont_match Staging_level_mismatch);
+      if Types.val_serving_level vd1 + source_shift
+         <> vd2.val_staging_level + ambient
+      then raise (Dont_match Runtime_value_in_compile_time_package)
+  | None ->
+      if vd1.val_staging_level <> vd2.val_staging_level then
+        raise (Dont_match Staging_level_mismatch);
+      if Types.val_is_static vd1 <> Types.val_is_static vd2 then
+        raise (Dont_match Staging_world_mismatch)
+  end;
+  value_descriptions_consistency env vd1 vd2
 
 (* Inclusion between manifest types (particularly for private row types) *)
 
@@ -248,6 +267,16 @@ let report_value_mismatch first second env ppf err =
       Errortrace_report.moregen ppf Type_scheme env trace
         (msg "The type")
         (msg "is not compatible with the type")
+  | Staging_level_mismatch ->
+     pr "One is a generator ($gen) and the other an ordinary value"
+  | Staging_world_mismatch ->
+     pr "One is a compile-time binding ($val) and the other an ordinary value"
+  | Runtime_value_in_compile_time_package ->
+     pr "The first is made at run time, but this package is built in@ \
+         compile-time code (the body of a generator or of a splice),@ \
+         which holds only compile-time values:@ \
+         static bindings, or the contents of a module from a@ \
+         compile-time library (a directory given to -I-static)"
 
 let report_type_inequality env ppf err =
   let msg = Fmt.Doc.msg in

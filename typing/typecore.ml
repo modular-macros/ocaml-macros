@@ -214,6 +214,14 @@ type error =
   | Optional_poly_param of string
   | Cannot_unify_tfunctor_to_tarrow of Errortrace.unification_error
   | Cannot_omit_tfunctor_argument of Ident.Unscoped.t * type_expr
+  | Value_level_mismatch of
+      { path : Path.t; bound : int; used : int; in_quotation : bool }
+  | Splice_outside_quotation of int
+  | Quotation_in_quotation
+  | Splice_in_splice
+  | Quoted_local_extension_constructor of Path.t
+  | Compile_time_module_in_runtime_code of Ident.t
+  | Generator_in_static_binding of Path.t
 
 
 let not_principal fmt =
@@ -258,10 +266,8 @@ let type_open_decl :
     ref =
   ref (fun ?used_slot:_ _ -> assert false)
 
-(* Forward declaration, to be filled in by Typemod.type_package *)
-
 let type_package =
-  ref (fun _ -> assert false)
+  ref (fun ?annotation:_ _ -> assert false)
 
 (* Forward declaration, to be filled in by Typemod.check_package_closed *)
 
@@ -305,7 +311,7 @@ type recarg =
 let mk_expected ?explanation ty = { ty; explanation; }
 
 let case lhs rhs =
-  {c_lhs = lhs; c_cont = None; c_guard = None; c_rhs = rhs}
+  {c_lhs = lhs; c_cont = None; c_guard = None; c_rhs = rhs; c_evidence = None}
 
 (* Typing of constants *)
 
@@ -478,6 +484,7 @@ let type_continuation_pat env expected_ty sp =
       let id = Ident.create_local name.txt in
       let desc =
         { val_type = expected_ty; val_kind = Val_reg;
+          val_staging_level = Env.get_env_level env;
           Types.val_loc = loc; val_attributes = [];
           val_uid = Uid.mk ~current_unit:(Env.get_current_unit ()); }
       in
@@ -1865,6 +1872,19 @@ let forbid_atomic_field_patterns loc penv (label_lid, label, pat) =
 
 (** [type_pat] propagates the expected type, and
     unification may update the typing environment. *)
+let check_extension_constructor_staging loc env path =
+  if Env.get_env_mode env = Types.M_Q then begin
+    let root = Path.head path in
+    if not (Ident.global root || Ident.is_predef root) then
+      let ok =
+        match Env.constructor_staging_level path env with
+        | l -> l = Env.get_env_level env
+        | exception Not_found -> false
+      in
+      if not ok then
+        raise (Error (loc, env, Quoted_local_extension_constructor path))
+  end
+
 let rec type_pat
   : type k . type_pat_state -> k pattern_category ->
       no_existentials: existential_restriction option ->
@@ -2094,6 +2114,11 @@ and type_pat_aux
         raise(Error(loc, !!penv, Constructor_arity_mismatch(lid.txt,
                                      constr.cstr_arity, List.length sargs)));
 
+      (match constr.cstr_tag with
+       | Cstr_extension (p, _) ->
+           check_extension_constructor_staging loc !!penv p
+       | _ -> ());
+
       let (ty_args, existential_ctyp) =
         solve_Ppat_construct tps penv loc constr no_existentials
           existential_styp expected_ty
@@ -2298,6 +2323,7 @@ let add_pattern_variables ?check ?check_as env pv =
        let check = if pv_kind=As_var then check_as else check in
        Env.add_value ?check pv_id
          {val_type = pv_type; val_kind = Val_reg; Types.val_loc = pv_loc;
+          val_staging_level = Env.get_env_level env;
           val_attributes = pv_attributes;
           val_uid = pv_uid;
          } env
@@ -2400,6 +2426,7 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
           Env.add_value pv_id
             { val_type = pv_type
             ; val_kind = Val_reg
+            ; val_staging_level = Env.get_env_level val_env
             ; val_attributes = pv_attributes
             ; val_loc = pv_loc
             ; val_uid
@@ -2410,6 +2437,7 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
           Env.add_value id' ~check
             { val_type = pv_type
             ; val_kind = Val_ivar (Immutable, cl_num)
+            ; val_staging_level = Env.get_env_level met_env
             ; val_attributes = pv_attributes
             ; val_loc = pv_loc
             ; val_uid
@@ -2966,11 +2994,9 @@ let dependent_labeled_app_error env err ~rev_args ~funct me_opt ty_fun
     let loc = beginning_function_loc rev_args ~funct in
     raise(Error(loc, env, Cannot_omit_tfunctor_argument (id_us, ty_res)))
 
-(* Given the module expression [M] and package type [(module S with cstrs)],
-   this returns the module expression [(M : S with cstrs)]. *)
-let module_with_package_type_constraint me optyp =
+let package_type_as_module_type optyp =
   match optyp with
-  | None -> me
+  | None -> None
   | Some ptyp ->
     let loc = ptyp.ppt_loc in
     let path = Ast_helper.Mty.ident ~loc ptyp.ppt_path in
@@ -2982,8 +3008,7 @@ let module_with_package_type_constraint me optyp =
         in Pwith_type (lid, t))
         ptyp.ppt_constraints
     in
-    let mty = Ast_helper.Mty.with_ ~loc path cstrs in
-    Ast_helper.Mod.constraint_ ~loc ~attrs:ptyp.ppt_attrs me mty
+    Some (Ast_helper.Mty.with_ ~loc ~attrs:ptyp.ppt_attrs path cstrs)
 
 let extract_packing sarg =
   match sarg.pexp_desc with
@@ -3012,10 +3037,10 @@ let collect_arrow_arg ~may_warn ~funct ~optional ~sargs ~ty_arg ~ty_arg0 ~lv
       end
 
 let type_tfunctor_module_arg ~env ~sarg ~me ~optyp ~pack ~pack0 =
-  let me = module_with_package_type_constraint me optyp in
+  let annotation = package_type_as_module_type optyp in
   (* We expanded the code here to prevent a principality warning
       because the expected signature is not closed. *)
-  let (modl, pack') = !type_package env me pack in
+  let (modl, pack') = !type_package ?annotation env me pack in
   let texp =
     {
       exp_desc = Texp_pack modl;
@@ -3361,6 +3386,7 @@ let rec is_nonexpansive exp =
      See GPR#1142 *)
   | Texp_assert (exp, _) ->
       is_nonexpansive exp
+  | Texp_quote (e, _) | Texp_splice { spl_exp = e } -> is_nonexpansive e
   | Texp_apply ({ exp_desc = Texp_ident (_, _, {val_kind = Val_prim p}) },
                 args) ->
     begin match p, args with
@@ -3391,7 +3417,7 @@ and is_nonexpansive_struct_item item =
   match item.str_desc with
   | Tstr_eval _ | Tstr_primitive _ | Tstr_type _
   | Tstr_modtype _ | Tstr_class_type _  -> true
-  | Tstr_value (_, pat_exp_list) ->
+  | Tstr_value (_, _, pat_exp_list) ->
       List.for_all (fun vb -> is_nonexpansive vb.vb_expr) pat_exp_list
   | Tstr_module {mb_expr=m;_}
   | Tstr_open {open_expr=m;_}
@@ -3760,7 +3786,8 @@ let check_partial_application ~statement exp =
             | Texp_while _ | Texp_for _ | Texp_instvar _
             | Texp_setinstvar _ | Texp_override _ | Texp_assert _
             | Texp_lazy _ | Texp_object _ | Texp_pack _ | Texp_unreachable
-            | Texp_extension_constructor _ | Texp_ifthenelse (_, _, None)
+            | Texp_extension_constructor _ | Texp_quote _ | Texp_splice _
+            | Texp_ifthenelse (_, _, None)
             | Texp_function _ ->
                 check_statement ()
             | Texp_match (_, cases, eff_cases, _) ->
@@ -4064,6 +4091,35 @@ type type_function_result_param =
   has_poly : bool;
 }
 
+let check_env_mode loc accepted err env =
+  if not (List.mem (Env.get_env_mode env) accepted) then
+    raise (Error (loc, env, err))
+
+
+let check_module_root_staging_level loc (path : Path.t) (env : Env.t) : unit =
+  if Env.get_env_level env >= 0 then
+    match Path.head path with
+    | id when Env.is_compile_time_module id env ->
+        raise (Error (loc, env, Compile_time_module_in_runtime_code id))
+    | _ | exception _ -> ()
+
+let check_value_staging_level loc (path : Path.t)
+    (value : Types.value_description) (env : Env.t) : unit =
+  match value.val_kind with
+  | Val_prim _ -> ()
+  | _ ->
+  let bind_level = Types.val_serving_level value in
+  let expected_level = Env.get_env_level env in
+
+  if Types.val_is_macro value && Env.in_static_init env then
+    raise (Error (loc, env, Generator_in_static_binding path));
+  if bind_level <> expected_level then begin
+    raise (Error (loc, env,
+                  Value_level_mismatch
+                    { path; bound = bind_level; used = expected_level;
+                      in_quotation = Env.get_env_mode env = Types.M_Q }))
+  end
+
 (** lower the level of function arguments to the level of the application *)
 let lower_args outer_level env ty_fun =
   let lower env ty =
@@ -4262,6 +4318,8 @@ and type_expect_
   match sexp.pexp_desc with
   | Pexp_ident lid ->
       let path, desc = type_ident env ~recarg lid in
+      check_value_staging_level loc path desc env;
+      check_module_root_staging_level loc path env;
       let exp_desc =
         match desc.val_kind with
         | Val_ivar (_, cl_num) ->
@@ -4849,6 +4907,7 @@ and type_expect_
         | Ppat_var {txt} ->
             Env.enter_value txt
               {val_type = instance Predef.type_int;
+               val_staging_level = Env.get_env_level env;
                val_attributes = [];
                val_kind = Val_reg;
                val_loc = loc;
@@ -5223,6 +5282,7 @@ and type_expect_
             | Cstr_extension (path, _) -> path
             | _ -> raise (Error (lid.loc, env, Not_an_extension_constructor))
           in
+          check_extension_constructor_staging lid.loc env path;
           rue {
             exp_desc = Texp_extension_constructor (lid, path);
             exp_loc = loc; exp_extra = [];
@@ -5258,7 +5318,64 @@ and type_expect_
       end
   | Pexp_extension ext ->
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
+  | Pexp_quote e ->
+      check_env_mode loc [Types.M_C ; Types.M_S] Quotation_in_quotation env;
+      let ty = newgenvar () in
+      let to_unify = Predef.type_expr ty in
+      with_explanation (fun () ->
+        unify_exp_types loc env to_unify (generic_instance ty_expected));
+      Env.enter_quotation ();
+      let body =
+        match
+          type_expect (Env.with_mode M_Q (Env.with_level_up env))
+            e (mk_expected ty)
+        with
+        | body -> body
+        | exception exn -> ignore (Env.leave_quotation ()); raise exn
+      in
+      let evidence = Env.leave_quotation () in
+      re {
+        exp_desc = Texp_quote (body, evidence);
+        exp_loc = loc; exp_extra = [];
+        exp_type = instance ty_expected;
+        exp_attributes = sexp.pexp_attributes;
+        exp_env = env;
+      }
+  | Pexp_splice e ->
+      check_env_mode loc [Types.M_C ; Types.M_Q] Splice_in_splice env;
 
+      let tl_n : int option =
+        if Env.get_env_mode env = Types.M_C then begin
+          if Env.get_env_level env <> 0 then begin
+            raise (Error (loc, env,
+                          Splice_outside_quotation (Env.get_env_level env)))
+          end;
+          let before_bump = Env.get_tlsplice_count () in
+          Env.set_tlsplice_count (before_bump + 1);
+          Some before_bump
+        end else
+          None
+      in
+
+      let lowered = Env.with_mode M_S (Env.with_level_down env) in
+      let body =
+        if not (Env.equations_above (Env.get_env_level lowered) lowered) then
+          type_expect lowered e (mk_expected (Predef.type_expr ty_expected))
+        else begin
+          let body = type_exp lowered e in
+          unify_exp_types loc env body.exp_type
+            (instance (Predef.type_expr ty_expected));
+          body
+        end
+      in
+      re {
+        exp_desc = Texp_splice { spl_exp = body; spl_index = tl_n };
+        exp_loc = loc;
+        exp_extra = [];
+        exp_type = instance ty_expected;
+        exp_attributes = sexp.pexp_attributes;
+        exp_env = env;
+      }
   | Pexp_unreachable ->
       re { exp_desc = Texp_unreachable;
            exp_loc = loc; exp_extra = [];
@@ -5653,7 +5770,7 @@ and type_function
             let default = type_expect env default (mk_expected ty_default) in
             ty_default, Some default
       in
-      let (pat, params, body, newtypes, contains_gadt), partial =
+      let (pat, params, body, newtypes, contains_gadt, evidence), partial =
         (* Check everything else in the scope of the parameter. *)
         map_half_typed_cases Value env ty_arg_internal ty_ret pat.ppat_loc
           ~check_if_total:true
@@ -5661,7 +5778,7 @@ and type_function
           [ { pattern = pat; has_guard = false; needs_refute = false }, () ]
           ~type_body:begin
             fun () pat ~when_env:_ ~ext_env ~cont:_ ~ty_expected ~ty_infer:_
-              ~contains_gadt:param_contains_gadt ->
+              ~contains_gadt:param_contains_gadt ~evidence ->
               let _, params, body, newtypes, suffix_contains_gadt =
                 type_function ext_env rest body_constraint body
                   ty_expected ~first:false ~in_function
@@ -5672,7 +5789,7 @@ and type_function
                 else
                   suffix_contains_gadt
               in
-              (pat, params, body, newtypes, contains_gadt)
+              (pat, params, body, newtypes, contains_gadt, evidence)
           end
         |> function
           (* The result must be a singleton because we passed a singleton
@@ -5719,6 +5836,7 @@ and type_function
             { fp_kind;
               fp_arg_label = arg_label;
               fp_param;
+              fp_evidence = evidence;
               fp_partial = partial;
               fp_newtypes = newtypes;
               fp_loc = pparam_loc;
@@ -5896,6 +6014,7 @@ and type_moddep_fun ~env ~name ~pack_param ~rest ~arg_label ~first
     { fp_kind;
       fp_arg_label = arg_label;
       fp_param = s_ident;
+      fp_evidence = None;
       fp_partial = Total;
       fp_newtypes = newtypes;
       fp_loc = pparam_loc;
@@ -6286,6 +6405,7 @@ and type_argument ?explanation ?recarg env sarg ty_expected' ty_expected =
         let id = Ident.create_local name in
         let desc =
           { val_type = ty; val_kind = Val_reg;
+            val_staging_level = Env.get_env_level env;
             val_attributes = [];
             val_loc = Location.none;
             val_uid = Uid.mk ~current_unit:(Env.get_current_unit ());
@@ -6493,6 +6613,10 @@ and type_construct env ~sexp lid sarg ty_expected_explained =
       ty_expected_explained
       (Constructor.disambiguate Env.Positive lid env expected_type) constrs
   in
+  (match constr.cstr_tag with
+   | Cstr_extension (p, _) ->
+       check_extension_constructor_staging lid.loc env p
+   | _ -> ());
   let sargs =
     match sarg with
       None -> []
@@ -6633,6 +6757,7 @@ and map_half_typed_cases
         -> ty_expected:_ (* type to check body in scope of *)
         -> ty_infer:_ (* type to infer for body *)
         -> contains_gadt:_ (* whether the pattern contains a GADT *)
+        -> evidence:_
         -> ret)
     -> check_if_total:bool (* if false, assume Partial right away *)
     -> ret list * partial
@@ -6781,6 +6906,14 @@ and map_half_typed_cases
         in
         let when_env = add_pattern_vars ext_env pvs in
         let when_env = add_module_variables when_env mvs in
+        let when_env, evidence =
+          if Env.get_env_mode env <> M_Q then when_env, None
+          else
+            let ev = Ident.create_local "evidence_equal" in
+            match Env.attach_evidence ev ~outer:env when_env with
+            | Some when_env -> when_env, Some ev
+            | None -> when_env, None
+        in
         let ext_env = add_pattern_vars when_env cont_vars in
         let ty_expected =
           if contains_gadt && not !Clflags.principal then
@@ -6789,7 +6922,7 @@ and map_half_typed_cases
             duplicate_type ty_res
           else ty_res in
         type_body case_data pat ~when_env ~ext_env ~cont ~ty_expected
-          ~ty_infer:ty_res' ~contains_gadt)
+          ~ty_infer:ty_res' ~contains_gadt ~evidence)
     conts half_typed_cases
   end in
   let do_init = may_contain_gadts || needs_exhaust_check in
@@ -6878,7 +7011,7 @@ and type_cases
     ~check_if_total
     ~type_body:begin
       fun { pc_guard; pc_rhs } pat ~when_env ~ext_env ~cont ~ty_expected
-        ~ty_infer ~contains_gadt:_ ->
+        ~ty_infer ~contains_gadt:_ ~evidence ->
         let cont = Option.map (fun (id,_) -> id) cont in
         let guard =
           match pc_guard with
@@ -6900,6 +7033,7 @@ and type_cases
         {
           c_lhs = pat;
           c_cont = cont;
+          c_evidence = evidence;
           c_guard = guard;
           c_rhs = {exp with exp_type = ty_infer}
         }
@@ -8142,6 +8276,58 @@ let report_error ~loc env = function
             The module argument %a cannot be omitted in this application.@]"
             (Style.as_inline_code Printtyp.type_expr) func_ty
             Style.inline_code (Ident.Unscoped.name id_us)
+  | Value_level_mismatch { path; bound; used; in_quotation } ->
+      if bound < 0 && in_quotation then
+        Location.errorf ~loc
+          "%a is bound %s, but this use is %s.\
+         @ A compile-time value reaches the code a quotation builds only\
+         @ through a splice (%a) or a lift (%a)."
+          (Style.as_inline_code Printtyp.path) path
+          (Env.describe_level bound) (Env.describe_level used)
+          Style.inline_code "$x" Style.inline_code "Expr.int"
+      else
+        Location.errorf ~loc "%a is bound %s, but this use is %s."
+          (Style.as_inline_code Printtyp.path) path
+          (Env.describe_level bound) (Env.describe_level used)
+  | Splice_outside_quotation level ->
+      Location.errorf ~loc
+        "A splice outside a quotation is evaluated at compile time,\
+       @ which is meaningful only at the top level of a module.\
+       @ This one is %s."
+        (Env.describe_level level)
+  | Quotation_in_quotation ->
+      Location.errorf ~loc
+        "A quotation cannot appear directly inside another quotation.\
+       @ Quotations nest only through a splice:@ %a."
+        Style.inline_code "<< ... $( ... << ... >> ... ) ... >>"
+  | Splice_in_splice ->
+      Location.errorf ~loc
+        "A splice cannot appear directly inside another splice.\
+       @ Splices nest only through a quotation:@ %a."
+        Style.inline_code "$( ... << ... $( ... ) ... >> ... )"
+  | Quoted_local_extension_constructor path ->
+      Location.errorf ~loc
+        "The extension constructor %a cannot be used inside this\
+       @ quotation: the code a quotation builds runs in another program,\
+       @ which has no such constructor, so the quotation would capture\
+       @ this one's."
+        (Style.as_inline_code Printtyp.path) path
+  | Generator_in_static_binding path ->
+      Location.errorf ~loc
+        "The generator %a cannot be used in a static binding ($let):\
+       @ the code a generator builds refers to run-time values through\
+       @ the environment its caller supplies, and a static binding runs\
+       @ with no run-time context to supply one.\
+       @ Call it from a splice, or from another generator, instead."
+        (Style.as_inline_code Printtyp.path) path
+  | Compile_time_module_in_runtime_code id ->
+      Location.errorf ~loc
+        "The module %a is bound in compile-time code, so the code this\
+       @ quotation builds cannot name it: that code runs in another\
+       @ program, which has no such module.\
+       @ Bind the module outside the generator or splice body, or move the\
+       @ reference into a splice."
+        Style.inline_code (Ident.name id)
 
 let report_error ~loc env err =
   Printtyp.wrap_printing_env ~error:true env

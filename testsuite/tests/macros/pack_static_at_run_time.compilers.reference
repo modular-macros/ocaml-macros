@@ -1,0 +1,11 @@
+File "pack_static_at_run_time.ml", line 16, characters 16-17:
+16 | let p = (module K : S)
+                     ^
+Error: Signature mismatch:
+       Modules do not match: sig $val v : int end is not included in S
+       Values do not match: $val v : int is not included in val v : int
+       One is a compile-time binding ($val) and the other an ordinary value
+       File "pack_static_at_run_time.ml", line 14, characters 20-31:
+         Expected declaration
+       File "pack_static_at_run_time.ml", line 15, characters 23-24:
+         Actual declaration

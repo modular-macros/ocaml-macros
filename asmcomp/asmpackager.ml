@@ -26,9 +26,19 @@ type error =
   | Linking_error
   | Assembler_error of string
   | File_not_found of string
+  | Macro_member of string
 
 
 exception Error of error
+
+let check_no_macro_members initial_env files =
+  List.iter
+    (fun file ->
+       let artifact = Unit_info.Artifact.from_filename file in
+       let sg = Env.read_signature (Unit_info.companion_cmi artifact) in
+       if Mtype.has_macro_components initial_env (Types.Mty_signature sg) then
+         raise (Error (Macro_member file)))
+    files
 
 (* Read the unit information from a .cmx file. *)
 
@@ -270,6 +280,7 @@ let package_files ~ppf_dump initial_env files targetcmx ~backend =
   let cmx = Unit_info.Artifact.from_filename targetcmx in
   let cmi = Unit_info.companion_cmi cmx in
   let obj = Unit_info.companion_obj cmx in
+  check_no_macro_members initial_env files;
   (* Set the name of the current "input" *)
   Location.input_name := targetcmx;
   (* Set the name of the current compunit *)
@@ -307,10 +318,21 @@ let report_error_doc ppf = function
       fprintf ppf "Error while assembling %a" Style.inline_code file
   | Linking_error ->
       fprintf ppf "Error during partial linking"
+  | Macro_member file ->
+      fprintf ppf
+        "%a defines macros or template functors,@ and %a copies only \
+         run-time objects,@ so the packed unit's compile-time components \
+         could never be resolved.@ A macro-bearing unit cannot be a \
+         member of a pack."
+        Location.Doc.quoted_filename file
+        Style.inline_code "-pack"
 
 let () =
   Location.register_error_of_exn
     (function
+      | Error (Macro_member file as err) ->
+          Some (Location.error_of_printer ~loc:(Location.in_file file)
+                  report_error_doc err)
       | Error err -> Some (Location.error_of_printer_file report_error_doc err)
       | _ -> None
     )

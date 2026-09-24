@@ -139,7 +139,7 @@ module Lazy : sig
   and modtype =
     | MtyL_ident of Path.t
     | MtyL_signature of signature
-    | MtyL_functor of functor_parameter * modtype
+    | MtyL_functor of Asttypes.functor_kind * functor_parameter * modtype
     | MtyL_alias of Path.t
 
   and modtype_declaration =

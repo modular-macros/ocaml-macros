@@ -293,7 +293,7 @@ module MT = struct
     | Pmty_ident s -> iter_loc_lid sub s
     | Pmty_alias s -> iter_loc_lid sub s
     | Pmty_signature sg -> sub.signature sub sg
-    | Pmty_functor (param, mt2) ->
+    | Pmty_functor (_, param, mt2) ->
         iter_functor_param sub param;
         sub.module_type sub mt2
     | Pmty_with (mt, l) ->
@@ -351,13 +351,13 @@ module M = struct
     match desc with
     | Pmod_ident x -> iter_loc_lid sub x
     | Pmod_structure str -> sub.structure sub str
-    | Pmod_functor (param, body) ->
+    | Pmod_functor (_, param, body) ->
         iter_functor_param sub param;
         sub.module_expr sub body
-    | Pmod_apply (m1, m2) ->
+    | Pmod_apply (_, m1, m2) ->
         sub.module_expr sub m1;
         sub.module_expr sub m2
-    | Pmod_apply_unit m1 ->
+    | Pmod_apply_unit (_, m1) ->
         sub.module_expr sub m1
     | Pmod_constraint (m, mty) ->
         sub.module_expr sub m; sub.module_type sub mty
@@ -369,7 +369,7 @@ module M = struct
     match desc with
     | Pstr_eval (x, attrs) ->
         sub.attributes sub attrs; sub.expr sub x
-    | Pstr_value (_r, vbs) -> List.iter (sub.value_binding sub) vbs
+    | Pstr_value (_r, _m, vbs) -> List.iter (sub.value_binding sub) vbs
     | Pstr_primitive vd -> sub.value_description sub vd
     | Pstr_type (_rf, l) -> List.iter (sub.type_declaration sub) l
     | Pstr_typext te -> sub.type_extension sub te
@@ -482,6 +482,8 @@ module E = struct
         sub.binding_op sub let_;
         List.iter (sub.binding_op sub) ands;
         sub.expr sub body
+    | Pexp_quote e -> sub.expr sub e
+    | Pexp_splice e -> sub.expr sub e
     | Pexp_extension x -> sub.extension sub x
     | Pexp_unreachable -> ()
     | Pexp_struct_item (si, e) ->

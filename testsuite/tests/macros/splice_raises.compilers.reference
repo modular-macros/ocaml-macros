@@ -1,0 +1,4 @@
+File "splice_raises.ml", line 18, characters 11-18:
+18 | let x = $( boom () )
+                ^^^^^^^
+Error: Compile-time evaluation of this splice raised Failure("boom").

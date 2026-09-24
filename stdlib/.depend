@@ -133,6 +133,19 @@ camlinternalFormatBasics.cmo : \
 camlinternalFormatBasics.cmx : \
     camlinternalFormatBasics.cmi
 camlinternalFormatBasics.cmi :
+camlinternalLam.cmo : \
+    stdlib__Printf.cmi \
+    stdlib__Obj.cmi \
+    stdlib__Nativeint.cmi \
+    stdlib__List.cmi \
+    camlinternalLam.cmi
+camlinternalLam.cmx : \
+    stdlib__Printf.cmx \
+    stdlib__Obj.cmx \
+    stdlib__Nativeint.cmx \
+    stdlib__List.cmx \
+    camlinternalLam.cmi
+camlinternalLam.cmi :
 camlinternalLazy.cmo : \
     stdlib__Sys.cmi \
     stdlib__Obj.cmi \
@@ -178,6 +191,20 @@ camlinternalOO.cmx : \
     camlinternalOO.cmi
 camlinternalOO.cmi : \
     stdlib__Obj.cmi
+camlinternalQuote.cmo : \
+    stdlib__Set.cmi \
+    stdlib__List.cmi \
+    stdlib__Effect.cmi \
+    camlinternalLam.cmi \
+    camlinternalQuote.cmi
+camlinternalQuote.cmx : \
+    stdlib__Set.cmx \
+    stdlib__List.cmx \
+    stdlib__Effect.cmx \
+    camlinternalLam.cmx \
+    camlinternalQuote.cmi
+camlinternalQuote.cmi : \
+    stdlib__Effect.cmi
 stdlib__Char.cmo : char.ml \
     stdlib__Char.cmi
 stdlib__Char.cmx : char.ml \
@@ -300,6 +327,29 @@ stdlib__Ephemeron.cmx : ephemeron.ml \
 stdlib__Ephemeron.cmi : ephemeron.mli \
     stdlib__Seq.cmi \
     stdlib__Hashtbl.cmi
+stdlib__Expr.cmo : expr.ml \
+    stdlib__Uchar.cmi \
+    stdlib__Result.cmi \
+    stdlib__Obj.cmi \
+    stdlib__Either.cmi \
+    stdlib__Complex.cmi \
+    camlinternalQuote.cmi \
+    camlinternalLam.cmi \
+    stdlib__Expr.cmi
+stdlib__Expr.cmx : expr.ml \
+    stdlib__Uchar.cmx \
+    stdlib__Result.cmx \
+    stdlib__Obj.cmx \
+    stdlib__Either.cmx \
+    stdlib__Complex.cmx \
+    camlinternalQuote.cmx \
+    camlinternalLam.cmx \
+    stdlib__Expr.cmi
+stdlib__Expr.cmi : expr.mli \
+    stdlib__Uchar.cmi \
+    stdlib__Result.cmi \
+    stdlib__Either.cmi \
+    stdlib__Complex.cmi
 stdlib__Filename.cmo : filename.ml \
     stdlib__Sys.cmi \
     stdlib__String.cmi \

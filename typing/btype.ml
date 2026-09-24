@@ -483,7 +483,7 @@ let type_iterators_without_type_expr =
       Mty_ident p
     | Mty_alias p -> it.it_path p
     | Mty_signature sg -> it.it_signature it sg
-    | Mty_functor (p, mt) ->
+    | Mty_functor (_, p, mt) ->
         it.it_functor_param it p;
         it.it_module_type it mt
   and it_class_type it = function
