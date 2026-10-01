@@ -477,6 +477,12 @@ and expression i ppf x =
       binding_op (i+1) ppf let_;
       list (i+1) binding_op ppf ands;
       case i ppf body
+  | Texp_quote e ->
+      line i ppf "Texp_quote\n";
+      expression i ppf e;
+  | Texp_splice e ->
+      line i ppf "Texp_splice\n";
+      expression i ppf e;
   | Texp_unreachable ->
       line i ppf "Texp_unreachable"
   | Texp_extension_constructor (li, _) ->

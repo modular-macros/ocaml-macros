@@ -123,6 +123,7 @@ let name_expression ~loc ~attrs exp =
   let vd =
     { val_type = exp.exp_type;
       val_kind = Val_reg;
+      val_staging_level = 0;
       val_loc = loc;
       val_attributes = attrs;
       val_uid = Uid.internal_not_actually_unique; }

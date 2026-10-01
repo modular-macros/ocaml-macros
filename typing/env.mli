@@ -61,6 +61,18 @@ val diff: t -> t -> Ident.t list
 (* approximation to the preimage equivalence class of [find_type] *)
 val same_type_declarations: t -> t -> bool
 
+(* The staging level and mode of the code being typed *)
+val get_env_level : t -> staging_level
+val with_level: staging_level -> t -> t
+val with_level_up: t -> t
+val with_level_down: t -> t
+val get_env_mode : t -> staging_mode
+val with_mode: staging_mode -> t -> t
+
+(* A staging level as an error message describes it: "at run time",
+   "in compile-time code", "inside a quotation". *)
+val describe_level : staging_level -> string
+
 type type_descr_kind =
   (label_description, constructor_description) type_kind
 

@@ -118,11 +118,24 @@ module Meths = Misc.Stdlib.String.Map
 module Vars = Misc.Stdlib.String.Map
 
 
+(* Staging *)
+
+(* The number of quotations less the number of splices around a binding
+   or a use: 0 at run time, 1 inside a quotation, -1 in compile-time
+   code. *)
+type staging_level = int
+
+type staging_mode =
+  | M_C  (* Inside neither a quotation nor a splice *)
+  | M_Q  (* Directly inside a quotation *)
+  | M_S  (* Directly inside a splice *)
+
 (* Value descriptions *)
 
 type value_description =
   { val_type: type_expr;                (* Type of the value *)
     val_kind: value_kind;
+    val_staging_level: staging_level;
     val_loc: Location.t;
     val_attributes: Parsetree.attributes;
     val_uid: Uid.t;

@@ -524,6 +524,8 @@ type t = {
   local_constraints: type_declaration Path.Map.t;
   id_pairs: (Ident.Unscoped.t * Ident.Unscoped.t) list;
   flags: int;
+  env_staging_level: staging_level;
+  env_staging_mode: staging_mode;
 }
 
 and module_components =
@@ -727,6 +729,8 @@ let empty = {
   id_pairs = [];
   flags = 0;
   not_aliasable = Ident.empty;
+  env_staging_level = 0;
+  env_staging_mode = M_C;
  }
 
 let in_signature b env =
@@ -760,6 +764,22 @@ let diff env1 env2 =
   TycompTbl.diff_keys is_local_ext env1.constrs env2.constrs @
   IdTbl.diff_keys env1.modules env2.modules @
   IdTbl.diff_keys env1.classes env2.classes
+
+(* Staging *)
+
+let get_env_level env = env.env_staging_level
+let with_level level env = {env with env_staging_level = level}
+let with_level_up env = with_level (get_env_level env + 1) env
+let with_level_down env = with_level (get_env_level env - 1) env
+
+let get_env_mode env = env.env_staging_mode
+let with_mode mode env = {env with env_staging_mode = mode}
+
+let describe_level = function
+  | 0 -> "at run time"
+  | -1 -> "in compile-time code"
+  | 1 -> "inside a quotation"
+  | n -> Misc.fatal_errorf "Env.describe_level %d" n
 
 (* Functions for use in "wrap" parameters in IdTbl *)
 let wrap_identity x = x

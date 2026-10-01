@@ -146,6 +146,8 @@ and expression_desc =
       body : value case;
       partial : partial;
     }
+  | Texp_quote of expression
+  | Texp_splice of expression
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
   | Texp_struct_item of structure_item * expression

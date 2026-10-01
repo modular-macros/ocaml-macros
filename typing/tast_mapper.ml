@@ -495,6 +495,10 @@ let expr sub x =
           body = sub.case sub body;
           partial;
         }
+    | Texp_quote exp ->
+        Texp_quote (sub.expr sub exp)
+    | Texp_splice exp ->
+        Texp_splice (sub.expr sub exp)
     | Texp_unreachable ->
         Texp_unreachable
     | Texp_extension_constructor (lid, path) ->

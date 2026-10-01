@@ -117,6 +117,29 @@ let is_ref : Types.value_description -> bool = function
         true
   | _ -> false
 
+(* The level of the definitions being checked.  A quotation at that
+   level builds a value, and its splices run when it is evaluated.  Below
+   it, a quotation is part of the code that an enclosing splice
+   generates. *)
+let definition_level = ref 0
+
+let staging_level exp = Env.get_env_level exp.exp_env
+
+let with_definition_level env f =
+  Misc.protect_refs [Misc.R (definition_level, Env.get_env_level env)] f
+
+(* The splices of the body of a quotation *)
+let quotation_splices body =
+  let splices = ref [] in
+  let expr sub e =
+    match e.exp_desc with
+    | Texp_splice e -> splices := e :: !splices
+    | _ -> Tast_iterator.default_iterator.expr sub e
+  in
+  let iterator = { Tast_iterator.default_iterator with expr } in
+  iterator.expr iterator body;
+  !splices
+
 (* See the note on abstracted arguments in the documentation for
     Typedtree.Texp_apply *)
 let is_abstracted_arg : arg_label * apply_arg -> bool = function
@@ -183,8 +206,13 @@ let classify_expression : Typedtree.expression -> sd =
         (* Unit-returning expressions *)
         Static
 
+    | Texp_quote _
     | Texp_unreachable ->
         Static
+
+    | Texp_splice _ ->
+        (* The code that a splice produces has no static size. *)
+        Dynamic
 
     | Texp_apply ({exp_desc = Texp_ident (_, _, vd)}, _)
       when is_ref vd ->
@@ -913,6 +941,17 @@ let rec expression : Typedtree.expression -> term_judg =
           list binding_op (let_ :: ands) <<< Dereference;
           case_env body <<< Delay
         ]
+    | Texp_quote e when staging_level exp = !definition_level ->
+      (*
+        G1 |- e1: m[Guard][Dereference] ... Gn |- en: m[Guard][Dereference]
+        -------------------------------------------------------------------
+        G1 + ... + Gn |- << ... $(e1) ... $(en) ... >>: m
+      *)
+      list expression (quotation_splices e) <<< Dereference <<< Guard
+    | Texp_quote e | Texp_splice e ->
+      (* A splice outside such a quotation generates code, and its
+         quotations are checked as that code. *)
+      expression e
     | Texp_unreachable ->
       (*
         ----------
@@ -1352,6 +1391,7 @@ let is_valid_recursive_expression idlist expr : sd option =
   | _ ->
      let rkind = classify_expression expr in
      let is_valid =
+       with_definition_level expr.exp_env @@ fun () ->
        match rkind with
        | Static ->
          (* The expression has known size or is constant *)
@@ -1402,6 +1442,9 @@ let is_valid_class_expr idlist ce =
       | Tcl_open (_, ce) ->
         class_expr mode ce
   in
-  match Env.unguarded (class_expr Return ce) idlist with
+  match
+    with_definition_level ce.cl_env (fun () ->
+      Env.unguarded (class_expr Return ce) idlist)
+  with
   | [] -> true
   | _ :: _ -> false

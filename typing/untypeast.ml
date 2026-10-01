@@ -558,6 +558,8 @@ let expression sub exp =
         let ands = List.map2 (sub.binding_op sub) ands and_pats in
         let body = sub.expr sub body.c_rhs in
         Pexp_letop {let_; ands; body }
+    | Texp_quote exp -> Pexp_quote (sub.expr sub exp)
+    | Texp_splice exp -> Pexp_splice (sub.expr sub exp)
     | Texp_unreachable ->
         Pexp_unreachable
     | Texp_extension_constructor (lid, _) ->

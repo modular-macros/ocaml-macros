@@ -1665,6 +1665,7 @@ let transl_value_decl env loc valdecl =
   match valdecl.pval_prim with
     [] when Env.is_in_signature env ->
       { val_type = ty; val_kind = Val_reg; Types.val_loc = loc;
+        val_staging_level = 0;
         val_attributes = valdecl.pval_attributes;
         val_uid = Uid.mk ~current_unit:(Env.get_current_unit ());
       }
@@ -1695,6 +1696,7 @@ let transl_value_decl env loc valdecl =
       then raise(Error(valdecl.pval_type.ptyp_loc, Missing_native_external));
       check_unboxable env loc ty;
       { val_type = ty; val_kind = Val_prim prim; Types.val_loc = loc;
+        val_staging_level = 0;
         val_attributes = valdecl.pval_attributes;
         val_uid = Uid.mk ~current_unit:(Env.get_current_unit ());
       }

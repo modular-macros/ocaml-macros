@@ -2338,11 +2338,13 @@ typing/value_rec_check.cmo : \
     typing/types.cmi \
     typing/typeopt.cmi \
     typing/typedtree.cmi \
+    typing/tast_iterator.cmi \
     typing/primitive.cmi \
     typing/path.cmi \
     utils/misc.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
+    typing/env.cmi \
     parsing/asttypes.cmi \
     typing/value_rec_check.cmi
 typing/value_rec_check.cmx : \
@@ -2350,11 +2352,13 @@ typing/value_rec_check.cmx : \
     typing/types.cmx \
     typing/typeopt.cmx \
     typing/typedtree.cmx \
+    typing/tast_iterator.cmx \
     typing/primitive.cmx \
     typing/path.cmx \
     utils/misc.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
+    typing/env.cmx \
     parsing/asttypes.cmx \
     typing/value_rec_check.cmi
 typing/value_rec_check.cmi : \
