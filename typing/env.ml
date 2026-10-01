@@ -522,6 +522,10 @@ type t = {
   not_aliasable: unit Ident.tbl;
   summary: summary;
   local_constraints: type_declaration Path.Map.t;
+  (* The level of the match that learned each equation: the equation is
+     usable at that level and above.  One with no level is usable
+     everywhere. *)
+  local_constraint_levels: int Path.Map.t;
   id_pairs: (Ident.Unscoped.t * Ident.Unscoped.t) list;
   flags: int;
   env_staging_level: staging_level;
@@ -681,10 +685,26 @@ let error err = raise (Error err)
 let lookup_error loc env err =
   error (Lookup_error(loc, env, err))
 
+(* Consulted by Ctype to flush memoised type expansions.  The staging
+   level is part of the comparison because an equation's expansion is
+   valid only at the equation's level and above: an expansion made in
+   a match's arm must not be reused in a splice within it. *)
 let same_type_declarations e1 e2 =
   e1.types == e2.types &&
   e1.modules == e2.modules &&
-  e1.local_constraints == e2.local_constraints
+  e1.local_constraints == e2.local_constraints &&
+  e1.env_staging_level = e2.env_staging_level
+
+(* Whether an equation in scope is not usable below [level]. *)
+let equations_above level env =
+  Path.Map.fold
+    (fun path l acc ->
+       if l <= level then acc
+       else
+         match Path.Map.find_opt path env.local_constraints with
+         | Some decl -> (path, decl) :: acc
+         | None -> acc)
+    env.local_constraint_levels []
 
 let same_constr = ref (fun _ _ _ -> assert false)
 
@@ -726,6 +746,7 @@ let empty = {
   modules = IdTbl.empty; modtypes = IdTbl.empty;
   classes = IdTbl.empty; cltypes = IdTbl.empty;
   summary = Env_empty; local_constraints = Path.Map.empty;
+  local_constraint_levels = Path.Map.empty;
   id_pairs = [];
   flags = 0;
   not_aliasable = Ident.empty;
@@ -1176,15 +1197,21 @@ let type_of_cstr path = function
       end
   | _ -> assert false
 
+(* An equation is usable at its level and above. *)
+let equation_usable path env =
+  match Path.Map.find_opt path env.local_constraint_levels with
+  | Some level -> level <= env.env_staging_level
+  | None -> true
+
 let rec find_type_data path env =
-  match Path.Map.find path env.local_constraints with
-  | decl ->
+  match Path.Map.find_opt path env.local_constraints with
+  | Some decl when equation_usable path env ->
     {
       tda_declaration = decl;
       tda_descriptions = Type_abstract (Btype.type_origin decl);
       tda_shape = Shape.leaf decl.type_uid;
     }
-  | exception Not_found -> begin
+  | _ -> begin
       match path with
       | Pident id -> IdTbl.find_same id env.types
       | Pdot(p, s) ->
@@ -2356,7 +2383,9 @@ let add_module_lazy ~update_summary id presence mty env =
 
 let add_local_constraint path info env =
   { env with
-    local_constraints = Path.Map.add path info env.local_constraints }
+    local_constraints = Path.Map.add path info env.local_constraints;
+    local_constraint_levels =
+      Path.Map.add path env.env_staging_level env.local_constraint_levels }
 
 (* Non-lazy version of scrape_alias *)
 let scrape_alias t mty =
@@ -3612,6 +3641,7 @@ let keep_only_summary env =
        empty with
        summary = env.summary;
        local_constraints = env.local_constraints;
+       local_constraint_levels = env.local_constraint_levels;
        flags = env.flags;
       }
     in
@@ -3625,6 +3655,7 @@ let env_of_only_summary env_from_summary env =
   let new_env = env_from_summary env.summary Subst.identity in
   { new_env with
     local_constraints = env.local_constraints;
+    local_constraint_levels = env.local_constraint_levels;
     flags = env.flags;
   }
 

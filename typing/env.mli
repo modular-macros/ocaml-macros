@@ -61,6 +61,11 @@ val diff: t -> t -> Ident.t list
 (* approximation to the preimage equivalence class of [find_type] *)
 val same_type_declarations: t -> t -> bool
 
+(* The equations in scope that are not usable at the level: each the
+   path of the type it refines, and the declaration that gives it its
+   manifest. *)
+val equations_above: int -> t -> (Path.t * type_declaration) list
+
 (* The staging level and mode of the code being typed *)
 val get_env_level : t -> staging_level
 val with_level: staging_level -> t -> t

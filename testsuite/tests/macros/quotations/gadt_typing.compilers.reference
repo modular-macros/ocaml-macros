@@ -1,0 +1,20 @@
+type (_, _) eql = Refl : ('a, 'a) eql
+val ok2 : ('a, 'b) eql expr -> ('a expr -> 'a expr) -> ('a -> 'b) expr
+val c17 : ('a, 'b) eql expr -> ('b expr -> 'b expr) -> ('a -> 'b) expr
+val ok8 : ('a, 'b) eql -> 'a expr -> 'b expr
+val ok9 : ('a, 'b) eql -> 'a expr -> 'b expr
+val ok13 : ('a, 'b) eql -> 'a expr -> ('b expr -> 'b expr) -> 'b expr
+val param : ('a, 'b) eql expr -> ('b expr -> 'b expr) -> ('a -> 'b) expr
+type _ ty = Int : int ty | Str : string ty | Bool : bool ty
+val typecase :
+  'a ty expr ->
+  (int expr -> 'r expr) ->
+  (string expr -> 'r expr) -> (bool expr -> 'r expr) -> 'a expr -> 'r expr
+val typecase_gen :
+  'a ty expr ->
+  ('r expr -> int expr) ->
+  ('r expr -> string expr) -> ('r expr -> bool expr) -> 'r expr -> 'a expr
+val bad7 : ('a, 'b) eql expr -> ('b -> unit) -> ('a -> 'b) expr
+val bad9 : ('a, 'b) eql expr -> 'a expr -> 'b expr
+type _ pack = Pack : 'e * ('e -> int) -> unit pack
+val ok10 : unit pack expr -> int expr

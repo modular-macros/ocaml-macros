@@ -4088,6 +4088,47 @@ type type_function_result_param =
 
 (* Staging *)
 
+(* Whether [ty], expanded in [env], mentions a type that one of
+   [equations] relates: the type that it refines, or a type of its
+   right-hand side.  A right-hand side with a type variable may relate
+   anything. *)
+let mentions_equations env equations ty =
+  let related = ref Path.Set.empty and any = ref false in
+  List.iter
+    (fun (path, decl) ->
+       related := Path.Set.add path !related;
+       match decl.type_manifest with
+       | None -> any := true
+       | Some rhs ->
+           let visited = ref TypeSet.empty in
+           let rec collect ty =
+             if not (TypeSet.mem ty !visited) then begin
+               visited := TypeSet.add ty !visited;
+               (match get_desc ty with
+                | Tvar _ | Tunivar _ -> any := true
+                | Tconstr (p, _, _) -> related := Path.Set.add p !related
+                | _ -> ());
+               Btype.iter_type_expr collect ty
+             end
+           in
+           collect rhs)
+    equations;
+  equations <> [] &&
+  (!any ||
+   let visited = ref TypeSet.empty in
+   let exception Found in
+   let rec visit ty =
+     let ty = expand_head env ty in
+     if not (TypeSet.mem ty !visited) then begin
+       visited := TypeSet.add ty !visited;
+       (match get_desc ty with
+        | Tconstr (p, _, _) when Path.Set.mem p !related -> raise Found
+        | _ -> ());
+       Btype.iter_type_expr visit ty
+     end
+   in
+   match visit ty with () -> false | exception Found -> true)
+
 let check_env_mode loc accepted err env =
   if not (List.mem (Env.get_env_mode env) accepted) then
     raise (Error (loc, env, err))
@@ -5322,7 +5363,27 @@ and type_expect_
       check_env_mode loc [Types.M_C ; Types.M_Q] Splice_in_splice env;
       let lowered = Env.with_mode M_S (Env.with_level_down env) in
       let body =
-        type_expect lowered e (mk_expected (Predef.type_expr ty_expected))
+        let equations =
+          Env.equations_above (Env.get_env_level lowered) lowered in
+        if not (mentions_equations lowered equations ty_expected) then
+          (* The expected type relates to no equation that the body may
+             not use: check the body against it directly, so that the
+             expected type propagates into it.  Unifying with it cannot
+             need those equations. *)
+          type_expect lowered e (mk_expected (Predef.type_expr ty_expected))
+        else begin
+          (* Equations of the enclosing quotation's match are not usable
+             in the body, which runs before that match has happened.
+             But the splice's result lands in the arm, where they hold:
+             so the body is typed on its own, and its type is unified
+             with the expected one here, in the arm's environment.  The
+             expected type is not propagated into the body in this
+             case. *)
+          let body = type_exp lowered e in
+          unify_exp_types loc env body.exp_type
+            (instance (Predef.type_expr ty_expected));
+          body
+        end
       in
       re {
         exp_desc = Texp_splice body;
