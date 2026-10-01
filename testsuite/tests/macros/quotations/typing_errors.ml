@@ -59,6 +59,8 @@ Line 1, characters 26-27:
 1 | let a = $(let y = 1 in << y >>)
                               ^
 Error: "y" is bound in compile-time code, but this use is at run time.
+       A compile-time value reaches the code a quotation builds only
+       through a splice ("$x") or a lift ("Expr.int").
 |}]
 
 let a = << fun y -> $(y) >>

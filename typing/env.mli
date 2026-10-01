@@ -197,6 +197,7 @@ type unbound_value_hint =
 
 type lookup_error =
   | Unbound_value of Longident.t * unbound_value_hint
+  | Level_mismatch of Longident.t * int * int * bool
   | Unbound_type of Longident.t
   | Unbound_constructor of Longident.t
   | Unbound_label of Longident.t

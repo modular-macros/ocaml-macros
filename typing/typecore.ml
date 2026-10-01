@@ -214,7 +214,6 @@ type error =
   | Optional_poly_param of string
   | Cannot_unify_tfunctor_to_tarrow of Errortrace.unification_error
   | Cannot_omit_tfunctor_argument of Ident.Unscoped.t * type_expr
-  | Value_level_mismatch of { path : Path.t; bound : int; used : int }
   | Quotation_in_quotation
   | Splice_in_splice
 
@@ -4134,7 +4133,8 @@ let check_env_mode loc accepted err env =
     raise (Error (loc, env, err))
 
 (* A value may be used only at the level at which it is bound. *)
-let check_value_staging_level loc path (value : Types.value_description) env =
+let check_value_staging_level loc lid _path (value : Types.value_description)
+    env =
   match value.val_kind with
   | Val_prim _ ->
       (* A primitive is materialised at each use: it has no level. *)
@@ -4143,7 +4143,9 @@ let check_value_staging_level loc path (value : Types.value_description) env =
       let bound = value.val_staging_level in
       let used = Env.get_env_level env in
       if bound <> used then
-        raise (Error (loc, env, Value_level_mismatch { path; bound; used }))
+        Env.lookup_error loc env
+          (Level_mismatch
+             (lid, bound, used, Env.get_env_mode env = Types.M_Q))
 
 (** lower the level of function arguments to the level of the application *)
 let lower_args outer_level env ty_fun =
@@ -5606,7 +5608,7 @@ and type_newtype
 
 and type_ident env ~loc ?(recarg=Rejected) lid =
   let (path, desc) = Env.lookup_value ~loc:lid.loc lid.txt env in
-  check_value_staging_level loc path desc env;
+  check_value_staging_level loc lid.txt path desc env;
   let is_recarg =
     match get_desc desc.val_type with
     | Tconstr(p, _, _) -> Path.is_constructor_typath p
@@ -8287,10 +8289,6 @@ let report_error ~loc env = function
             The module argument %a cannot be omitted in this application.@]"
             (Style.as_inline_code Printtyp.type_expr) func_ty
             Style.inline_code (Ident.Unscoped.name id_us)
-  | Value_level_mismatch { path; bound; used } ->
-      Location.errorf ~loc "%a is bound %s, but this use is %s."
-        (Style.as_inline_code Printtyp.path) path
-        (Env.describe_level bound) (Env.describe_level used)
   | Quotation_in_quotation ->
       Location.errorf ~loc
         "A quotation cannot appear directly inside another quotation.\

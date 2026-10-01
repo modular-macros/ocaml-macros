@@ -415,6 +415,49 @@ module IdTbl =
             raise exn
         end
 
+    (* As [find_name], for a name used at a level, and also returning
+       the shift under which it serves that level.  A local binding is
+       found whatever its level.  A component of an opened module is
+       found only if [serves path descr] gives such a shift. *)
+    let rec find_name_staged ~serves wrap ~mark name tbl =
+      match Ident.find_name name tbl.current with
+      | (id, desc) -> Some (Pident id, desc, 0)
+      | exception Not_found ->
+        begin match tbl.layer with
+        | Open {using; root; next; components} ->
+            let accepted =
+              match NameMap.find name components with
+              | data ->
+                  let descr = wrap data in
+                  Option.map (fun shift -> descr, shift)
+                    (serves (Pdot (root, name)) descr)
+              | exception Not_found -> None
+            in
+            begin match accepted with
+            | Some (descr, shift) ->
+                let res = Pdot (root, name), descr, shift in
+                if mark then begin match using with
+                | None -> ()
+                | Some f ->
+                    begin match
+                      find_name_staged ~serves wrap ~mark:false name next
+                    with
+                    | None -> f name None
+                    | Some (_, descr', _) -> f name (Some (descr', descr))
+                    end
+                end;
+                Some res
+            | None ->
+                find_name_staged ~serves wrap ~mark name next
+            end
+        | Map {f; next} ->
+            Option.map
+              (fun (p, desc, sh) -> (p, f desc, sh))
+              (find_name_staged ~serves wrap ~mark name next)
+        | Nothing ->
+            None
+        end
+
     let rec find_all wrap name tbl =
       List.map
         (fun (id, desc) -> Pident id, desc)
@@ -646,6 +689,9 @@ type unbound_value_hint =
 
 type lookup_error =
   | Unbound_value of Longident.t * unbound_value_hint
+  | Level_mismatch of Longident.t * int * int * bool
+      (* value or class, level it serves, level of the use, whether the
+         use is in a quotation *)
   | Unbound_type of Longident.t
   | Unbound_constructor of Longident.t
   | Unbound_label of Longident.t
@@ -894,13 +940,6 @@ let find_same_module id tbl =
   | exception Not_found
     when Ident.persistent id && not (Current_unit.Name.is_ident id) ->
       Mod_persistent
-
-let find_name_module ~mark name tbl =
-  match IdTbl.find_name wrap_module ~mark name tbl with
-  | x -> x
-  | exception Not_found when not (Current_unit.Name.is name) ->
-      let path = Pident(Ident.create_persistent name) in
-      path, Mod_persistent
 
 let add_persistent_structure id env =
   if not (Ident.persistent id) then invalid_arg "Env.add_persistent_structure";
@@ -2901,12 +2940,62 @@ type _ load =
   | Load : module_data load
   | Don't_load : unit load
 
+(* The shifts under which the module [path] serves its components: a
+   component recorded at the level [l] serves the levels [l + s].  A
+   module serves its components at the levels at which they are
+   recorded. *)
+let module_shifts _env _path = [0]
+
+(* The shift under which the module [path] serves a component recorded
+   at the level [natural], where it is used, if it serves that level *)
+let serving_shift env path natural =
+  let shift = get_env_level env - natural in
+  if List.mem shift (module_shifts env path) then Some shift else None
+
+(* The shift under which the module [path] serves such a component: the
+   one that brings it to the level of the use, or, if none does, the
+   nearest, for the error that follows *)
+let component_shift env path natural =
+  let ambient = get_env_level env in
+  let distance shift = abs (natural + shift - ambient) in
+  match module_shifts env path with
+  | [] -> 0
+  | first :: others ->
+      List.fold_left
+        (fun best shift ->
+           if distance shift < distance best then shift else best)
+        first others
+
+(* The module of a component, if it is not bound in the current scope *)
+let component_module = function
+  | Pdot (p, _) -> Some p
+  | Pident _ | Pextra_ty _ | Papply _ -> None
+
 let lookup_ident_module (type a) (load : a load) ~errors ~use ~loc s env =
+  (* A module that serves the level of the use is preferred, but any
+     will do: a module also has components that are bound at no
+     level. *)
+  let serves_ambient path _ =
+    if List.mem (get_env_level env) (module_shifts env path) then Some 0
+    else None
+  in
   let path, data =
-    match find_name_module ~mark:use s env.modules with
-    | res -> res
-    | exception Not_found ->
-        may_lookup_error errors loc env (Unbound_module (Lident s))
+    match
+      IdTbl.find_name_staged ~serves:serves_ambient wrap_module ~mark:use
+        s env.modules
+    with
+    | Some (path, data, _) -> path, data
+    | None ->
+        match
+          IdTbl.find_name_staged ~serves:(fun _ _ -> Some 0) wrap_module
+            ~mark:use s env.modules
+        with
+        | Some (path, data, _) -> path, data
+        | None ->
+            if not (Current_unit.Name.is s) then
+              (Pident (Ident.create_persistent s), Mod_persistent)
+            else
+              may_lookup_error errors loc env (Unbound_module (Lident s))
   in
   match data with
   | Mod_local mda -> begin
@@ -2932,15 +3021,57 @@ let lookup_ident_module (type a) (load : a load) ~errors ~use ~loc s env =
         end
     end
 
+(* A value found under a shift is served at the shifted level. *)
+let shift_vda shift vda =
+  if shift = 0 then vda
+  else
+    { vda with vda_description =
+        { vda.vda_description with
+          val_staging_level =
+            vda.vda_description.val_staging_level + shift } }
+
+let value_entry_level = function
+  | Val_bound vda ->
+      (match vda.vda_description.val_kind with
+       | Val_prim _ -> None
+       | _ -> Some vda.vda_description.val_staging_level)
+  | Val_unbound _ -> None
+
 let lookup_ident_value ~errors ~use ~loc name env =
-  match IdTbl.find_name wrap_value ~mark:use name env.values with
-  | (path, Val_bound vda) ->
+  (* An open serves a component as a path through its module does. *)
+  let serves path data =
+    match value_entry_level data, component_module path with
+    | Some natural, Some p -> serving_shift env p natural
+    | Some _, None | None, _ -> Some 0
+  in
+  match
+    IdTbl.find_name_staged ~serves wrap_value ~mark:use name env.values
+  with
+  | Some (path, Val_bound vda, shift) ->
+      let vda = shift_vda shift vda in
       use_value ~use ~loc path vda;
       path, vda.vda_description
-  | (_, Val_unbound reason) ->
+  | Some (_, Val_unbound reason, _) ->
       report_value_unbound ~errors ~loc env reason (Lident name)
-  | exception Not_found ->
-      may_lookup_error errors loc env (Unbound_value (Lident name, No_hint))
+  | None ->
+      (* No open serves the name at the level of the use.  As for a
+         qualified name, the value is returned at the nearest level that
+         its module serves, and the caller's check of levels reports
+         it. *)
+      match IdTbl.find_name wrap_value ~mark:false name env.values with
+      | (path, Val_bound vda) ->
+          let shift =
+            match component_module path with
+            | Some p ->
+                component_shift env p vda.vda_description.val_staging_level
+            | None -> 0
+          in
+          let vda = shift_vda shift vda in
+          use_value ~use ~loc path vda;
+          path, vda.vda_description
+      | (_, Val_unbound _) | exception Not_found ->
+          may_lookup_error errors loc env
+            (Unbound_value (Lident name, No_hint))
 
 let lookup_ident_type ~errors ~use ~loc s env =
   match IdTbl.find_name wrap_identity ~mark:use s env.types with
@@ -3123,6 +3254,10 @@ let lookup_dot_value ~errors ~use ~loc l s env =
   in
   match NameMap.find s.txt comps.comp_values with
   | vda ->
+      let shift =
+        component_shift env path vda.vda_description.val_staging_level
+      in
+      let vda = shift_vda shift vda in
       let path = Pdot(path, s.txt) in
       use_value ~use ~loc path vda;
       (path, vda.vda_description)
@@ -3719,6 +3854,21 @@ let extract_instance_variables env =
        | _ -> acc) None env []
 
 let report_lookup_error_doc loc env = function
+  | Level_mismatch (lid, bound, used, in_quotation) ->
+      (* The hint is given only where the fix is the same whatever the
+         program: a compile-time value reaches the code a quotation builds
+         by being spliced or lifted, and there is no other way in. *)
+      let hint ppf =
+        if bound < 0 && in_quotation then
+          Format_doc.fprintf ppf
+            "@ A compile-time value reaches the code a quotation builds only\
+             @ through a splice (%a) or a lift (%a)."
+            Style.inline_code "$x" Style.inline_code "Expr.int"
+      in
+      Location.errorf ~loc
+        "%a is bound %s, but this use is %s.%t"
+        quoted_longident lid (describe_level bound) (describe_level used)
+        hint
   | Unbound_value(lid, hint) ->
       Location.aligned_error_hint ~loc
         "@{<ralign>Unbound value @}%a" quoted_longident lid
