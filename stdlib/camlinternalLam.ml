@@ -86,6 +86,11 @@ type lam = Obj.t
    test_quote_layout checks: the tag of each constructor built, and the
    value of each constant constructor stored. *)
 let lconst_tag = 2
+let lprim_tag = 8
+let pmakearray_tag = 19  (* among the constructors of [primitive] *)
+let pgenarray = 0        (* [array_kind] *)
+let immutable = 0        (* [mutable_flag] *)
+let loc_unknown = 0      (* [scoped_location] *)
 
 let lconst (c : structured_constant) : lam =
   let b = Obj.new_block lconst_tag 1 in
@@ -102,6 +107,20 @@ let boxed_number_kind o =
   else if Nativeint.equal ops int64_ops then `Int64
   else if Nativeint.equal ops nativeint_ops then `Nativeint
   else `Other
+
+let make_iarray (elems : lam list) : lam =
+  match elems with
+  | [] ->
+      lconst (Const_block (0, []))
+  | _ ->
+      let prim = Obj.new_block pmakearray_tag 2 in
+      Obj.set_field prim 0 (Obj.repr pgenarray);
+      Obj.set_field prim 1 (Obj.repr immutable);
+      let b = Obj.new_block lprim_tag 3 in
+      Obj.set_field b 0 prim;
+      Obj.set_field b 1 (Obj.repr elems);
+      Obj.set_field b 2 (Obj.repr loc_unknown);
+      b
 
 let const : 'a. 'a -> lam =
   let rec constant_of : 'a. 'a -> structured_constant = fun o ->

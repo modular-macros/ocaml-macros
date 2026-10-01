@@ -1,0 +1,16 @@
+File "lookup_warnings.ml", line 20, characters 44-53:
+20 | let c = let open List in length [1] + $(let open List in Expr.int (length [1]))
+                                                 ^^^^^^^^^
+Warning 44 [open-shadow-identifier]: this open statement shadows the
+  value identifier length (which is later used)
+
+File "lookup_warnings.ml", line 14, characters 0-6:
+14 | open M
+     ^^^^^^
+Warning 33 [unused-open]: unused open M.
+
+File "lookup_warnings.ml", line 18, characters 14-20:
+18 | let b = $(let open N in Expr.int (List.length [1]))
+                   ^^^^^^
+Warning 33 [unused-open]: unused open N.
+a

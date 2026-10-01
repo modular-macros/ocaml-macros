@@ -381,6 +381,7 @@ val persistent_structures_of_dir : Load_path.Dir.t -> Misc.Stdlib.String.Set.t
    well as run-time code, their level-0 names viewed at level -1. *)
 val register_stage_units : static:Misc.Stdlib.String.Set.t -> unit
 val reset_stage_units : unit -> unit
+val is_static_stage_unit : string -> bool
 
 (* [filter_non_loaded_persistent f env] removes all the persistent
    structures that are not yet loaded and for which [f] returns

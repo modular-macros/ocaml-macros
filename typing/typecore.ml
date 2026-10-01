@@ -313,9 +313,14 @@ let not_implemented_in_staged_code env feature =
   if Env.get_env_level env <> 0 then
     Misc.fatal_error (feature ^ " in staged code: not implemented")
 
-let check_constructor_level env = function
-  | Path.Pident id when Ident.is_predef id -> ()
-  | _ -> not_implemented_in_staged_code env "extension constructors"
+let check_constructor_level env path =
+  let head = Path.head path in
+  let served_at_compile_time =
+    Env.get_env_level env = -1
+    && Ident.persistent head && Env.is_static_stage_unit (Ident.name head)
+  in
+  if not (Ident.is_predef head || served_at_compile_time) then
+    not_implemented_in_staged_code env "extension constructors"
 
 (* Typing of constants *)
 

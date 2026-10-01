@@ -1,0 +1,5 @@
+Loading program... done.
+Breakpoint: 1
+18   <|b|>print_int y; print_newline ()
+x: int = 2
+y: int = 42

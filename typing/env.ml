@@ -2954,6 +2954,8 @@ let register_stage_units ~static =
 let reset_stage_units () =
   static_stage_units := String.Set.empty
 
+let is_static_stage_unit s = String.Set.mem s !static_stage_units
+
 let rec persistent_root = function
   | Pident id -> if Ident.persistent id then Some (Ident.name id) else None
   | Pdot (p, _) | Pextra_ty (p, _) -> persistent_root p

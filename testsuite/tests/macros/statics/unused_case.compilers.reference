@@ -1,0 +1,6 @@
+File "unused_case.ml", line 15, characters 4-5:
+15 |   | 0 -> $(print_endline "splice of the unused case"; Expr.int 2)
+         ^
+Warning 11 [redundant-case]: this match case is unused.
+splice of the first case
+splice of the last case

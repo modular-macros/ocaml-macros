@@ -45,3 +45,6 @@ val const : 'a -> lam
    boxed number, a float, a flat float block, or a block of these.
    Raises [Invalid_argument] on any other value, and does not terminate
    on a cyclic one. *)
+
+val make_iarray : lam list -> lam
+(* [Lprim (Pmakearray (Pgenarray, Immutable), els, Loc_unknown)] *)

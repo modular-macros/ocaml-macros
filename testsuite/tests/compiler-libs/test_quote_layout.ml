@@ -57,7 +57,7 @@ let specimens = [
   Ltrywith (u, id, u); Lifthenelse (u, u, u); Lsequence (u, u);
   Lwhile (u, u); Lfor (id, u, u, Upto, u); Lassign (id, u);
   Lsend (Public, u, u, [], Loc_unknown); Levent (u, ev); Lifused (id, u);
-  Lsplice u ]
+  lsplice u ]
 
 (* Expected Obj size of each constructor's block, in declaration order. *)
 let sizes = [ 1; 1; 1; 1; 1; 5; 4; 2; 3; 3; 4; 2; 3; 3; 3; 2; 2; 5; 2;
@@ -145,7 +145,8 @@ val specimens : Lambda.lambda list =
    Levent (Lconst (Const_int 0),
     {lev_loc = Debuginfo.Scoped_location.Loc_unknown; lev_kind = Lev_before;
      lev_repr = None; lev_env = <abstr>});
-   Lifused (<abstr>, Lconst (Const_int 0)); Lsplice (Lconst (Const_int 0))]
+   Lifused (<abstr>, Lconst (Const_int 0));
+   Lsplice {sp_code = Lconst (Const_int 0); sp_args = []}]
 val sizes : int list =
   [1; 1; 1; 1; 1; 5; 4; 2; 3; 3; 4; 2; 3; 3; 3; 2; 2; 5; 2; 5; 2; 2; 1]
 val lambda_drift : string list = []
@@ -301,4 +302,26 @@ let float_block_drift =
 [%%expect{|
 type fr = { fx : float; fy : float; }
 val float_block_drift : string list = []
+|}]
+
+(* [CamlinternalLam.make_iarray] (serving [Expr.iarray]) constructs
+   [Lprim (Pmakearray (Pgenarray, Immutable), els, Loc_unknown)] as a
+   raw block -- [Lprim]'s tag among [lambda]'s constructors,
+   [Pmakearray]'s among [primitive]'s argument-carrying constructors,
+   and the three immediate-[0] payload constructors are all pinned
+   here; the empty case must be the constant empty array. *)
+let make_iarray_drift =
+  let lam (l : lambda) : CamlinternalLam.lam = Obj.magic l in
+  let e = Lvar id in
+  (match (Obj.magic (CamlinternalLam.make_iarray [ lam u; lam e ])
+          : lambda) with
+   | Lprim (Pmakearray (Pgenarray, Immutable), [ a; b ], Loc_unknown)
+     when a == u && b == e -> []
+   | _ -> [ "make_iarray built a different term" ])
+  @ (match (Obj.magic (CamlinternalLam.make_iarray []) : lambda) with
+     | Lconst (Const_block (0, [])) -> []
+     | _ -> [ "make_iarray [] is not the empty constant array" ])
+;;
+[%%expect{|
+val make_iarray_drift : string list = []
 |}]

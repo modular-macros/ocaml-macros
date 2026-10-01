@@ -1,0 +1,4 @@
+File "unused_case.ml", line 24, characters 7-8:
+24 |      | 0 -> $(note "unused case")
+            ^
+Warning 11 [redundant-case]: this match case is unused.

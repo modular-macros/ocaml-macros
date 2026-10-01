@@ -329,6 +329,29 @@ stdlib__Ephemeron.cmx : ephemeron.ml \
 stdlib__Ephemeron.cmi : ephemeron.mli \
     stdlib__Seq.cmi \
     stdlib__Hashtbl.cmi
+stdlib__Expr.cmo : expr.ml \
+    stdlib__Uchar.cmi \
+    stdlib__Result.cmi \
+    stdlib__Obj.cmi \
+    stdlib__Either.cmi \
+    stdlib__Complex.cmi \
+    camlinternalQuote.cmi \
+    camlinternalLam.cmi \
+    stdlib__Expr.cmi
+stdlib__Expr.cmx : expr.ml \
+    stdlib__Uchar.cmx \
+    stdlib__Result.cmx \
+    stdlib__Obj.cmx \
+    stdlib__Either.cmx \
+    stdlib__Complex.cmx \
+    camlinternalQuote.cmx \
+    camlinternalLam.cmx \
+    stdlib__Expr.cmi
+stdlib__Expr.cmi : expr.mli \
+    stdlib__Uchar.cmi \
+    stdlib__Result.cmi \
+    stdlib__Either.cmi \
+    stdlib__Complex.cmi
 stdlib__Filename.cmo : filename.ml \
     stdlib__Sys.cmi \
     stdlib__String.cmi \

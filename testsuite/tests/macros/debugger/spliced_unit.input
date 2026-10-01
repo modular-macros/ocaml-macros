@@ -1,0 +1,5 @@
+break @ Spliced_unit 18
+run
+print x
+print y
+quit
