@@ -1,0 +1,5 @@
+break @ Code_values 18
+run
+print c
+print l
+quit

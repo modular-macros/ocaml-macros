@@ -42,8 +42,14 @@ val transl_scoped_exp : scopes:scopes -> expression -> lambda
 type error =
     Free_super_var
   | Unreachable_reached
+  | Objects_in_staged_code
 
 exception Error of Location.t * error
+
+(* Reject objects and classes in the code of an expression that is
+   quoted or runs at compile time, or with [~anywhere] in all of it, with
+   a located error. *)
+val check_no_objects : ?anywhere:bool -> Typedtree.expression -> unit
 
 val report_error: error Format_doc.format_printer
 val report_error_doc: error Format_doc.printer

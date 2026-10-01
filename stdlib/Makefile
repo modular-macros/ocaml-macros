@@ -181,7 +181,7 @@ $(OBJS:.cmo=.cmx) std_exit.cmx: $(OPTCOMPILER)
 # Dependencies on Stdlib (not tracked by ocamlc -depend)
 
 $(OTHERS) std_exit.cmo: stdlib.cmi
-$(OTHERS:.cmo=.cmi) std_exit.cmi: stdlib.cmi
+$(OTHERS:.cmo=.cmi) camlinternalLam.cmi std_exit.cmi: stdlib.cmi
 $(OBJS:.cmo=.cmx) std_exit.cmx: stdlib.cmi
 $(OTHERS:.cmo=.cmx) std_exit.cmx: stdlib.cmx
 

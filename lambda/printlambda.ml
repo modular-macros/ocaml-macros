@@ -673,6 +673,9 @@ let rec lam ppf = function
       end
   | Lifused(id, expr) ->
       fprintf ppf "@[<2>(ifused@ %a@ %a)@]" Ident.print id lam expr
+  | Lsplice { sp_code; sp_args } ->
+      fprintf ppf "@[<2>(splice@ %a%a)@]" lam sp_code
+        (fun ppf -> List.iter (fprintf ppf "@ %a" Ident.print)) sp_args
 
 and sequence ppf = function
   | Lsequence(l1, l2) ->

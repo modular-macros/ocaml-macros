@@ -214,6 +214,9 @@ val equal_value_kind : value_kind -> value_kind -> bool
 
 val equal_boxed_integer : boxed_integer -> boxed_integer -> bool
 
+(* stdlib/camlinternalLam.ml mirrors the layout of this type, and builds
+   [Lconst] nodes.  A change here must be made there too, and in
+   testsuite/tests/compiler-libs/test_quote_layout.ml. *)
 type structured_constant =
     Const_int of int
   | Const_char of char
@@ -295,6 +298,11 @@ type function_attribute = {
 
 type scoped_location = Debuginfo.Scoped_location.t
 
+(* The layout of this type, and of the records it refers to, is known to
+   Translquote, whose generated code builds quoted terms as values of
+   this type, and, in the standard library, only to
+   stdlib/camlinternalLam.ml.  A change here must be made there too, and
+   in testsuite/tests/compiler-libs/test_quote_layout.ml. *)
 type lambda =
     Lvar of Ident.t
   | Lmutvar of Ident.t
@@ -323,6 +331,10 @@ type lambda =
   | Lsend of meth_kind * lambda * lambda * lambda list * scoped_location
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
+  (* Compile-time code in a term that is being quoted: a splice inside
+     a quotation.  Translquote replaces it by its contents, so it never
+     reaches code generation. *)
+  | Lsplice of lambda_splice
 
 and rec_binding = {
   id : Ident.t;
@@ -347,6 +359,16 @@ and lambda_apply =
     ap_tailcall : tailcall_attribute;
     ap_inlined : inline_attribute; (* specified with the [@inlined] attribute *)
     ap_specialised : specialise_attribute; }
+
+(* The code of a splice is closed over the variables of the term that it
+   mentions, [sp_args]: its contents are [sp_code] applied to them, or
+   [sp_code] itself if there are none.  The variables are the only
+   subterms of a splice; traversals treat [sp_code] as opaque.  A
+   substitution renames the variables, and replaces none of them by
+   another term. *)
+and lambda_splice =
+  { sp_code : lambda;
+    sp_args : Ident.t list; }
 
 and lambda_switch =
   { sw_numconsts: int;                  (* Number of integer cases *)
@@ -392,6 +414,12 @@ val const_unit: structured_constant
 val const_int : int -> structured_constant
 val lambda_unit: lambda
 
+(* A splice whose contents are the given code, closed over no variable *)
+val lsplice: lambda -> lambda
+
+(* The contents of a splice: its code applied to its variables *)
+val splice_contents: lambda_splice -> lambda
+
 val lambda_of_const : Asttypes.constant -> lambda
 
 (** [dummy_constant] produces a plecholder value with a recognizable
@@ -433,10 +461,12 @@ val shallow_iter:
     sub-terms which are in tail position or not. *)
 
 val transl_prim: string -> string -> lambda
-(** Translate a value from a persistent module. For instance:
+(** Translate a value from a persistent module, given by its path in the
+    module. For instance:
 
     {[
       transl_prim "CamlinternalLazy" "force"
+      transl_prim "CamlinternalQuote" "Identifier.rename"
     ]}
 *)
 
@@ -469,6 +499,8 @@ val subst:
     [freshen_bound_variables], which defaults to [false], freshens
     the bound variables within [lt].
  *)
+
+val thunk: Ident.t -> lambda -> lambda
 
 val rename : Ident.t Ident.Map.t -> lambda -> lambda
 (** A version of [subst] specialized for the case where we're just renaming

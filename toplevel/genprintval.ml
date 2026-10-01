@@ -347,6 +347,10 @@ module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
                 when Path.same path Predef.path_lazy_t ->
                 tree_of_lazy depth obj ty_arg
 
+              | Tconstr (path, [_], _)
+                when Path.same path Predef.path_expr ->
+                Oval_stuff "<code>"
+
               | _ ->
                 match Env.find_type path env with
                 | exception Not_found

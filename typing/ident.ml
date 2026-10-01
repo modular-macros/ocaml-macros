@@ -96,6 +96,9 @@ module Unscoped = struct
   module Set = Stdlib.Set.Make(Ops)
 end
 
+(* The representation of this type is mirrored by
+   [CamlinternalLam.Ident], since quoted terms carry identifiers as
+   run-time data; see testsuite/tests/compiler-libs/test_quote_layout.ml. *)
 type t =
   | Local of { name: string; stamp: int }
   | Scoped of { name: string; stamp: int; scope: int }

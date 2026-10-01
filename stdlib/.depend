@@ -133,6 +133,21 @@ camlinternalFormatBasics.cmo : \
 camlinternalFormatBasics.cmx : \
     camlinternalFormatBasics.cmi
 camlinternalFormatBasics.cmi :
+camlinternalLam.cmo : \
+    stdlib__Printf.cmi \
+    stdlib__Obj.cmi \
+    stdlib__Nativeint.cmi \
+    stdlib__List.cmi \
+    stdlib__Array.cmi \
+    camlinternalLam.cmi
+camlinternalLam.cmx : \
+    stdlib__Printf.cmx \
+    stdlib__Obj.cmx \
+    stdlib__Nativeint.cmx \
+    stdlib__List.cmx \
+    stdlib__Array.cmx \
+    camlinternalLam.cmi
+camlinternalLam.cmi :
 camlinternalLazy.cmo : \
     stdlib__Sys.cmi \
     stdlib__Obj.cmi \
@@ -178,6 +193,18 @@ camlinternalOO.cmx : \
     camlinternalOO.cmi
 camlinternalOO.cmi : \
     stdlib__Obj.cmi
+camlinternalQuote.cmo : \
+    stdlib__Set.cmi \
+    stdlib__Effect.cmi \
+    camlinternalLam.cmi \
+    camlinternalQuote.cmi
+camlinternalQuote.cmx : \
+    stdlib__Set.cmx \
+    stdlib__Effect.cmx \
+    camlinternalLam.cmx \
+    camlinternalQuote.cmi
+camlinternalQuote.cmi : \
+    stdlib__Effect.cmi
 stdlib__Char.cmo : char.ml \
     stdlib__Char.cmi
 stdlib__Char.cmx : char.ml \

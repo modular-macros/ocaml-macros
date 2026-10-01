@@ -64,6 +64,104 @@ let print_out_sig_item = Oprint.out_sig_item
 let print_out_signature = Oprint.out_signature
 let print_out_phrase = Oprint.out_phrase
 
+(* The term of a code value, as the toplevel shows it: its identifiers by
+   name, numbered where distinct identifiers share a name, and without
+   the kinds of values that the term records for the code generator. *)
+let displayed_term term =
+  let idents = ref [] in
+  let note id =
+    if not (List.exists (Ident.same id) !idents) then idents := id :: !idents
+  in
+  let rec collect lam =
+    let open Lambda in
+    begin match lam with
+    | Lvar id | Lmutvar id | Llet (_, _, id, _, _) | Lmutlet (_, id, _, _)
+    | Ltrywith (_, id, _) | Lfor (id, _, _, _, _) | Lassign (id, _)
+    | Lifused (id, _) ->
+        note id
+    | Lfunction { params; _ } -> List.iter (fun (id, _) -> note id) params
+    | Lletrec (decls, _) -> List.iter (fun { id; _ } -> note id) decls
+    | Lstaticcatch (_, (_, ids), _) -> List.iter (fun (id, _) -> note id) ids
+    | _ -> ()
+    end;
+    shallow_iter ~tail:collect ~non_tail:collect lam
+  in
+  collect term;
+  let shown = Hashtbl.create 8 in
+  (* An identifier shown under its own name is kept: making one takes a
+     stamp, which the names of the toplevel's later globals would show. *)
+  let display id =
+    let rec fresh name k =
+      let candidate = if k = 0 then name else Printf.sprintf "%s_%d" name k in
+      if Hashtbl.mem shown candidate then fresh name (k + 1) else candidate
+    in
+    let name = fresh (Ident.name id) 0 in
+    Hashtbl.add shown name ();
+    if name = Ident.name id then id else Ident.create_local name
+  in
+  let renaming =
+    List.fold_left (fun m id -> Ident.Map.add id (display id) m)
+      Ident.Map.empty (List.rev !idents)
+  in
+  let displayed id =
+    Option.value ~default:id (Ident.Map.find_opt id renaming) in
+  let displayed_function
+      { Lambda.kind; params; return = _; body; attr; loc } =
+    Lambda.lfunction' ~kind
+      ~params:(List.map (fun (id, _) -> displayed id, Lambda.Pgenval) params)
+      ~return:Pgenval ~body ~attr ~loc
+  in
+  let rec show lam =
+    let open Lambda in
+    let lam =
+      match lam with
+      | Lvar id -> Lvar (displayed id)
+      | Lmutvar id -> Lmutvar (displayed id)
+      | Llet (_, _, id, def, body) ->
+          Llet (Strict, Pgenval, displayed id, def, body)
+      | Lmutlet (_, id, def, body) -> Lmutlet (Pgenval, displayed id, def, body)
+      | Lfunction f -> Lfunction (displayed_function f)
+      | Lletrec (decls, body) ->
+          let decl { id; def } =
+            { id = displayed id; def = displayed_function def } in
+          Lletrec (List.map decl decls, body)
+      | Lstaticcatch (body, (n, ids), handler) ->
+          Lstaticcatch
+            (body, (n, List.map (fun (id, _) -> displayed id, Pgenval) ids),
+             handler)
+      | Ltrywith (body, id, handler) -> Ltrywith (body, displayed id, handler)
+      | Lfor (id, lo, hi, dir, body) -> Lfor (displayed id, lo, hi, dir, body)
+      | Lassign (id, e) -> Lassign (displayed id, e)
+      | Lifused (id, e) -> Lifused (displayed id, e)
+      | lam -> lam
+    in
+    shallow_map show lam
+  in
+  show term
+
+(* A code value is a pair of its term and the set of its free
+   variables.  The toplevel prints the term, where other users of
+   [Genprintval] print [<code>]. *)
+let print_code ppf obj =
+  let term, _free_variables = (Obj.obj obj : Lambda.lambda * Obj.t) in
+  Misc.protect_refs [Misc.R (Clflags.unique_ids, false)] @@ fun () ->
+  Format.fprintf ppf "@[<2><code@ %a>@]" Printlambda.lambda
+    (displayed_term term)
+
+let () =
+  Genprintval.User_printer.install_generic_outcometree
+    (Path.Pdot (Path.Pident (Ident.create_persistent "Topcommon"),
+                "print_code"))
+    Predef.path_expr
+    (fun _depth ->
+       Genprintval.User_printer.Succ
+         (fun _print_argument ->
+            Genprintval.User_printer.Zero
+              (fun obj ->
+                 Outcometree.Oval_printer
+                   (Format_doc.deprecated_printer
+                      (fun ppf -> print_code ppf obj)))))
+
 let find_eval_phrase str =
   let open Typedtree in
   match str.str_items with

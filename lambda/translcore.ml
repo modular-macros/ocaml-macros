@@ -29,8 +29,26 @@ open Debuginfo.Scoped_location
 type error =
     Free_super_var
   | Unreachable_reached
+  | Objects_in_staged_code
 
 exception Error of Location.t * error
+
+(* Objects and classes are not supported in quotations or in
+   compile-time code. *)
+let check_no_objects ?(anywhere = false) (e : Typedtree.expression) =
+  let staged env =
+    anywhere || Env.get_env_mode env = Types.M_Q || Env.get_env_level env < 0
+  in
+  let expr iter (e : Typedtree.expression) =
+    (match e.exp_desc with
+     | Texp_object _ | Texp_new _ | Texp_instvar _
+     | Texp_setinstvar _ | Texp_override _ when staged e.exp_env ->
+         raise (Error (e.exp_loc, Objects_in_staged_code))
+     | _ -> ());
+    Tast_iterator.default_iterator.expr iter e
+  in
+  let iter = { Tast_iterator.default_iterator with expr } in
+  iter.expr iter e
 
 let use_dup_for_constant_mutable_arrays_bigger_than = 4
 
@@ -39,6 +57,26 @@ let transl_module =
   ref((fun ~scopes:_ _cc _rootpath _modl -> assert false) :
       scopes:scopes -> module_coercion -> Path.t option ->
       module_expr -> lambda)
+
+(* The splice in a quotation of the given code, closed over the
+   variables it mentions: a function of them.  The binders of the
+   quotation occur in the splice as its variables only, where they
+   follow the quoted term through renaming. *)
+let close_splice loc body =
+  match body, Ident.Set.elements (free_variables body) with
+  | Lvar _, _ | _, [] -> { sp_code = body; sp_args = [] }
+  | _, vars ->
+      let params = List.map (fun v -> v, Ident.rename v) vars in
+      let renaming =
+        List.fold_left (fun m (v, p) -> Ident.Map.add v p m)
+          Ident.Map.empty params
+      in
+      { sp_code =
+          lfunction ~kind:Curried
+            ~params:(List.map (fun (_, p) -> p, Pgenval) params)
+            ~return:Pgenval ~attr:default_function_attribute ~loc
+            ~body:(rename renaming body);
+        sp_args = vars }
 
 let transl_struct_item =
   ref ((fun ~scopes:_ _fields _rootpath _stri _next -> assert false) :
@@ -571,8 +609,15 @@ and transl_exp0 ~in_new_scope ~scopes e =
   | Texp_letop{let_; ands; param; body; partial} ->
       event_after ~scopes e
         (transl_letop ~scopes e.exp_loc e.exp_env let_ ands param body partial)
-  | Texp_quote _ | Texp_splice _ ->
-      Misc.fatal_error "quotations and splices: not implemented"
+  | Texp_quote e ->
+    check_no_objects e;
+    Translquote.quote_expression (transl_exp ~scopes e)
+  | Texp_splice body ->
+      if Env.get_env_mode e.exp_env <> Types.M_Q then
+        Misc.fatal_error "top-level splices: not implemented";
+      Lsplice
+        (close_splice (of_location ~scopes body.exp_loc)
+           (transl_exp ~scopes body))
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
   | Texp_struct_item (si, e) ->
@@ -1331,6 +1376,9 @@ let report_error_doc ppf = function
         "Ancestor names can only be used to select inherited methods"
   | Unreachable_reached ->
       fprintf ppf "Unreachable expression was reached"
+  | Objects_in_staged_code ->
+      fprintf ppf
+        "Objects and classes are not yet supported in quotations."
 
 let () =
   Location.register_error_of_exn

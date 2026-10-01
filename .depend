@@ -4743,9 +4743,11 @@ lambda/translcore.cmo : \
     typing/typeopt.cmi \
     typing/typedtree.cmi \
     typing/typecore.cmi \
+    lambda/translquote.cmi \
     lambda/translprim.cmi \
     lambda/translobj.cmi \
     lambda/translattribute.cmi \
+    typing/tast_iterator.cmi \
     typing/printtyp.cmi \
     typing/primitive.cmi \
     typing/predef.cmi \
@@ -4771,9 +4773,11 @@ lambda/translcore.cmx : \
     typing/typeopt.cmx \
     typing/typedtree.cmx \
     typing/typecore.cmx \
+    lambda/translquote.cmx \
     lambda/translprim.cmx \
     lambda/translobj.cmx \
     lambda/translattribute.cmx \
+    typing/tast_iterator.cmx \
     typing/printtyp.cmx \
     typing/primitive.cmx \
     typing/predef.cmx \
@@ -4930,6 +4934,24 @@ lambda/translprim.cmi : \
     typing/ident.cmi \
     utils/format_doc.cmi \
     typing/env.cmi
+lambda/translquote.cmo : \
+    parsing/parse.cmi \
+    utils/misc.cmi \
+    lambda/lambda.cmi \
+    typing/ident.cmi \
+    typing/env.cmi \
+    lambda/debuginfo.cmi \
+    lambda/translquote.cmi
+lambda/translquote.cmx : \
+    parsing/parse.cmx \
+    utils/misc.cmx \
+    lambda/lambda.cmx \
+    typing/ident.cmx \
+    typing/env.cmx \
+    lambda/debuginfo.cmx \
+    lambda/translquote.cmi
+lambda/translquote.cmi : \
+    lambda/lambda.cmi
 lambda/value_rec_compiler.cmo : \
     typing/value_rec_types.cmi \
     typing/primitive.cmi \

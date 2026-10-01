@@ -328,6 +328,7 @@ type lambda =
   | Lsend of meth_kind * lambda * lambda * lambda list * scoped_location
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
+  | Lsplice of lambda_splice
 
 and rec_binding = {
   id : Ident.t;
@@ -349,6 +350,10 @@ and lambda_apply =
     ap_tailcall : tailcall_attribute;
     ap_inlined : inline_attribute;
     ap_specialised : specialise_attribute; }
+
+and lambda_splice =
+  { sp_code : lambda;
+    sp_args : Ident.t list; }
 
 and lambda_switch =
   { sw_numconsts: int;
@@ -405,6 +410,19 @@ let lfunction ~kind ~params ~return ~body ~attr ~loc =
 
 let lambda_unit = Lconst const_unit
 
+let lsplice code = Lsplice { sp_code = code; sp_args = [] }
+
+let splice_contents { sp_code; sp_args } =
+  match sp_args with
+  | [] -> sp_code
+  | _ ->
+      Lapply { ap_func = sp_code;
+               ap_args = List.map (fun id -> Lvar id) sp_args;
+               ap_loc = Loc_unknown;
+               ap_tailcall = Default_tailcall;
+               ap_inlined = Default_inline;
+               ap_specialised = Default_specialise }
+
 let default_function_attribute = {
   inline = Default_inline;
   specialise = Default_specialise;
@@ -434,6 +452,13 @@ let default_stub_attribute =
 *)
 
 let max_raw = 32
+
+let thunk x body = Lfunction({kind=Curried;
+                              params=[(x, Pgenval)];
+                              return=Pgenval;
+                              body;
+                              attr=default_function_attribute;
+                              loc=Loc_unknown})
 
 let make_key e =
   let exception Not_simple in
@@ -495,7 +520,7 @@ let make_key e =
         Lsend (m,tr_rec env e1,tr_rec env e2,tr_recs env es,Loc_unknown)
     | Lifused (id,e) -> Lifused (id,tr_rec env e)
     | Lletrec _|Lfunction _
-    | Lfor _ | Lwhile _
+    | Lfor _ | Lwhile _ | Lsplice _
 (* Beware: (PR#6412) the event argument to Levent
    may include cyclic structure of type Type.typexpr *)
     | Levent _  ->
@@ -592,6 +617,8 @@ let shallow_iter ~tail ~non_tail:f = function
       tail e
   | Lifused (_v, e) ->
       tail e
+  | Lsplice { sp_args; _ } ->
+      List.iter (fun id -> f (Lvar id)) sp_args
 
 let iter_head_constructor f l =
   shallow_iter ~tail:f ~non_tail:f l
@@ -679,6 +706,8 @@ let rec free_variables = function
   | Lifused (_v, e) ->
       (* Shouldn't v be considered a free variable ? *)
       free_variables e
+  | Lsplice { sp_args; _ } ->
+      Ident.Set.of_list sp_args
 
 and free_variables_list set exprs =
   List.fold_left (fun set expr -> Ident.Set.union (free_variables expr) set)
@@ -747,7 +776,10 @@ let transl_prim modname field =
   | Error `Not_found ->
       fatal_errorf "Module %s unavailable." modname
   | Ok env -> (
-      match Env.find_value_by_name (Longident.Lident field) env with
+      let lid =
+        Option.get (Longident.unflatten (String.split_on_char '.' field))
+      in
+      match Env.find_value_by_name lid env with
       | exception Not_found ->
           fatal_errorf "Primitive %s.%s not found." modname field
       | path, _ -> transl_value_path Loc_unknown env path
@@ -891,6 +923,16 @@ let build_substs update_env ?(freshen_bound_variables = false) s =
     | Lifused (id, e) ->
         let id = try Ident.Map.find id l with Not_found -> id in
         Lifused (id, subst s l e)
+    | Lsplice sp ->
+        let arg id =
+          match subst s l (Lvar id) with
+          | Lvar id -> id
+          | _ ->
+              Misc.fatal_error
+                "Lambda.subst: a variable of a splice replaced by a term"
+        in
+        Lsplice { sp with sp_args = List.map arg sp.sp_args }
+
   and subst_list s l li = List.map (subst s l) li
   and subst_decl s l decl = { decl with def = subst_lfun s l decl.def }
   and subst_lfun s l lf =
@@ -992,6 +1034,15 @@ let shallow_map f = function
       Levent (f l, ev)
   | Lifused (v, e) ->
       Lifused (v, f e)
+  | Lsplice sp ->
+      let arg id =
+        match f (Lvar id) with
+        | Lvar id -> id
+        | _ ->
+            Misc.fatal_error
+              "Lambda.shallow_map: a variable of a splice mapped to a term"
+      in
+      Lsplice { sp with sp_args = List.map arg sp.sp_args }
 
 let map f =
   let rec g lam = f (shallow_map g lam) in
