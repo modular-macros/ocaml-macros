@@ -1,0 +1,5 @@
+File "splice_extrusion.ml", lines 12-14, characters 4-6:
+12 | ....let r = ref << 0 >> in
+13 |     let _ = << fun x -> $(r := << x >>; << x >>) >> in
+14 |     !r.
+Error: The code built by this splice has a variable escaping a quotation's scope: x.

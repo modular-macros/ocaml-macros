@@ -30,4 +30,8 @@ module Identifier : sig
   val free_var : t -> set_of_t
   val merge_free_vars: set_of_t -> set_of_t -> set_of_t
   val check : set_of_t -> unit
+
+  (* The names of the variables of a set, sorted and without
+     duplicates, for reporting a scope extrusion. *)
+  val names : set_of_t -> string list
 end

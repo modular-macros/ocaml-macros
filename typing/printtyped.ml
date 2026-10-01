@@ -480,8 +480,9 @@ and expression i ppf x =
   | Texp_quote e ->
       line i ppf "Texp_quote\n";
       expression i ppf e;
-  | Texp_splice e ->
+  | Texp_splice { spl_top_level; spl_exp = e } ->
       line i ppf "Texp_splice\n";
+      if spl_top_level then line (i+1) ppf "top-level\n";
       expression i ppf e;
   | Texp_unreachable ->
       line i ppf "Texp_unreachable"

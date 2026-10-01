@@ -52,18 +52,41 @@ let check_no_objects ?(anywhere = false) (e : Typedtree.expression) =
 
 let use_dup_for_constant_mutable_arrays_bigger_than = 4
 
+(* The state of a translation *)
+
+type context =
+  { splice_source : (context -> expression -> lambda_splice) option;
+    (* How the hole of a top-level splice is filled when the run-time
+       term is translated: the function gives the contents of the hole,
+       in the context of the splice. *)
+    closing : Ident.t Ident.Map.t;
+    (* The renaming of the run-time variables that the code of a
+       top-level splice quotes; see [Translquote.transl_close_function]. *)
+    quoted_variables : Ident.Set.t ref option;
+    (* Where the quotations of the compile-time code being translated
+       add the variables of run-time code that they mention: the free
+       variables of their translated bodies, a splice in a body counting
+       as its arguments *) }
+
+let initial_context () =
+  { splice_source = None;
+    closing = Ident.Map.empty;
+    quoted_variables = None }
+
 (* Forward declaration -- to be filled in by Translmod.transl_module *)
 let transl_module =
-  ref((fun ~scopes:_ _cc _rootpath _modl -> assert false) :
-      scopes:scopes -> module_coercion -> Path.t option ->
+  ref((fun ~ctx:_ ~scopes:_ _cc _rootpath _modl -> assert false) :
+      ctx:context -> scopes:scopes -> module_coercion -> Path.t option ->
       module_expr -> lambda)
 
-(* The splice in a quotation of the given code, closed over the
-   variables it mentions: a function of them.  The binders of the
-   quotation occur in the splice as its variables only, where they
-   follow the quoted term through renaming. *)
-let close_splice loc body =
-  match body, Ident.Set.elements (free_variables body) with
+(* The splice in a quotation of the given code, closed over [vars],
+   the variables of the quoted term that the quotations in the code
+   mention: a function of them.  They occur in the splice as its
+   arguments only, where they follow the quoted term through renaming.
+   The other free variables of the code are those of compile-time
+   code. *)
+let close_splice loc vars body =
+  match body, Ident.Set.elements vars with
   | Lvar _, _ | _, [] -> { sp_code = body; sp_args = [] }
   | _, vars ->
       let params = List.map (fun v -> v, Ident.rename v) vars in
@@ -79,13 +102,14 @@ let close_splice loc body =
         sp_args = vars }
 
 let transl_struct_item =
-  ref ((fun ~scopes:_ _fields _rootpath _stri _next -> assert false) :
-       scopes:scopes -> Ident.t list -> Path.t option ->
+  ref ((fun ~ctx:_ ~scopes:_ _fields _rootpath _stri _next -> assert false) :
+       ctx:context -> scopes:scopes -> Ident.t list -> Path.t option ->
        structure_item -> (Ident.t list -> lambda) -> lambda)
 
 let transl_object =
-  ref (fun ~scopes:_ _id _s _cl -> assert false :
-       scopes:scopes -> Ident.t -> string list -> class_expr -> lambda)
+  ref (fun ~ctx:_ ~scopes:_ _id _s _cl -> assert false :
+       ctx:context -> scopes:scopes -> Ident.t -> string list -> class_expr ->
+       lambda)
 
 (* Compile an exception/extension definition *)
 
@@ -221,8 +245,8 @@ let is_omitted = function
   | Arg _ -> false
   | Omitted () -> true
 
-let rec transl_exp ~scopes e =
-  transl_exp1 ~scopes ~in_new_scope:false e
+let rec transl_exp ~ctx ~scopes e =
+  transl_exp1 ~ctx ~scopes ~in_new_scope:false e
 
 (* ~in_new_scope tracks whether we just opened a new scope.
 
@@ -231,17 +255,17 @@ let rec transl_exp ~scopes e =
    parsed as a let-bound Pexp_function node [let f = fun x -> ...].
    We give it f's scope.
 *)
-and transl_exp1 ~scopes ~in_new_scope e =
+and transl_exp1 ~ctx ~scopes ~in_new_scope e =
   let eval_once =
     (* Whether classes for immediate objects must be cached *)
     match e.exp_desc with
       Texp_function _ | Texp_for _ | Texp_while _ -> false
     | _ -> true
   in
-  if eval_once then transl_exp0 ~scopes ~in_new_scope  e else
-  Translobj.oo_wrap e.exp_env true (transl_exp0 ~scopes ~in_new_scope) e
+  if eval_once then transl_exp0 ~ctx ~scopes ~in_new_scope  e else
+  Translobj.oo_wrap e.exp_env true (transl_exp0 ~ctx ~scopes ~in_new_scope) e
 
-and transl_exp0 ~in_new_scope ~scopes e =
+and transl_exp0 ~in_new_scope ~ctx ~scopes e =
   match e.exp_desc with
   | Texp_ident(path, _, desc) ->
       transl_ident (of_location ~scopes e.exp_loc)
@@ -249,14 +273,14 @@ and transl_exp0 ~in_new_scope ~scopes e =
   | Texp_constant cst ->
       Lambda.lambda_of_const cst
   | Texp_let(rec_flag, pat_expr_list, body) ->
-      transl_let ~scopes rec_flag pat_expr_list
-        (event_before ~scopes body (transl_exp ~scopes body))
+      transl_let ~ctx ~scopes rec_flag pat_expr_list
+        (event_before ~scopes body (transl_exp ~ctx ~scopes body))
   | Texp_function (params, body) ->
       let scopes =
         if in_new_scope then scopes
         else enter_anonymous_function ~scopes
       in
-      transl_function ~scopes e params body
+      transl_function ~ctx ~scopes e params body
   | Texp_apply({ exp_desc = Texp_ident(path, _, {val_kind = Val_prim p});
                 exp_type = prim_type } as funct, oargs)
     when List.length oargs >= p.prim_arity
@@ -265,7 +289,7 @@ and transl_exp0 ~in_new_scope ~scopes e =
       let arg_exps =
          List.map (function _, Arg x -> x | _, Omitted () -> assert false) argl
       in
-      let args = transl_list ~scopes arg_exps in
+      let args = transl_list ~ctx ~scopes arg_exps in
       let prim_exp = if extra_args = [] then Some e else None in
       let lam =
         Translprim.transl_primitive_application
@@ -279,7 +303,7 @@ and transl_exp0 ~in_new_scope ~scopes e =
         let specialised = Translattribute.get_specialised_attribute funct in
         let e = { e with exp_desc = Texp_apply(funct, oargs) } in
         event_after ~scopes e
-          (transl_apply ~scopes ~tailcall ~inlined ~specialised
+          (transl_apply ~ctx ~scopes ~tailcall ~inlined ~specialised
              lam extra_args (of_location ~scopes e.exp_loc))
       end
   | Texp_apply(funct, oargs) ->
@@ -288,10 +312,11 @@ and transl_exp0 ~in_new_scope ~scopes e =
       let specialised = Translattribute.get_specialised_attribute funct in
       let e = { e with exp_desc = Texp_apply(funct, oargs) } in
       event_after ~scopes e
-        (transl_apply ~scopes ~tailcall ~inlined ~specialised
-           (transl_exp ~scopes funct) oargs (of_location ~scopes e.exp_loc))
+        (transl_apply ~ctx ~scopes ~tailcall ~inlined ~specialised
+           (transl_exp ~ctx ~scopes funct) oargs
+           (of_location ~scopes e.exp_loc))
   | Texp_match(arg, pat_expr_list, [], partial) ->
-      transl_match ~scopes e arg pat_expr_list partial
+      transl_match ~ctx ~scopes e arg pat_expr_list partial
   | Texp_match(arg, pat_expr_list, eff_pat_expr_list, partial) ->
   (* need to separate the values from exceptions for transl_handler *)
       let split_case (val_cases, exn_cases as acc)
@@ -312,17 +337,18 @@ and transl_exp0 ~in_new_scope ~scopes e =
         let x, y = List.fold_left split_case ([], []) pat_expr_list in
         List.rev x, List.rev y
       in
-      transl_handler ~scopes e arg (Some (pat_expr_list, partial))
+      transl_handler ~ctx ~scopes e arg (Some (pat_expr_list, partial))
         exn_pat_expr_list eff_pat_expr_list
   | Texp_try(body, pat_expr_list, []) ->
       let id = Typecore.name_cases "exn" pat_expr_list in
-      Ltrywith(transl_exp ~scopes body, id,
+      Ltrywith(transl_exp ~ctx ~scopes body, id,
                Matching.for_trywith ~scopes e.exp_loc (Lvar id)
-                 (transl_cases_try ~scopes pat_expr_list))
+                 (transl_cases_try ~ctx ~scopes pat_expr_list))
   | Texp_try(body, exn_pat_expr_list, eff_pat_expr_list) ->
-      transl_handler ~scopes e body None exn_pat_expr_list eff_pat_expr_list
+      transl_handler ~ctx ~scopes e body None exn_pat_expr_list
+        eff_pat_expr_list
   | Texp_tuple el ->
-      let ll, shape = transl_list_with_shape ~scopes (List.map snd el) in
+      let ll, shape = transl_list_with_shape ~ctx ~scopes (List.map snd el) in
       begin try
         Lconst(Const_block(0, List.map extract_constant ll))
       with Not_constant ->
@@ -330,7 +356,7 @@ and transl_exp0 ~in_new_scope ~scopes e =
               (of_location ~scopes e.exp_loc))
       end
   | Texp_construct(_, cstr, args) ->
-      let ll, shape = transl_list_with_shape ~scopes args in
+      let ll, shape = transl_list_with_shape ~ctx ~scopes args in
       if cstr.cstr_inlined <> None then begin match ll with
         | [x] -> x
         | _ -> assert false
@@ -361,7 +387,7 @@ and transl_exp0 ~in_new_scope ~scopes e =
       begin match arg with
         None -> Lconst(const_int tag)
       | Some arg ->
-          let lam = transl_exp ~scopes arg in
+          let lam = transl_exp ~ctx ~scopes arg in
           try
             Lconst(Const_block(0, [const_int tag;
                                    extract_constant lam]))
@@ -371,19 +397,19 @@ and transl_exp0 ~in_new_scope ~scopes e =
                   of_location ~scopes e.exp_loc)
       end
   | Texp_record {fields; representation; extended_expression} ->
-      transl_record ~scopes e.exp_loc e.exp_env
+      transl_record ~ctx ~scopes e.exp_loc e.exp_env
         fields representation extended_expression
   | Texp_atomic_loc (arg, _, lbl) ->
       let shape = Some [Typeopt.value_kind arg.exp_env arg.exp_type; Pintval] in
-      let (arg, lbl) = transl_atomic_loc ~scopes arg lbl in
+      let (arg, lbl) = transl_atomic_loc ~ctx ~scopes arg lbl in
       let loc = of_location ~scopes e.exp_loc in
       Lprim (Pmakeblock (0, Immutable, shape), [arg; lbl], loc)
   | Texp_field (arg, _, ({ lbl_atomic = Atomic; _ } as lbl)) ->
-      let arg, lbl = transl_atomic_loc ~scopes arg lbl in
+      let arg, lbl = transl_atomic_loc ~ctx ~scopes arg lbl in
       let loc = of_location ~scopes e.exp_loc in
       Lprim (Patomic_load, [arg; lbl], loc)
   | Texp_field (arg, _, lbl) ->
-      let targ = transl_exp ~scopes arg in
+      let targ = transl_exp ~ctx ~scopes arg in
       begin match lbl.lbl_repres with
           Record_regular | Record_inlined _ ->
           Lprim (Pfield (lbl.lbl_pos, maybe_pointer e, lbl.lbl_mut), [targ],
@@ -401,8 +427,8 @@ and transl_exp0 ~in_new_scope ~scopes e =
         Primitive.simple
           ~name:"caml_atomic_exchange_field" ~arity:3 ~alloc:false
       in
-      let arg, lbl = transl_atomic_loc ~scopes arg lbl in
-      let newval = transl_exp ~scopes newval in
+      let arg, lbl = transl_atomic_loc ~ctx ~scopes arg lbl in
+      let newval = transl_exp ~ctx ~scopes newval in
       let loc = of_location ~scopes e.exp_loc in
       Lprim (
         Pignore,
@@ -420,11 +446,12 @@ and transl_exp0 ~in_new_scope ~scopes e =
         | Record_extension _ ->
           Psetfield (lbl.lbl_pos + 1, maybe_pointer newval, Assignment)
       in
-      Lprim(access, [transl_exp ~scopes arg; transl_exp ~scopes newval],
+      Lprim(access,
+            [transl_exp ~ctx ~scopes arg; transl_exp ~ctx ~scopes newval],
             of_location ~scopes e.exp_loc)
   | Texp_array (amut, expr_list) ->
       let kind = array_kind e in
-      let ll = transl_list ~scopes expr_list in
+      let ll = transl_list ~ctx ~scopes expr_list in
       let loc = of_location ~scopes e.exp_loc in
       let makearray mutability =
         Lprim (Pmakearray (kind, mutability), ll, loc)
@@ -477,31 +504,31 @@ and transl_exp0 ~in_new_scope ~scopes e =
         makearray amut
       end
   | Texp_ifthenelse(cond, ifso, Some ifnot) ->
-      Lifthenelse(transl_exp ~scopes cond,
-                  event_before ~scopes ifso (transl_exp ~scopes ifso),
-                  event_before ~scopes ifnot (transl_exp ~scopes ifnot))
+      Lifthenelse(transl_exp ~ctx ~scopes cond,
+                  event_before ~scopes ifso (transl_exp ~ctx ~scopes ifso),
+                  event_before ~scopes ifnot (transl_exp ~ctx ~scopes ifnot))
   | Texp_ifthenelse(cond, ifso, None) ->
-      Lifthenelse(transl_exp ~scopes cond,
-                  event_before ~scopes ifso (transl_exp ~scopes ifso),
+      Lifthenelse(transl_exp ~ctx ~scopes cond,
+                  event_before ~scopes ifso (transl_exp ~ctx ~scopes ifso),
                   lambda_unit)
   | Texp_sequence(expr1, expr2) ->
-      Lsequence(transl_exp ~scopes expr1,
-                event_before ~scopes expr2 (transl_exp ~scopes expr2))
+      Lsequence(transl_exp ~ctx ~scopes expr1,
+                event_before ~scopes expr2 (transl_exp ~ctx ~scopes expr2))
   | Texp_while(cond, body) ->
-      Lwhile(transl_exp ~scopes cond,
-             event_before ~scopes body (transl_exp ~scopes body))
+      Lwhile(transl_exp ~ctx ~scopes cond,
+             event_before ~scopes body (transl_exp ~ctx ~scopes body))
   | Texp_for(param, _, low, high, dir, body) ->
-      Lfor(param, transl_exp ~scopes low, transl_exp ~scopes high, dir,
-           event_before ~scopes body (transl_exp ~scopes body))
+      Lfor(param, transl_exp ~ctx ~scopes low, transl_exp ~ctx ~scopes high,
+           dir, event_before ~scopes body (transl_exp ~ctx ~scopes body))
   | Texp_send(expr, met) ->
       let lam =
         let loc = of_location ~scopes e.exp_loc in
         match met with
         | Tmeth_val id ->
-            let obj = transl_exp ~scopes expr in
+            let obj = transl_exp ~ctx ~scopes expr in
             Lsend (Self, Lvar id, obj, [], loc)
         | Tmeth_name nm ->
-            let obj = transl_exp ~scopes expr in
+            let obj = transl_exp ~ctx ~scopes expr in
             let (tag, cache) = Translobj.meth obj nm in
             let kind = if cache = [] then Public else Cached in
             Lsend (kind, tag, obj, cache, loc)
@@ -536,7 +563,7 @@ and transl_exp0 ~in_new_scope ~scopes e =
       let loc = of_location ~scopes e.exp_loc in
       let self = transl_value_path loc e.exp_env path_self in
       let var = transl_value_path loc e.exp_env path in
-      transl_setinstvar ~scopes loc self var expr
+      transl_setinstvar ~ctx ~scopes loc self var expr
   | Texp_override(path_self, modifs) ->
       let loc = of_location ~scopes e.exp_loc in
       let self = transl_value_path loc e.exp_env path_self in
@@ -552,18 +579,18 @@ and transl_exp0 ~in_new_scope ~scopes e =
            },
            List.fold_right
              (fun (id, _, expr) rem ->
-                Lsequence(transl_setinstvar ~scopes Loc_unknown
+                Lsequence(transl_setinstvar ~ctx ~scopes Loc_unknown
                             (Lvar cpy) (Lvar id) expr, rem))
              modifs
              (Lvar cpy))
   | Texp_pack modl ->
-      !transl_module ~scopes Tcoerce_none None modl
+      !transl_module ~ctx ~scopes Tcoerce_none None modl
   | Texp_assert ({exp_desc=Texp_construct(_, {cstr_name="false"}, _)}, loc) ->
       assert_failed loc ~scopes e
   | Texp_assert (cond, loc) ->
       if !Clflags.noassert
       then lambda_unit
-      else Lifthenelse (transl_exp ~scopes cond, lambda_unit,
+      else Lifthenelse (transl_exp ~ctx ~scopes cond, lambda_unit,
                         assert_failed loc ~scopes e)
   | Texp_lazy e ->
       (* when e needs no computation (constants, identifiers, ...), we
@@ -573,14 +600,14 @@ and transl_exp0 ~in_new_scope ~scopes e =
       | `Constant_or_function ->
         (* A constant expr (of type <> float if [Config.flat_float_array] is
            true) gets compiled as itself. *)
-         transl_exp ~scopes e
+         transl_exp ~ctx ~scopes e
       | `Float_that_cannot_be_shortcut
       | `Identifier `Forward_value ->
          Lprim (Pmakelazyblock Forward_tag,
-                [transl_exp ~scopes e],
+                [transl_exp ~ctx ~scopes e],
                 of_location ~scopes e.exp_loc)
       | `Identifier `Other ->
-         transl_exp ~scopes e
+         transl_exp ~ctx ~scopes e
       | `Other ->
          (* other cases compile to a lazy block holding a function *)
          let fn = lfunction ~kind:Curried
@@ -592,14 +619,14 @@ and transl_exp0 ~in_new_scope ~scopes e =
                             *)
                             ~attr:function_attribute_disallowing_arity_fusion
                             ~loc:(of_location ~scopes e.exp_loc)
-                            ~body:(transl_exp ~scopes e) in
+                            ~body:(transl_exp ~ctx ~scopes e) in
           Lprim(Pmakelazyblock Lazy_tag, [fn],
                 of_location ~scopes e.exp_loc)
       end
   | Texp_object (cs, meths) ->
       let cty = cs.cstr_type in
       let cl = Ident.create_local "object" in
-      !transl_object ~scopes cl meths
+      !transl_object ~ctx ~scopes cl meths
         { cl_desc = Tcl_structure cs;
           cl_loc = e.exp_loc;
           cl_type = Cty_signature cty;
@@ -608,20 +635,34 @@ and transl_exp0 ~in_new_scope ~scopes e =
          }
   | Texp_letop{let_; ands; param; body; partial} ->
       event_after ~scopes e
-        (transl_letop ~scopes e.exp_loc e.exp_env let_ ands param body partial)
+        (transl_letop ~ctx ~scopes e.exp_loc e.exp_env let_ ands param body
+           partial)
   | Texp_quote e ->
     check_no_objects e;
-    Translquote.quote_expression (transl_exp ~scopes e)
-  | Texp_splice body ->
-      if Env.get_env_mode e.exp_env <> Types.M_Q then
-        Misc.fatal_error "top-level splices: not implemented";
-      Lsplice
-        (close_splice (of_location ~scopes body.exp_loc)
-           (transl_exp ~scopes body))
+    let body =
+      Translquote.close_quoted ctx.closing (transl_exp ~ctx ~scopes e)
+    in
+    Option.iter
+      (fun vars -> vars := Ident.Set.union !vars (free_variables body))
+      ctx.quoted_variables;
+    Translquote.quote_expression body
+  | Texp_splice { spl_top_level = false; spl_exp = e } ->
+      let vars = ref Ident.Set.empty in
+      let body =
+        transl_exp ~ctx:{ ctx with quoted_variables = Some vars } ~scopes e
+      in
+      Lsplice (close_splice (of_location ~scopes e.exp_loc) !vars body)
+  | Texp_splice { spl_exp; spl_top_level = true } ->
+    begin
+      match ctx.splice_source with
+      | Some hole -> Lsplice (hole ctx spl_exp)
+      | None -> Misc.fatal_error "top-level splices: not implemented"
+    end
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
   | Texp_struct_item (si, e) ->
-      !transl_struct_item ~scopes [] None si (fun _ -> transl_exp ~scopes e)
+      !transl_struct_item ~ctx ~scopes [] None si
+        (fun _ -> transl_exp ~ctx ~scopes e)
 
 and pure_module m =
   match m.mod_desc with
@@ -629,23 +670,23 @@ and pure_module m =
   | Tmod_constraint (m,_,_,_) -> pure_module m
   | _ -> Strict
 
-and transl_list ~scopes expr_list =
-  List.map (transl_exp ~scopes) expr_list
+and transl_list ~ctx ~scopes expr_list =
+  List.map (transl_exp ~ctx ~scopes) expr_list
 
-and transl_list_with_shape ~scopes expr_list =
+and transl_list_with_shape ~ctx ~scopes expr_list =
   let transl_with_shape e =
     let shape = Typeopt.value_kind e.exp_env e.exp_type in
-    transl_exp ~scopes e, shape
+    transl_exp ~ctx ~scopes e, shape
   in
   List.split (List.map transl_with_shape expr_list)
 
-and transl_guard ~scopes guard rhs =
-  let expr = event_before ~scopes rhs (transl_exp ~scopes rhs) in
+and transl_guard ~ctx ~scopes guard rhs =
+  let expr = event_before ~scopes rhs (transl_exp ~ctx ~scopes rhs) in
   match guard with
   | None -> expr
   | Some cond ->
       event_before ~scopes cond
-        (Lifthenelse(transl_exp ~scopes cond, expr, staticfail))
+        (Lifthenelse(transl_exp ~ctx ~scopes cond, expr, staticfail))
 
 and transl_cont cont c_cont body =
   match cont, c_cont with
@@ -654,34 +695,35 @@ and transl_cont cont c_cont body =
   | Some _, None -> body
   | None, Some _ -> assert false
 
-and transl_case ~scopes ?cont {c_lhs; c_cont; c_guard; c_rhs} =
-  (c_lhs, transl_cont cont c_cont (transl_guard ~scopes c_guard c_rhs))
+and transl_case ~ctx ~scopes ?cont {c_lhs; c_cont; c_guard; c_rhs} =
+  (c_lhs, transl_cont cont c_cont (transl_guard ~ctx ~scopes c_guard c_rhs))
 
-and transl_cases ~scopes ?cont cases =
+and transl_cases ~ctx ~scopes ?cont cases =
   let cases =
     List.filter (fun c -> c.c_rhs.exp_desc <> Texp_unreachable) cases in
-  List.map (transl_case ~scopes ?cont) cases
+  List.map (transl_case ~ctx ~scopes ?cont) cases
 
-and transl_case_try ~scopes {c_lhs; c_guard; c_rhs} =
+and transl_case_try ~ctx ~scopes {c_lhs; c_guard; c_rhs} =
   iter_exn_names Translprim.add_exception_ident c_lhs;
   Misc.try_finally
-    (fun () -> c_lhs, transl_guard ~scopes c_guard c_rhs)
+    (fun () -> c_lhs, transl_guard ~ctx ~scopes c_guard c_rhs)
     ~always:(fun () ->
         iter_exn_names Translprim.remove_exception_ident c_lhs)
 
-and transl_cases_try ~scopes cases =
+and transl_cases_try ~ctx ~scopes cases =
   let cases =
     List.filter (fun c -> c.c_rhs.exp_desc <> Texp_unreachable) cases in
-  List.map (transl_case_try ~scopes) cases
+  List.map (transl_case_try ~ctx ~scopes) cases
 
-and transl_tupled_cases ~scopes patl_expr_list =
+and transl_tupled_cases ~ctx ~scopes patl_expr_list =
   let patl_expr_list =
     List.filter (fun (_,_,e) -> e.exp_desc <> Texp_unreachable)
       patl_expr_list in
-  List.map (fun (patl, guard, expr) -> (patl, transl_guard ~scopes guard expr))
+  List.map
+    (fun (patl, guard, expr) -> (patl, transl_guard ~ctx ~scopes guard expr))
     patl_expr_list
 
-and transl_apply ~scopes
+and transl_apply ~ctx ~scopes
       ?(tailcall=Default_tailcall)
       ?(inlined = Default_inline)
       ?(specialised = Default_specialise)
@@ -775,7 +817,7 @@ and transl_apply ~scopes
     | [] ->
         lapply lam (List.rev_map fst args)
   in
-  let transl_arg arg = Typedtree.map_apply_arg (transl_exp ~scopes) arg in
+  let transl_arg arg = Typedtree.map_apply_arg (transl_exp ~ctx ~scopes) arg in
   (build_apply lam [] (List.map (fun (l, arg) ->
                                    transl_arg arg,
                                    Btype.is_optional l)
@@ -791,7 +833,7 @@ and transl_apply ~scopes
    the function as taking each argument individually (in
    [trans_curried_function]).
 *)
-and transl_function_without_attributes ~scopes loc repr params body =
+and transl_function_without_attributes ~ctx ~scopes loc repr params body =
   let return =
     match body with
     | Tfunction_body body ->
@@ -802,9 +844,9 @@ and transl_function_without_attributes ~scopes loc repr params body =
         (* With Camlp4/ppx, a pattern matching might be empty *)
         Pgenval
   in
-  transl_tupled_function ~scopes loc return repr params body
+  transl_tupled_function ~ctx ~scopes loc return repr params body
 
-and transl_tupled_function ~scopes loc return repr params body =
+and transl_tupled_function ~ctx ~scopes loc return repr params body =
   (* Cases are eligible for flattening if they belong to the only param. *)
   let eligible_cases =
     match params, body with
@@ -851,17 +893,17 @@ and transl_tupled_function ~scopes loc return repr params body =
         let params = List.map fst tparams in
         ((Tupled, tparams, return),
          Matching.for_tupled_function ~scopes loc params
-           (transl_tupled_cases ~scopes pats_expr_list) partial)
+           (transl_tupled_cases ~ctx ~scopes pats_expr_list) partial)
     with Matching.Cannot_flatten ->
-      transl_curried_function ~scopes loc return repr params body
+      transl_curried_function ~ctx ~scopes loc return repr params body
       end
-  | _ -> transl_curried_function ~scopes loc return repr params body
+  | _ -> transl_curried_function ~ctx ~scopes loc return repr params body
 
-and transl_curried_function ~scopes loc return repr params body =
+and transl_curried_function ~ctx ~scopes loc return repr params body =
   let cases_param, body =
     match body with
     | Tfunction_body body ->
-        None, event_before ~scopes body (transl_exp ~scopes body)
+        None, event_before ~scopes body (transl_exp ~ctx ~scopes body)
     | Tfunction_cases { cases; partial; param; loc = cases_loc } ->
         let kind =
           match cases with
@@ -878,7 +920,7 @@ and transl_curried_function ~scopes loc return repr params body =
         in
         let body =
           Matching.for_function ~scopes cases_loc repr (Lvar param)
-            (transl_cases ~scopes cases) partial
+            (transl_cases ~ctx ~scopes cases) partial
         in
         Some (param, kind), body
   in
@@ -897,7 +939,8 @@ and transl_curried_function ~scopes loc return repr params body =
           body, (param, kind) :: params
       | Tparam_optional_default (pat, default_arg) ->
           let default_arg =
-            event_before ~scopes default_arg (transl_exp ~scopes default_arg)
+            event_before ~scopes default_arg
+              (transl_exp ~ctx ~scopes default_arg)
           in
           let body =
             Matching.for_optional_arg_default
@@ -934,12 +977,13 @@ and transl_curried_function ~scopes loc return repr params body =
   in
   ((Curried, params, return), body)
 
-and transl_function ~scopes e params body =
+and transl_function ~ctx ~scopes e params body =
   let ((kind, params, return), body) =
     event_function ~scopes e
       (function repr ->
          let params, body = fuse_method_arity params body in
-         transl_function_without_attributes ~scopes e.exp_loc repr params body)
+         transl_function_without_attributes ~ctx ~scopes e.exp_loc repr params
+           body)
   in
   let attr = function_attribute_disallowing_arity_fusion in
   let loc = of_location ~scopes e.exp_loc in
@@ -959,11 +1003,11 @@ and transl_function ~scopes e params body =
   Translattribute.add_function_attributes lam e.exp_loc attrs
 
 (* Like transl_exp, but used when a new scope was just introduced. *)
-and transl_scoped_exp ~scopes expr =
-  transl_exp1 ~scopes ~in_new_scope:true expr
+and transl_scoped_exp ~ctx ~scopes expr =
+  transl_exp1 ~ctx ~scopes ~in_new_scope:true expr
 
 (* Decides whether a pattern binding should introduce a new scope. *)
-and transl_bound_exp ~scopes ~in_structure pat expr =
+and transl_bound_exp ~ctx ~scopes ~in_structure pat expr =
   let should_introduce_scope =
     match expr.exp_desc with
     | Texp_function _ -> true
@@ -971,8 +1015,8 @@ and transl_bound_exp ~scopes ~in_structure pat expr =
     | _ -> false in
   match pat_bound_idents pat with
   | (id :: _) when should_introduce_scope ->
-     transl_scoped_exp ~scopes:(enter_value_definition ~scopes id) expr
-  | _ -> transl_exp ~scopes expr
+     transl_scoped_exp ~ctx ~scopes:(enter_value_definition ~scopes id) expr
+  | _ -> transl_exp ~ctx ~scopes expr
 
 (*
   Notice: transl_let consumes (ie compiles) its pat_expr_list argument,
@@ -980,7 +1024,7 @@ and transl_bound_exp ~scopes ~in_structure pat expr =
   This complication allows choosing any compilation order for the
   bindings and body of let constructs.
 *)
-and transl_let ~scopes ?(in_structure=false) rec_flag pat_expr_list =
+and transl_let ~ctx ~scopes ?(in_structure=false) rec_flag pat_expr_list =
   match rec_flag with
     Nonrecursive ->
       let rec transl = function
@@ -988,7 +1032,7 @@ and transl_let ~scopes ?(in_structure=false) rec_flag pat_expr_list =
           fun body -> body
       | {vb_pat=pat; vb_expr=expr; vb_rec_kind=_; vb_attributes=attr; vb_loc}
         :: rem ->
-          let lam = transl_bound_exp ~scopes ~in_structure pat expr in
+          let lam = transl_bound_exp ~ctx ~scopes ~in_structure pat expr in
           let lam = Translattribute.add_function_attributes lam vb_loc attr in
           let mk_body = transl rem in
           fun body ->
@@ -1003,7 +1047,7 @@ and transl_let ~scopes ?(in_structure=false) rec_flag pat_expr_list =
         pat_expr_list in
       let transl_case {vb_expr=expr; vb_attributes; vb_rec_kind = rkind;
                        vb_loc; vb_pat} id =
-        let def = transl_bound_exp ~scopes ~in_structure vb_pat expr in
+        let def = transl_bound_exp ~ctx ~scopes ~in_structure vb_pat expr in
         let def =
           Translattribute.add_function_attributes def vb_loc vb_attributes
         in
@@ -1011,11 +1055,11 @@ and transl_let ~scopes ?(in_structure=false) rec_flag pat_expr_list =
       let lam_bds = List.map2 transl_case pat_expr_list idlist in
       fun body -> Value_rec_compiler.compile_letrec lam_bds body
 
-and transl_setinstvar ~scopes loc self var expr =
+and transl_setinstvar ~ctx ~scopes loc self var expr =
   Lprim(Psetfield_computed (maybe_pointer expr, Assignment),
-    [self; var; transl_exp ~scopes expr], loc)
+    [self; var; transl_exp ~ctx ~scopes expr], loc)
 
-and transl_record ~scopes loc env fields repres opt_init_expr =
+and transl_record ~ctx ~scopes loc env fields repres opt_init_expr =
   let size = Array.length fields in
   (* Determine if there are "enough" fields (only relevant if this is a
      functional-style record update *)
@@ -1044,7 +1088,7 @@ and transl_record ~scopes loc env fields repres opt_init_expr =
                field_kind
            | Overridden (_lid, expr) ->
                let field_kind = value_kind expr.exp_env expr.exp_type in
-               transl_exp ~scopes expr, field_kind)
+               transl_exp ~ctx ~scopes expr, field_kind)
         fields
     in
     let ll, shape = List.split (Array.to_list lv) in
@@ -1081,7 +1125,7 @@ and transl_record ~scopes loc env fields repres opt_init_expr =
     begin match opt_init_expr with
       None -> lam
     | Some init_expr -> Llet(Strict, Pgenval, init_id,
-                             transl_exp ~scopes init_expr, lam)
+                             transl_exp ~ctx ~scopes init_expr, lam)
     end
   end else begin
     (* Take a shallow copy of the init record, then mutate the fields
@@ -1101,7 +1145,7 @@ and transl_record ~scopes loc env fields repres opt_init_expr =
             | Record_extension _ ->
                 Psetfield(lbl.lbl_pos + 1, maybe_pointer expr, Assignment)
           in
-          Lsequence(Lprim(upd, [Lvar copy_id; transl_exp ~scopes expr],
+          Lsequence(Lprim(upd, [Lvar copy_id; transl_exp ~ctx ~scopes expr],
                           of_location ~scopes loc),
                     cont)
     in
@@ -1109,14 +1153,15 @@ and transl_record ~scopes loc env fields repres opt_init_expr =
       None -> assert false
     | Some init_expr ->
         Llet(Strict, Pgenval, copy_id,
-             Lprim(Pduprecord (repres, size), [transl_exp ~scopes init_expr],
+             Lprim(Pduprecord (repres, size),
+                   [transl_exp ~ctx ~scopes init_expr],
                    of_location ~scopes loc),
              Array.fold_left update_field (Lvar copy_id) fields)
     end
   end
 
-and transl_atomic_loc ~scopes arg lbl =
-  let arg = transl_exp ~scopes arg in
+and transl_atomic_loc ~ctx ~scopes arg lbl =
+  let arg = transl_exp ~ctx ~scopes arg in
   let offset =
     match lbl.lbl_repres with
     | Record_regular
@@ -1132,7 +1177,7 @@ and transl_atomic_loc ~scopes arg lbl =
   let lbl = Lconst (Const_int (lbl.lbl_pos + offset)) in
   (arg, lbl)
 
-and transl_match ~scopes e arg pat_expr_list partial =
+and transl_match ~ctx ~scopes e arg pat_expr_list partial =
   let rewrite_case (val_cases, exn_cases, static_handlers as acc)
         ({ c_lhs; c_guard; c_rhs } as case) =
     if c_rhs.exp_desc = Texp_unreachable then acc else
@@ -1141,11 +1186,11 @@ and transl_match ~scopes e arg pat_expr_list partial =
     | None, None -> assert false
     | Some pv, None ->
         let val_case =
-          transl_case ~scopes { case with c_lhs = pv }
+          transl_case ~ctx ~scopes { case with c_lhs = pv }
         in
         val_case :: val_cases, exn_cases, static_handlers
     | None, Some pe ->
-        let exn_case = transl_case_try ~scopes { case with c_lhs = pe } in
+        let exn_case = transl_case_try ~ctx ~scopes { case with c_lhs = pe } in
         val_cases, exn_case :: exn_cases, static_handlers
     | Some pv, Some pe ->
         assert (c_guard = None);
@@ -1168,7 +1213,7 @@ and transl_match ~scopes e arg pat_expr_list partial =
         let rhs =
           Misc.try_finally
             (fun () -> event_before ~scopes c_rhs
-                         (transl_exp ~scopes c_rhs))
+                         (transl_exp ~ctx ~scopes c_rhs))
             ~always:(fun () ->
                 iter_exn_names Translprim.remove_exception_ident pe)
         in
@@ -1211,7 +1256,7 @@ and transl_match ~scopes e arg pat_expr_list partial =
     | {exp_desc = Texp_tuple argl}, [] ->
       assert (static_handlers = []);
       Matching.for_multiple_match ~scopes e.exp_loc
-        (transl_list ~scopes (List.map snd argl)) val_cases partial
+        (transl_list ~ctx ~scopes (List.map snd argl)) val_cases partial
     | {exp_desc = Texp_tuple argl}, _ :: _ ->
         let argl = List.map snd argl in
         let val_ids =
@@ -1223,17 +1268,17 @@ and transl_match ~scopes e arg pat_expr_list partial =
             argl
         in
         let lvars = List.map (fun (id, _) -> Lvar id) val_ids in
-        static_catch (transl_list ~scopes argl) val_ids
+        static_catch (transl_list ~ctx ~scopes argl) val_ids
           (Matching.for_multiple_match ~scopes e.exp_loc
              lvars val_cases partial)
     | arg, [] ->
       assert (static_handlers = []);
       Matching.for_function ~scopes e.exp_loc
-        None (transl_exp ~scopes arg) val_cases partial
+        None (transl_exp ~ctx ~scopes arg) val_cases partial
     | arg, _ :: _ ->
         let val_id = Typecore.name_pattern "val" (List.map fst val_cases) in
         let k = Typeopt.value_kind arg.exp_env arg.exp_type in
-        static_catch [transl_exp ~scopes arg] [val_id, k]
+        static_catch [transl_exp ~ctx ~scopes arg] [val_id, k]
           (Matching.for_function ~scopes e.exp_loc
              None (Lvar val_id) val_cases partial)
   in
@@ -1244,7 +1289,7 @@ and transl_match ~scopes e arg pat_expr_list partial =
 and prim_alloc_stack =
   Pccall (Primitive.simple ~name:"caml_alloc_stack" ~arity:3 ~alloc:true)
 
-and transl_handler ~scopes e body val_caselist exn_caselist eff_caselist =
+and transl_handler ~ctx ~scopes e body val_caselist exn_caselist eff_caselist =
   let val_fun =
     match val_caselist with
     | None ->
@@ -1253,7 +1298,7 @@ and transl_handler ~scopes e body val_caselist exn_caselist eff_caselist =
          ~return:Pgenval ~body:(Lvar param)
          ~attr:default_function_attribute ~loc:Loc_unknown
     | Some (val_caselist, partial) ->
-        let val_cases = transl_cases ~scopes val_caselist in
+        let val_cases = transl_cases ~ctx ~scopes val_caselist in
         let param = Typecore.name_cases "param" val_caselist in
         let body =
           Matching.for_function ~scopes e.exp_loc None (Lvar param) val_cases
@@ -1264,7 +1309,7 @@ and transl_handler ~scopes e body val_caselist exn_caselist eff_caselist =
           ~loc:Loc_unknown ~body
   in
   let exn_fun =
-    let exn_cases = transl_cases ~scopes exn_caselist in
+    let exn_cases = transl_cases ~ctx ~scopes exn_caselist in
     let param = Typecore.name_cases "exn" exn_caselist in
     let body = Matching.for_trywith ~scopes e.exp_loc (Lvar param) exn_cases in
     lfunction ~kind:Curried ~params:[param, Pgenval] ~return:Pgenval
@@ -1274,7 +1319,7 @@ and transl_handler ~scopes e body val_caselist exn_caselist eff_caselist =
     let param = Typecore.name_cases "eff" eff_caselist in
     let cont = Ident.create_local "k" in
     let cont_tail = Ident.create_local "ktail" in
-    let eff_cases = transl_cases ~scopes ~cont eff_caselist in
+    let eff_cases = transl_cases ~ctx ~scopes ~cont eff_caselist in
     let body =
       Matching.for_handler ~scopes e.exp_loc (Lvar param) (Lvar cont)
         (Lvar cont_tail) eff_cases
@@ -1284,7 +1329,7 @@ and transl_handler ~scopes e body val_caselist exn_caselist eff_caselist =
       ~return:Pgenval ~attr:default_function_attribute ~loc:Loc_unknown ~body
   in
   let (body_fun, arg) =
-    match transl_exp ~scopes body with
+    match transl_exp ~ctx ~scopes body with
     | Lapply { ap_func = fn; ap_args = [arg]; _ }
         when is_evaluated fn && is_evaluated arg -> (fn, arg)
     | body ->
@@ -1300,7 +1345,7 @@ and transl_handler ~scopes e body val_caselist exn_caselist eff_caselist =
   Lprim(Prunstack, [alloc_stack; body_fun; arg],
         of_location ~scopes e.exp_loc)
 
-and transl_letop ~scopes loc env let_ ands param case partial =
+and transl_letop ~ctx ~scopes loc env let_ ands param case partial =
   let rec loop prev_lam = function
     | [] -> prev_lam
     | and_ :: rest ->
@@ -1310,7 +1355,7 @@ and transl_letop ~scopes loc env let_ ands param case partial =
           transl_ident (of_location ~scopes and_.bop_op_name.loc) env
             and_.bop_op_type and_.bop_op_path and_.bop_op_val
         in
-        let exp = transl_exp ~scopes and_.bop_exp in
+        let exp = transl_exp ~ctx ~scopes and_.bop_exp in
         let lam =
           bind Strict right_id exp
             (Lapply{
@@ -1328,14 +1373,14 @@ and transl_letop ~scopes loc env let_ ands param case partial =
     transl_ident (of_location ~scopes let_.bop_op_name.loc) env
       let_.bop_op_type let_.bop_op_path let_.bop_op_val
   in
-  let exp = loop (transl_exp ~scopes let_.bop_exp) ands in
+  let exp = loop (transl_exp ~ctx ~scopes let_.bop_exp) ands in
   let func =
     let (kind, params, return), body =
       event_function ~scopes case.c_rhs
         (function repr ->
            let loc = case.c_rhs.exp_loc in
            let ghost_loc = { loc with loc_ghost = true } in
-           transl_function_without_attributes ~scopes loc repr []
+           transl_function_without_attributes ~ctx ~scopes loc repr []
              (Tfunction_cases
                 { cases = [case]; param; partial; loc = ghost_loc;
                   exp_extra = None; attributes = []; }))
@@ -1352,6 +1397,19 @@ and transl_letop ~scopes loc env let_ ands param case partial =
     ap_inlined = Default_inline;
     ap_specialised = Default_specialise;
   }
+
+(* The variables of run-time code that the quotations of [e], which is
+   compile-time code, mention: those that the code it builds is closed
+   over.  [e] is translated to find them, and the translation is
+   dropped.  A variable of another unit is reached through its global,
+   and is not one of them. *)
+let quoted_variables ~ctx ~scopes e =
+  let vars = ref Ident.Set.empty in
+  let ctx =
+    { ctx with quoted_variables = Some vars; closing = Ident.Map.empty }
+  in
+  ignore (transl_exp ~ctx ~scopes e);
+  Ident.Set.filter (fun id -> not (Ident.global id)) !vars
 
 (* Wrapper for class compilation *)
 
@@ -1378,7 +1436,8 @@ let report_error_doc ppf = function
       fprintf ppf "Unreachable expression was reached"
   | Objects_in_staged_code ->
       fprintf ppf
-        "Objects and classes are not yet supported in quotations."
+        "Objects and classes are not yet supported in quotations,@ \
+         or in compile-time code."
 
 let () =
   Location.register_error_of_exn

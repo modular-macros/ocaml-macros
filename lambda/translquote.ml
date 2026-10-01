@@ -285,3 +285,285 @@ and quote_lambda_switch { sw_numconsts; sw_consts; sw_numblocks;
 and term t = quote_lambda t
 
 let quote_expression = quote_lambda
+
+(* Closing the code of a top-level splice over the run-time variables
+   that it quotes.  The variables are renamed in each term that the
+   splice quotes, but not in the rest of its code: [closing] maps each
+   to the parameter that stands for it. *)
+let rec rename_quoted subst lam =
+  let renamed id = Option.value (Ident.Map.find_opt id subst) ~default:id in
+  match lam with
+  | Lvar id -> Lvar (renamed id)
+  | Lmutvar id -> Lmutvar (renamed id)
+  | Lassign (id, e) -> Lassign (renamed id, rename_quoted subst e)
+  | Lsplice _ -> lam
+  | _ -> Lambda.shallow_map (rename_quoted subst) lam
+
+let close_quoted closing lam =
+  if Ident.Map.is_empty closing then lam else rename_quoted closing lam
+
+(* [transl_close_function loc params body] gives the variables of
+   [params] that are not persistent, in a fixed order, the parameters
+   that stand for them, and the code that [body] translates the splice
+   to, in which each quoted term mentions the parameters.  The caller
+   abstracts the code over the parameters and applies it, at the hole,
+   to the variables, so that a renaming of the surrounding term reaches
+   them.  A reference through a persistent identifier is quoted as a
+   primitive and needs no closing. *)
+let transl_close_function _loc params body =
+  let params = Ident.Set.filter (fun r -> not (Ident.global r)) params in
+  let originals = Ident.Set.elements params in
+  let subst =
+    List.fold_left (fun m r -> Ident.Map.add r (Ident.rename r) m)
+      Ident.Map.empty originals
+  in
+  let fresh_vars = List.map (fun r -> Ident.Map.find r subst) originals in
+  let body = body subst in
+  let code =
+    fst (new_scope fresh_vars
+           (body %>> fun c fvs -> seq (check fvs) (pair c fvs)))
+  in
+  (originals, fresh_vars, code)
+
+(* Rebuilding the lambda term of a unit.
+
+   [quote lam] is code that builds [lam] with the contents of each hole
+   in the place of the hole, or [None] if [lam] has no hole: the parent
+   then embeds the whole of [lam] as one constant.  Unlike
+   [quote_lambda], it keeps the binders of the term: the term is closed,
+   so there is nothing to rename and no scope to check. *)
+
+(* The contents of a hole are the application of a function of the
+   static program to the variables of the term that the splice quotes.
+   The term keeps its binders, so each variable is passed as the
+   constant that denotes it. *)
+let hole_contents { sp_code; sp_args } =
+  match sp_args with
+  | [] -> sp_code
+  | _ ->
+      Lapply { ap_func = sp_code;
+               ap_args = List.map const sp_args;
+               ap_loc = Loc_unknown;
+               ap_tailcall = Default_tailcall;
+               ap_inlined = Default_inline;
+               ap_specialised = Default_specialise }
+
+(* A child beside its optional rebuild: the rebuilt code where the child
+   needed rebuilding, the child embedded as one constant where not. *)
+let one q e = match q with None -> const e | Some c -> c
+
+let rec quote lam =
+  let tag = Obj.(tag (repr lam)) in
+  (* [rebuild] is called only when some child needs rebuilding. *)
+  let rebuild args = Some (mkblock ~tag args) in
+  match lam with
+  | Lsplice sp -> Some (hole_contents sp)
+  | Lvar _ | Lmutvar _ | Lconst _ -> None
+  | Lapply { ap_func; ap_args; ap_loc; ap_tailcall; ap_inlined;
+             ap_specialised } ->
+      let qf = quote ap_func and qargs = quote_list ap_args in
+      if qf = None && qargs = None then None
+      else
+        rebuild [mkblock [one qf ap_func; one qargs ap_args;
+                          const ap_loc; const ap_tailcall;
+                          const ap_inlined; const ap_specialised]]
+  | Lfunction lfun ->
+      begin match quote_lfunction lfun with
+      | None -> None
+      | Some c -> rebuild [c]
+      end
+  | Llet (lk, vk, id, e1, e2) ->
+      let q1 = quote e1 and q2 = quote e2 in
+      if q1 = None && q2 = None then None
+      else rebuild [const lk; const vk; const id; one q1 e1; one q2 e2]
+  | Lmutlet (vk, id, e1, e2) ->
+      let q1 = quote e1 and q2 = quote e2 in
+      if q1 = None && q2 = None then None
+      else rebuild [const vk; const id; one q1 e1; one q2 e2]
+  | Lletrec (binds, e) ->
+      let qbinds = List.map (fun b -> quote_lfunction b.def) binds in
+      let qe = quote e in
+      if qe = None && List.for_all (( = ) None) qbinds then None
+      else
+        let bind b q = mkblock [const b.id; one q b.def] in
+        rebuild [list (fun x -> x) (List.map2 bind binds qbinds); one qe e]
+  | Lprim (p, es, loc) ->
+      begin match quote_list es with
+      | None -> None
+      | Some cs -> rebuild [const p; cs; const loc]
+      end
+  | Lswitch (e, sw, loc) ->
+      let qe = quote e and qsw = quote_switch sw in
+      if qe = None && qsw = None then None
+      else
+        rebuild [one qe e; one qsw sw; const loc]
+  | Lstringswitch (e, cases, eopt, loc) ->
+      let qcases = List.map (fun (_, e) -> quote e) cases in
+      let qe = quote e and qopt = Option.map quote eopt in
+      if qe = None && List.for_all (( = ) None) qcases
+         && (qopt = None || qopt = Some None)
+      then None
+      else
+        let case (str, e) q = mkblock [const str; one q e] in
+        rebuild [one qe e;
+                 list (fun x -> x) (List.map2 case cases qcases);
+                 (* [qopt] is [Option.map quote eopt], so it is present
+                    exactly when the default is: flattening picks out the
+                    default's rebuild, if it needed one. *)
+                 (match eopt with
+                  | None -> const None
+                  | Some e -> some (one (Option.join qopt) e));
+                 const loc]
+  | Lstaticraise (i, es) ->
+      begin match quote_list es with
+      | None -> None
+      | Some cs -> rebuild [const i; cs]
+      end
+  | Lstaticcatch (e1, handler, e2) ->
+      let q1 = quote e1 and q2 = quote e2 in
+      if q1 = None && q2 = None then None
+      else rebuild [one q1 e1; const handler; one q2 e2]
+  | Ltrywith (e1, id, e2) ->
+      let q1 = quote e1 and q2 = quote e2 in
+      if q1 = None && q2 = None then None
+      else rebuild [one q1 e1; const id; one q2 e2]
+  | Lifthenelse (e1, e2, e3) ->
+      let q1 = quote e1 and q2 = quote e2 and q3 = quote e3 in
+      if q1 = None && q2 = None && q3 = None then None
+      else rebuild [one q1 e1; one q2 e2; one q3 e3]
+  | Lsequence (e1, e2) | Lwhile (e1, e2) ->
+      let q1 = quote e1 and q2 = quote e2 in
+      if q1 = None && q2 = None then None
+      else rebuild [one q1 e1; one q2 e2]
+  | Lfor (id, e1, e2, dir, e3) ->
+      let q1 = quote e1 and q2 = quote e2 and q3 = quote e3 in
+      if q1 = None && q2 = None && q3 = None then None
+      else
+        rebuild [const id; one q1 e1; one q2 e2; const dir; one q3 e3]
+  | Lassign (id, e) ->
+      begin match quote e with
+      | None -> None
+      | Some c -> rebuild [const id; c]
+      end
+  | Lsend (mk, e1, e2, es, loc) ->
+      let q1 = quote e1 and q2 = quote e2 and qes = quote_list es in
+      if q1 = None && q2 = None && qes = None then None
+      else
+        rebuild [const mk; one q1 e1; one q2 e2; one qes es; const loc]
+  | Levent _ ->
+      (* [quote_module_lambda] strips events before quoting: an event's
+         environment cannot be serialised by [const]. *)
+      fatal_error "Translquote.quote: Levent"
+  | Lifused (id, e) ->
+      begin match quote e with
+      | None -> None
+      | Some c -> rebuild [const id; c]
+      end
+
+(* [None] if no element needs rebuilding. *)
+and quote_list es =
+  let qs = List.map quote es in
+  if List.for_all (( = ) None) qs then None
+  else Some (list (fun x -> x) (List.map2 (fun e q -> one q e) es qs))
+
+and quote_lfunction { kind; params; return; body; attr; loc } =
+  match quote body with
+  | None -> None
+  | Some c ->
+      let param (i, k) = mkblock [const i; const k] in
+      Some (mkblock [const kind; list param params; const return; c;
+                     const attr; const loc])
+
+and quote_switch { sw_numconsts; sw_consts; sw_numblocks; sw_blocks;
+                   sw_failaction } =
+  let qconsts = List.map (fun (_, e) -> quote e) sw_consts in
+  let qblocks = List.map (fun (_, e) -> quote e) sw_blocks in
+  let qfail = Option.map quote sw_failaction in
+  if List.for_all (( = ) None) qconsts && List.for_all (( = ) None) qblocks
+     && (qfail = None || qfail = Some None)
+  then None
+  else
+    let case (i, e) q = mkblock [const i; one q e] in
+    Some (mkblock
+            [const sw_numconsts;
+             list (fun x -> x) (List.map2 case sw_consts qconsts);
+             const sw_numblocks;
+             list (fun x -> x) (List.map2 case sw_blocks qblocks);
+             (* As in [Lstringswitch]: [qfail] is [Option.map quote
+                sw_failaction], so its outer option follows the
+                failaction's. *)
+             (match sw_failaction with
+              | None -> const None
+              | Some e -> some (one (Option.join qfail) e))])
+
+(* An event carries a typing environment, which [const] cannot embed.
+   The contents of a hole are code to run, not to quote, and keep their
+   events. *)
+let rec remove_events lam =
+  match lam with
+  | Levent (lam, _) -> remove_events lam
+  | Lsplice _ -> lam
+  | _ -> shallow_map remove_events lam
+
+let quote_module_lambda lam =
+  let lam = remove_events lam in
+  match quote lam with
+  | None -> const lam
+  | Some code -> code
+
+(* The holes of a term, numbered in the order of [shallow_map]: the
+   static program numbers the holes of the term it rebuilds, and the
+   compiler those of its own term, events and all, alike. *)
+let map_holes f lam =
+  let n = ref 0 in
+  let rec map lam =
+    match lam with
+    | Lsplice sp -> let i = !n in incr n; f i sp
+    | _ -> shallow_map map lam
+  in
+  let lam = map lam in
+  lam, !n
+
+(* Code that rebuilds the term as [quote_module_lambda]'s does, so that
+   the splices are evaluated in the same order, and gives the block of
+   the contents of its holes, numbered as by [map_holes]. *)
+let quote_module_holes lam =
+  let holes = Ident.create_local "*holes*" in
+  let lam, count =
+    map_holes
+      (fun i sp ->
+         let c = Ident.create_local "*hole*" in
+         Lsplice
+           { sp_code =
+               Llet (Strict, Pgenval, c, hole_contents sp,
+                     Lsequence
+                       (Lprim (Psetfield (i, Pointer, Assignment),
+                               [Lvar holes; Lvar c], Loc_unknown),
+                        Lvar c));
+             sp_args = [] })
+      (remove_events lam)
+  in
+  Llet (Strict, Pgenval, holes,
+        Lprim (Pmakeblock (0, Mutable, None),
+               List.init count (fun _ -> lambda_unit), Loc_unknown),
+        Lsequence
+          (Lprim (Pignore, [quote_module_lambda lam], Loc_unknown),
+           Lvar holes))
+
+(* The code of a hole keeps the numbers of the static exceptions that
+   the compilation of its quotations drew, which a later pass of this
+   compilation must not draw again: a pass that introduces a handler
+   assumes that its number is fresh.  The binders of the code need no
+   such care: a quotation renames them, with stamps that the compiler
+   never draws. *)
+let fill_holes lam (contents : lambda array) =
+  let rec reserve lam =
+    (match lam with
+     | Lstaticraise (i, _) | Lstaticcatch (_, (i, _), _) ->
+         Lambda.reserve_raise_count i
+     | _ -> ());
+    Lambda.iter_head_constructor reserve lam
+  in
+  Array.iter reserve contents;
+  let lam, _ = map_holes (fun i _ -> contents.(i)) lam in
+  lam

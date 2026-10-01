@@ -218,7 +218,11 @@ ocamlbytecomp_SOURCES = \
   bytecomp/bytelink.mli bytecomp/bytelink.ml \
   bytecomp/bytelibrarian.mli bytecomp/bytelibrarian.ml \
   bytecomp/bytepackager.mli bytecomp/bytepackager.ml \
+  bytecomp/emit_cmo.mli bytecomp/emit_cmo.ml \
+  bytecomp/static_holes.mli bytecomp/static_holes.ml \
+  bytecomp/static_report.mli bytecomp/static_report.ml \
   driver/errors.mli driver/errors.ml \
+  driver/static_link.mli driver/static_link.ml \
   driver/compile.mli driver/compile.ml \
   driver/maindriver.mli driver/maindriver.ml
 
@@ -569,6 +573,7 @@ $(foreach PROGRAM, $(OCAML_PROGRAMS),\
 # We have to use dedicated rules to build it
 
 OCAML_BYTECODE_PROGRAMS = expunge \
+  staticrun \
   $(TOOLS_BYT_PROGRAMS) \
   $(addprefix tools/, cvt_emit make_opcodes ocamltex) \
   debugger/ocamldebug \
@@ -811,7 +816,7 @@ endif
 	$(MAKE) otherlibrariesopt
 	$(MAKE) ocamllex.opt ocamltoolsopt ocamltoolsopt.opt \
 	  $(OCAMLDOC_OPT_TARGET) \
-	  $(OCAMLTEST_OPT_TARGET) othertools ocamlnat
+	  $(OCAMLTEST_OPT_TARGET) othertools ocamlnat staticrun$(EXE)
 ifeq "$(build_libraries_manpages)" "true"
 	$(MAKE) manpages
 endif
@@ -851,7 +856,7 @@ all: coreall
 	$(MAKE) ocaml
 	$(MAKE) otherlibraries $(WITH_DEBUGGER) $(OCAMLDOC_TARGET) \
          $(OCAMLTEST_TARGET)
-	$(MAKE) othertools
+	$(MAKE) othertools staticrun$(EXE)
 ifeq "$(build_libraries_manpages)" "true"
 	$(MAKE) manpages
 endif
@@ -1200,6 +1205,28 @@ expunge_SOURCES = toplevel/expunge.mli toplevel/expunge.ml
 
 partialclean::
 	rm -f expunge expunge.exe
+
+# The program that runs static programs.  It is linked with -linkall
+# because a static program may refer to any unit of its libraries.
+
+staticrun_LIBRARIES = \
+  $(addprefix compilerlibs/,ocamlcommon ocamlbytecomp) \
+  otherlibs/dynlink/dynlink
+
+staticrun_SOURCES = driver/staticrun.mli driver/staticrun.ml
+
+staticrun_BYTECODE_LINKFLAGS = -linkall
+
+driver/staticrun.cm%: VPATH += otherlibs/dynlink
+
+# The runner loads static programs compiled against the standard library
+# of the tree, so it is relinked when that library changes.  It links
+# the copy in boot/, which coldstart refreshes; the copy itself is new
+# at every coldstart, so the original is the one depended on.
+staticrun$(EXE): stdlib/stdlib.cma
+
+partialclean::
+	rm -f staticrun staticrun.exe
 
 # The runtime system
 
@@ -2854,6 +2881,7 @@ common-install::
 	    runtime/caml/domain_state.tbl runtime/caml/*.h, \
 	  lib, $(INSTALL_LIBDIR_CAML))
 	$(call INSTALL_ITEMS, ocaml$(EXE), bin)
+	$(call INSTALL_ITEMS, staticrun$(EXE), bin)
 ifeq "$(INSTALL_BYTECODE_PROGRAMS)" "true"
 	$(call STRIP_BYTE_PROG, ocamlc$(EXE))
 ifeq "$(NATIVE_COMPILER)" "true"

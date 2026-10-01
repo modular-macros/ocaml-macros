@@ -432,12 +432,12 @@ let compile_recmodule ~scopes compile_rhs bindings cont =
 
 (* Code to translate class entries in a structure *)
 
-let transl_class_bindings ~scopes cl_list =
+let transl_class_bindings ~ctx ~scopes cl_list =
   let ids = List.map (fun (ci, _) -> ci.ci_id_class) cl_list in
   (ids,
    List.map
      (fun ({ci_id_class=id; ci_expr=cl; ci_virt=vf}, meths) ->
-       let def, rkind = transl_class ~scopes ids id meths cl vf in
+       let def, rkind = transl_class ~ctx ~scopes ids id meths cl vf in
        (id, rkind, def))
      cl_list)
 
@@ -485,7 +485,7 @@ let merge_functors ~scopes mexp coercion root_path =
   in
   merge ~scopes mexp coercion root_path [] Default_inline
 
-let rec compile_functor ~scopes mexp coercion root_path loc =
+let rec compile_functor ~ctx ~scopes mexp coercion root_path loc =
   let functor_params_rev, body, body_path, res_coercion, inline_attribute =
     merge_functors ~scopes mexp coercion root_path
   in
@@ -497,7 +497,7 @@ let rec compile_functor ~scopes mexp coercion root_path loc =
         let params = (param', Pgenval) :: params in
         let body = Llet (Alias, Pgenval, param, arg, body) in
         params, body)
-      ([], transl_module ~scopes res_coercion body_path body)
+      ([], transl_module ~ctx ~scopes res_coercion body_path body)
       functor_params_rev
   in
   lfunction
@@ -519,28 +519,28 @@ let rec compile_functor ~scopes mexp coercion root_path loc =
 
 (* Compile a module expression *)
 
-and transl_module ~scopes cc rootpath mexp =
+and transl_module ~ctx ~scopes cc rootpath mexp =
   let loc = of_location ~scopes mexp.mod_loc in
   match mexp.mod_desc with
   | Tmod_ident (path,_) ->
       apply_coercion loc Strict cc
         (transl_module_path loc mexp.mod_env path)
   | Tmod_structure str ->
-      transl_struct ~scopes loc [] cc rootpath str
+      transl_struct ~ctx ~scopes loc [] cc rootpath str
   | Tmod_functor _ ->
       oo_wrap mexp.mod_env true (fun () ->
-        compile_functor ~scopes mexp cc rootpath loc) ()
+        compile_functor ~ctx ~scopes mexp cc rootpath loc) ()
   | Tmod_apply(funct, arg, ccarg) ->
-      let translated_arg = transl_module ~scopes ccarg None arg in
-      transl_apply ~scopes ~loc ~cc mexp.mod_env funct translated_arg
+      let translated_arg = transl_module ~ctx ~scopes ccarg None arg in
+      transl_apply ~ctx ~scopes ~loc ~cc mexp.mod_env funct translated_arg
   | Tmod_apply_unit funct ->
-      transl_apply ~scopes ~loc ~cc mexp.mod_env funct lambda_unit
+      transl_apply ~ctx ~scopes ~loc ~cc mexp.mod_env funct lambda_unit
   | Tmod_constraint(arg, _, _, ccarg) ->
-      transl_module ~scopes (compose_coercions cc ccarg) rootpath arg
+      transl_module ~ctx ~scopes (compose_coercions cc ccarg) rootpath arg
   | Tmod_unpack(arg, _) ->
-      apply_coercion loc Strict cc (Translcore.transl_exp ~scopes arg)
+      apply_coercion loc Strict cc (Translcore.transl_exp ~ctx ~scopes arg)
 
-and transl_apply ~scopes ~loc ~cc mod_env funct translated_arg =
+and transl_apply ~ctx ~scopes ~loc ~cc mod_env funct translated_arg =
   let inlined_attribute =
     Translattribute.get_inlined_attribute_on_module funct
   in
@@ -548,19 +548,20 @@ and transl_apply ~scopes ~loc ~cc mod_env funct translated_arg =
     (apply_coercion loc Strict cc)
     (Lapply{
        ap_loc=loc;
-       ap_func=transl_module ~scopes Tcoerce_none None funct;
+       ap_func=transl_module ~ctx ~scopes Tcoerce_none None funct;
        ap_args=[translated_arg];
        ap_tailcall=Default_tailcall;
        ap_inlined=inlined_attribute;
        ap_specialised=Default_specialise})
 
-and transl_struct ~scopes loc fields cc rootpath {str_final_env; str_items; _} =
-  transl_structure ~scopes loc fields cc rootpath str_final_env str_items
+and transl_struct ~ctx ~scopes loc fields cc rootpath
+      {str_final_env; str_items; _} =
+  transl_structure ~ctx ~scopes loc fields cc rootpath str_final_env str_items
 
 (* The function  transl_structure is called by  the bytecode compiler.
    Some effort is made to compile in top to bottom order, in order to display
    warning by increasing locations. *)
-and transl_structure ~scopes loc fields cc rootpath final_env = function
+and transl_structure ~ctx ~scopes loc fields cc rootpath final_env = function
     [] ->
       let body =
         match cc with
@@ -610,19 +611,19 @@ and transl_structure ~scopes loc fields cc rootpath final_env = function
       else
         body
   | item :: rem ->
-      transl_struct_item ~scopes fields rootpath item
+      transl_struct_item ~ctx ~scopes fields rootpath item
         (fun fields ->
-           transl_structure ~scopes loc fields cc rootpath final_env rem)
+           transl_structure ~ctx ~scopes loc fields cc rootpath final_env rem)
 
-and transl_struct_item ~scopes fields rootpath item next =
+and transl_struct_item ~ctx ~scopes fields rootpath item next =
   match item.str_desc with
   | Tstr_eval (expr, _) ->
       let body = next fields in
-      Lsequence(transl_exp ~scopes expr, body)
+      Lsequence(transl_exp ~ctx ~scopes expr, body)
   | Tstr_value(rec_flag, pat_expr_list) ->
       (* Translate bindings first *)
       let mk_lam_let =
-        transl_let ~scopes ~in_structure:true rec_flag pat_expr_list in
+        transl_let ~ctx ~scopes ~in_structure:true rec_flag pat_expr_list in
       let ext_fields =
         List.rev_append (let_bound_idents pat_expr_list) fields in
       (* Then, translate remainder of struct *)
@@ -653,7 +654,7 @@ and transl_struct_item ~scopes fields rootpath item next =
         | None -> scopes
         | Some id -> enter_module_definition ~scopes id in
       let module_body =
-        transl_module ~scopes:subscopes Tcoerce_none
+        transl_module ~ctx ~scopes:subscopes Tcoerce_none
           (Option.bind id (field_path rootpath)) mb.mb_expr
       in
       let module_body =
@@ -680,16 +681,16 @@ and transl_struct_item ~scopes fields rootpath item next =
       let lam =
         compile_recmodule ~scopes (fun id modl ->
             match id with
-            | None -> transl_module ~scopes Tcoerce_none None modl
+            | None -> transl_module ~ctx ~scopes Tcoerce_none None modl
             | Some id ->
                 transl_module
-                  ~scopes:(enter_module_definition ~scopes id)
+                  ~ctx ~scopes:(enter_module_definition ~scopes id)
                   Tcoerce_none (field_path rootpath id) modl
           ) bindings body
       in
       lam
   | Tstr_class cl_list ->
-      let (ids, class_bindings) = transl_class_bindings ~scopes cl_list in
+      let (ids, class_bindings) = transl_class_bindings ~ctx ~scopes cl_list in
       let body = next (List.rev_append ids fields) in
       Value_rec_compiler.compile_letrec class_bindings body
   | Tstr_include incl ->
@@ -709,7 +710,7 @@ and transl_struct_item ~scopes fields rootpath item next =
       in
       let body = rebind_idents 0 fields ids in
       Llet(pure_module modl, Pgenval, mid,
-           transl_module ~scopes Tcoerce_none None modl, body)
+           transl_module ~ctx ~scopes Tcoerce_none None modl, body)
 
   | Tstr_open od ->
       let pure = pure_module od.open_expr in
@@ -735,7 +736,7 @@ and transl_struct_item ~scopes fields rootpath item next =
           in
           let body = rebind_idents 0 fields ids in
           Llet(pure, Pgenval, mid,
-               transl_module ~scopes Tcoerce_none None od.open_expr, body)
+               transl_module ~ctx ~scopes Tcoerce_none None od.open_expr, body)
       end
   | Tstr_modtype _
   | Tstr_class_type _
@@ -792,7 +793,7 @@ let module_block_size component_names coercion =
   | Tcoerce_primitive _
   | Tcoerce_alias _ -> assert false
 
-let transl_implementation_flambda module_name (str, cc) =
+let transl_implementation_flambda ~ctx module_name (str, cc) =
   reset_labels ();
   primitive_declarations := [];
   Translprim.clear_used_primitives ();
@@ -800,7 +801,7 @@ let transl_implementation_flambda module_name (str, cc) =
   let scopes = enter_module_definition ~scopes:empty_scopes module_id in
   let body =
     Translobj.transl_label_init
-      (fun () -> transl_struct ~scopes Loc_unknown [] cc
+      (fun () -> transl_struct ~ctx ~scopes Loc_unknown [] cc
                    (global_path module_id) str)
   in
   let size =
@@ -810,15 +811,125 @@ let transl_implementation_flambda module_name (str, cc) =
     required_globals = required_globals ~flambda:true body;
     code = body }
 
-let transl_implementation module_name (str, cc) =
+let transl_implementation ~ctx module_name (str, cc) =
   let implementation =
-    transl_implementation_flambda module_name (str, cc)
+    transl_implementation_flambda ~ctx module_name (str, cc)
   in
   let code =
     Lprim (Psetglobal implementation.module_ident, [implementation.code],
            Loc_unknown)
   in
   { implementation with code }
+
+(* A function of the compiler that the static program calls.  The
+   function is the only component of the unit [m], which the program
+   that runs the static program is linked with. *)
+let call_static_support m args =
+  let unit = Lprim (Pgetglobal (Ident.create_persistent m), [], Loc_unknown) in
+  Lapply { ap_func = Lprim (Pfield (0, Pointer, Immutable), [unit],
+                            Loc_unknown);
+           ap_args = args;
+           ap_loc = Loc_unknown;
+           ap_tailcall = Default_tailcall;
+           ap_inlined = Default_inline;
+           ap_specialised = Default_specialise }
+
+(* The static program of a unit with top-level splices, and the run-time
+   term of the unit, with a hole for each top-level splice.
+
+   The static program evaluates the code of each splice and writes the
+   terms that fill the holes; the compiler fills the holes of its own
+   term with them, and compiles it.  The term is not simplified before
+   because a hole hides the binders that its contents mention. *)
+let transl_static_program module_name (str, cc) ~source_file ~prefix =
+  let module_id = Ident.create_persistent module_name in
+  let scopes = enter_module_definition ~scopes:empty_scopes module_id in
+  let ctx = initial_context () in
+  (* A failure of an evaluation is written to [err_file], where the
+     driver finds it. *)
+  let err_file = prefix ^ "$static.err" in
+  let static_report loc what body =
+    call_static_support "Static_report"
+      [Translquote.const err_file;
+       Translquote.const (loc : Location.t);
+       Translquote.const what;
+       Lambda.thunk (Ident.create_local "*report*") body]
+  in
+  (* The code of each splice is a function, bound around the call that
+     writes the code of the holes, which the hole applies: a splice is
+     evaluated when the term around it is built. *)
+  let pending_splices = ref [] in
+  let splice_thunk ctx spl_exp =
+    Translcore.check_no_objects spl_exp;
+    let roots = Translcore.quoted_variables ~ctx ~scopes spl_exp in
+    let originals, fresh_vars, code =
+      Translquote.transl_close_function Location.none roots
+        (fun closing ->
+           Translcore.transl_exp ~ctx:{ ctx with closing } ~scopes spl_exp)
+    in
+    let code = static_report spl_exp.exp_loc "this splice" code in
+    let h = Ident.create_local "*splice*" in
+    (* Without variables, the function is a thunk, which the hole
+       applies: the splice is evaluated there all the same. *)
+    let params, sp_code =
+      match fresh_vars with
+      | [] ->
+          [ (Ident.create_local "*unit*", Pgenval) ],
+          Lapply { ap_func = Lvar h; ap_args = [ lambda_unit ];
+                   ap_loc = Loc_unknown; ap_tailcall = Default_tailcall;
+                   ap_inlined = Default_inline;
+                   ap_specialised = Default_specialise }
+      | _ -> List.map (fun v -> (v, Pgenval)) fresh_vars, Lvar h
+    in
+    let fn =
+      lfunction ~kind:Curried ~params ~return:Pgenval ~body:code
+        ~attr:default_function_attribute ~loc:Loc_unknown
+    in
+    pending_splices := (h, fn) :: !pending_splices;
+    { sp_code; sp_args = originals }
+  in
+  let run_time =
+    transl_implementation ~ctx:{ ctx with splice_source = Some splice_thunk }
+      module_name (str, cc)
+  in
+  (* The globals that the object requires are those of the term with
+     its holes empty: the globals of a splice's code belong to the
+     static program. *)
+  let rt_required_globals =
+    let rec blank lam =
+      match lam with
+      | Lsplice _ -> lsplice lambda_unit
+      | _ -> Lambda.shallow_map blank lam
+    in
+    required_globals ~flambda:false (blank run_time.code)
+  in
+  let emit =
+    List.fold_right
+      (fun (h, code) body -> Llet (Strict, Pgenval, h, code, body))
+      (List.rev !pending_splices)
+      (call_static_support "Static_holes"
+         [Translquote.const (prefix ^ "$static.holes");
+          Translquote.quote_module_holes run_time.code])
+  in
+  let static_id = Ident.create_persistent (module_name ^ "$static") in
+  let code =
+    Lsequence
+      (emit,
+       Lprim (Psetglobal static_id,
+              [Lprim (Pmakeblock (0, Immutable, None),
+                      [Lconst const_unit], Loc_unknown)],
+              Loc_unknown))
+  in
+  (* A failure outside any splice is attributed to the unit. *)
+  let code =
+    static_report (Location.in_file source_file)
+      "the compile-time part of this unit" code
+  in
+  { module_ident = static_id;
+    main_module_block_size = 1;
+    required_globals = required_globals ~flambda:false code;
+    code },
+  { run_time with required_globals = rt_required_globals }
 
 (* Build the list of value identifiers defined by a toplevel structure
    (excluding primitive declarations). *)
@@ -979,7 +1090,7 @@ let field_of_str loc str =
     | _ -> apply_coercion loc Strict cc (Lvar ids.(pos))
 
 
-let transl_store_structure ~scopes glob map prims aliases str =
+let transl_store_structure ~ctx ~scopes glob map prims aliases str =
   let no_env_update _ _ env = env in
   let rec transl_store ~scopes rootpath subst cont = function
     [] ->
@@ -989,12 +1100,12 @@ let transl_store_structure ~scopes glob map prims aliases str =
         match item.str_desc with
         | Tstr_eval (expr, _attrs) ->
             Lsequence(Lambda.subst no_env_update subst
-                        (transl_exp ~scopes expr),
+                        (transl_exp ~ctx ~scopes expr),
                       transl_store ~scopes rootpath subst cont rem)
         | Tstr_value(rec_flag, pat_expr_list) ->
             let ids = let_bound_idents pat_expr_list in
             let lam =
-              transl_let ~scopes ~in_structure:true rec_flag pat_expr_list
+              transl_let ~ctx ~scopes ~in_structure:true rec_flag pat_expr_list
                 (store_idents Loc_unknown ids)
             in
             Lsequence(Lambda.subst no_env_update subst lam,
@@ -1036,7 +1147,7 @@ let transl_store_structure ~scopes glob map prims aliases str =
              mb_loc=loc; mb_attributes} ->
             let lam =
               Translattribute.add_inline_attribute
-                (transl_module ~scopes Tcoerce_none None modl)
+                (transl_module ~ctx ~scopes Tcoerce_none None modl)
                 loc mb_attributes
             in
             Lsequence(
@@ -1099,7 +1210,7 @@ let transl_store_structure ~scopes glob map prims aliases str =
             let lam =
               Translattribute.add_inline_attribute
                 (transl_module
-                   ~scopes:(enter_module_definition ~scopes id)
+                   ~ctx ~scopes:(enter_module_definition ~scopes id)
                    Tcoerce_none (field_path rootpath id) modl)
                 loc mb_attributes
             in
@@ -1123,17 +1234,19 @@ let transl_store_structure ~scopes glob map prims aliases str =
                  Lambda.subst no_env_update subst
                    (match id with
                     | None ->
-                      transl_module ~scopes Tcoerce_none None modl
+                      transl_module ~ctx ~scopes Tcoerce_none None modl
                     | Some id ->
                       transl_module
-                        ~scopes:(enter_module_definition ~scopes id)
+                        ~ctx ~scopes:(enter_module_definition ~scopes id)
                         Tcoerce_none (field_path rootpath id) modl))
               bindings
               (Lsequence(store_idents Loc_unknown ids,
                          transl_store ~scopes rootpath
                            (add_idents true ids subst) cont rem))
         | Tstr_class cl_list ->
-            let (ids, class_bindings) = transl_class_bindings ~scopes cl_list in
+            let (ids, class_bindings) =
+              transl_class_bindings ~ctx ~scopes cl_list
+            in
             let lam =
               Value_rec_compiler.compile_letrec class_bindings
                 (store_idents Loc_unknown ids)
@@ -1201,7 +1314,7 @@ let transl_store_structure ~scopes glob map prims aliases str =
             in
             Llet(Strict, Pgenval, mid,
                  Lambda.subst no_env_update subst
-                   (transl_module ~scopes Tcoerce_none None modl),
+                   (transl_module ~ctx ~scopes Tcoerce_none None modl),
                  store_idents 0 ids)
         | Tstr_open od ->
             begin match od.open_expr.mod_desc with
@@ -1249,7 +1362,8 @@ let transl_store_structure ~scopes glob map prims aliases str =
                     Llet(
                       pure, Pgenval, mid,
                       Lambda.subst no_env_update subst
-                        (transl_module ~scopes Tcoerce_none None od.open_expr),
+                        (transl_module ~ctx ~scopes Tcoerce_none None
+                           od.open_expr),
                       store_idents 0 ids)
           end
         | Tstr_modtype _
@@ -1358,7 +1472,8 @@ let build_ident_map restr idlist more_ids =
 (* Compile an implementation using transl_store_structure
    (for the native-code compiler). *)
 
-let transl_store_gen ~scopes module_name ({ str_items = str }, restr) topl =
+let transl_store_gen ~ctx ~scopes module_name ({ str_items = str }, restr)
+    topl =
   reset_labels ();
   primitive_declarations := [];
   Translprim.clear_used_primitives ();
@@ -1369,25 +1484,27 @@ let transl_store_gen ~scopes module_name ({ str_items = str }, restr) topl =
     | [ { str_desc = Tstr_eval (expr, _attrs) } ] when topl ->
         assert (size = 0);
         Lambda.subst (fun _ _ env -> env) !transl_store_subst
-          (transl_exp ~scopes expr)
-    | str -> transl_store_structure ~scopes module_id map prims aliases str
+          (transl_exp ~ctx ~scopes expr)
+    | str -> transl_store_structure ~ctx ~scopes module_id map prims aliases str
   in
   transl_store_label_init module_id size f str
   (*size, transl_label_init (transl_store_structure module_id map prims str)*)
 
-let transl_store_phrases module_name str =
+let transl_store_phrases ~ctx module_name str =
   let scopes =
     enter_module_definition ~scopes:empty_scopes
       (Ident.create_persistent module_name)
   in
-  transl_store_gen ~scopes module_name (str,Tcoerce_none) true
+  transl_store_gen ~ctx ~scopes module_name (str,Tcoerce_none) true
 
-let transl_store_implementation module_name (str, restr) =
+let transl_store_implementation ~ctx module_name (str, restr) =
   let s = !transl_store_subst in
   transl_store_subst := Ident.Map.empty;
   let module_ident = Ident.create_persistent module_name in
   let scopes = enter_module_definition ~scopes:empty_scopes module_ident in
-  let (i, code) = transl_store_gen ~scopes module_name (str, restr) false in
+  let (i, code) =
+    transl_store_gen ~ctx ~scopes module_name (str, restr) false
+  in
   transl_store_subst := s;
   { Lambda.main_module_block_size = i;
     code;
@@ -1445,7 +1562,7 @@ let close_toplevel_term lam =
                                   toploop_getvalue id, l))
                 (free_variables lam) lam
 
-let transl_toplevel_item ~scopes item =
+let transl_toplevel_item ~ctx ~scopes item =
   match item.str_desc with
     Tstr_eval (expr, _)
   | Tstr_value(Nonrecursive,
@@ -1454,10 +1571,10 @@ let transl_toplevel_item ~scopes item =
          that Toploop can display the result of the expression.
          Otherwise, the normal compilation would result
          in a Lsequence returning unit. *)
-      transl_exp ~scopes expr
+      transl_exp ~ctx ~scopes expr
   | Tstr_value(rec_flag, pat_expr_list) ->
       let idents = let_bound_idents pat_expr_list in
-      transl_let ~scopes ~in_structure:true rec_flag pat_expr_list
+      transl_let ~ctx ~scopes ~in_structure:true rec_flag pat_expr_list
         (make_sequence toploop_setvalue_id idents)
   | Tstr_typext(tyext) ->
       let idents =
@@ -1474,13 +1591,13 @@ let transl_toplevel_item ~scopes item =
         (transl_extension_constructor ~scopes
            item.str_env None ext.tyexn_constructor)
   | Tstr_module {mb_id=None; mb_presence=Mp_present; mb_expr=modl} ->
-      transl_module ~scopes Tcoerce_none None modl
+      transl_module ~ctx ~scopes Tcoerce_none None modl
   | Tstr_module {mb_id=Some id; mb_presence=Mp_present; mb_expr=modl} ->
       (* we need to use the unique name for the module because of issues
          with "open" (PR#8133) *)
       set_toplevel_unique_name id;
       let lam = transl_module
-                  ~scopes:(enter_module_definition ~scopes id)
+                  ~ctx ~scopes:(enter_module_definition ~scopes id)
                   Tcoerce_none (Some(Pident id)) modl in
       toploop_setvalue id lam
   | Tstr_recmodule bindings ->
@@ -1489,17 +1606,17 @@ let transl_toplevel_item ~scopes item =
         (fun id modl ->
            match id with
            | None ->
-             transl_module ~scopes Tcoerce_none None modl
+             transl_module ~ctx ~scopes Tcoerce_none None modl
            | Some id ->
              transl_module
-               ~scopes:(enter_module_definition ~scopes id)
+               ~ctx ~scopes:(enter_module_definition ~scopes id)
                Tcoerce_none (Some (Pident id)) modl)
         bindings
         (make_sequence toploop_setvalue_id idents)
   | Tstr_class cl_list ->
       (* we need to use unique names for the classes because there might
          be a value named identically *)
-      let (ids, class_bindings) = transl_class_bindings ~scopes cl_list in
+      let (ids, class_bindings) = transl_class_bindings ~ctx ~scopes cl_list in
       List.iter set_toplevel_unique_name ids;
       Value_rec_compiler.compile_letrec class_bindings
         (make_sequence toploop_setvalue_id ids)
@@ -1516,7 +1633,7 @@ let transl_toplevel_item ~scopes item =
                              [Lvar mid], Loc_unknown)),
                     set_idents (pos + 1) ids) in
       Llet(Strict, Pgenval, mid,
-           transl_module ~scopes Tcoerce_none None modl, set_idents 0 ids)
+           transl_module ~ctx ~scopes Tcoerce_none None modl, set_idents 0 ids)
   | Tstr_primitive descr ->
       record_primitive descr.val_val;
       lambda_unit
@@ -1541,7 +1658,7 @@ let transl_toplevel_item ~scopes item =
                           set_idents (pos + 1) ids)
           in
           Llet(pure, Pgenval, mid,
-               transl_module ~scopes Tcoerce_none None od.open_expr,
+               transl_module ~ctx ~scopes Tcoerce_none None od.open_expr,
                set_idents 0 ids)
       end
   | Tstr_module ({mb_presence=Mp_absent}) ->
@@ -1552,15 +1669,15 @@ let transl_toplevel_item ~scopes item =
   | Tstr_attribute _ ->
       lambda_unit
 
-let transl_toplevel_item_and_close ~scopes itm =
+let transl_toplevel_item_and_close ~ctx ~scopes itm =
   close_toplevel_term
-    (transl_label_init (fun () -> transl_toplevel_item ~scopes itm))
+    (transl_label_init (fun () -> transl_toplevel_item ~ctx ~scopes itm))
 
-let transl_toplevel_definition str =
+let transl_toplevel_definition ~ctx str =
   reset_labels ();
   Translprim.clear_used_primitives ();
   make_sequence
-    (transl_toplevel_item_and_close ~scopes:empty_scopes)
+    (transl_toplevel_item_and_close ~ctx ~scopes:empty_scopes)
     str.str_items
 
 (* Compile the initialization code for a packed library *)
@@ -1644,6 +1761,23 @@ let transl_store_package component_names target_name coercion =
          0 pos_cc_list)
   *)
   | _ -> assert false
+
+(* The entry points: each translation starts in a context of its own. *)
+
+let transl_implementation_flambda module_name str_cc =
+  transl_implementation_flambda ~ctx:(initial_context ()) module_name str_cc
+
+let transl_implementation module_name str_cc =
+  transl_implementation ~ctx:(initial_context ()) module_name str_cc
+
+let transl_store_phrases module_name str =
+  transl_store_phrases ~ctx:(initial_context ()) module_name str
+
+let transl_store_implementation module_name str_cc =
+  transl_store_implementation ~ctx:(initial_context ()) module_name str_cc
+
+let transl_toplevel_definition str =
+  transl_toplevel_definition ~ctx:(initial_context ()) str
 
 (* Error report *)
 

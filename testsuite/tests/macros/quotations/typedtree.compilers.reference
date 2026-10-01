@@ -1,0 +1,41 @@
+[
+  structure_item (typedtree.ml[11,221+0]..typedtree.ml[11,221+33])
+    Tstr_value Nonrec
+    [
+      <def>
+        pattern (typedtree.ml[11,221+4]..typedtree.ml[11,221+5])
+          Tpat_var "a"
+        expression (typedtree.ml[11,221+8]..typedtree.ml[11,221+33])
+          Texp_quote
+          expression (typedtree.ml[11,221+11]..typedtree.ml[11,221+30])
+            Texp_function
+            [
+              Nolabel
+              Param_pat
+                pattern (typedtree.ml[11,221+15]..typedtree.ml[11,221+16])
+                  Tpat_var "x"
+            ]
+            Tfunction_body
+              expression (typedtree.ml[11,221+20]..typedtree.ml[11,221+30])
+                Texp_splice
+                expression (typedtree.ml[11,221+22]..typedtree.ml[11,221+29])
+                  Texp_quote
+                  expression (typedtree.ml[11,221+25]..typedtree.ml[11,221+26])
+                    Texp_ident "x"
+    ]
+  structure_item (typedtree.ml[12,255+0]..typedtree.ml[12,255+18])
+    Tstr_value Nonrec
+    [
+      <def>
+        pattern (typedtree.ml[12,255+4]..typedtree.ml[12,255+5])
+          Tpat_var "b"
+        expression (typedtree.ml[12,255+8]..typedtree.ml[12,255+18])
+          Texp_splice
+            top-level
+          expression (typedtree.ml[12,255+10]..typedtree.ml[12,255+17])
+            Texp_quote
+            expression (typedtree.ml[12,255+13]..typedtree.ml[12,255+14])
+              Texp_constant Const_int 1
+    ]
+]
+

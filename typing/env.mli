@@ -78,6 +78,12 @@ val with_mode: staging_mode -> t -> t
    "in compile-time code", "inside a quotation". *)
 val describe_level : staging_level -> string
 
+(* Whether a top-level splice has been typed in the compilation unit.
+   Typing a top-level splice sets it; the driver resets it for each
+   compilation unit. *)
+val get_unit_has_top_level_splice : unit -> bool
+val set_unit_has_top_level_splice : bool -> unit
+
 type type_descr_kind =
   (label_description, constructor_description) type_kind
 

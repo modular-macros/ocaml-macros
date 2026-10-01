@@ -1,0 +1,4 @@
+File "splice_raises.ml", line 11, characters 10-65:
+11 | let a = $(if List.length [] = 0 then failwith "boom" else << 1 >>)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Compile-time evaluation of this splice raised Failure("boom").

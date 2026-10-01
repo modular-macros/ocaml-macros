@@ -147,7 +147,7 @@ and expression_desc =
       partial : partial;
     }
   | Texp_quote of expression
-  | Texp_splice of expression
+  | Texp_splice of splice_desc
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
   | Texp_struct_item of structure_item * expression
@@ -666,6 +666,11 @@ and 'a class_infos =
     ci_loc: Location.t;
     ci_attributes: attribute list;
    }
+
+and splice_desc =
+  { spl_exp: expression;
+    spl_top_level: bool;
+  }
 
 type implementation = {
   structure: structure;

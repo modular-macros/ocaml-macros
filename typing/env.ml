@@ -934,6 +934,10 @@ let set_current_unit = Current_unit.set
 let get_current_unit = Current_unit.get
 let get_current_unit_name = Current_unit.Name.get
 
+let unit_has_top_level_splice = ref false
+let get_unit_has_top_level_splice () = !unit_has_top_level_splice
+let set_unit_has_top_level_splice b = unit_has_top_level_splice := b
+
 let find_same_module id tbl =
   match IdTbl.find_same id tbl with
   | x -> x

@@ -297,7 +297,7 @@ and expression_desc =
     }
   | Texp_quote of expression
         (** [<< E >>] *)
-  | Texp_splice of expression
+  | Texp_splice of splice_desc
         (** [$(E)] *)
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
@@ -862,6 +862,13 @@ and 'a class_infos =
     ci_loc: Location.t;
     ci_attributes: attributes;
    }
+
+and splice_desc =
+  { spl_exp: expression;
+    spl_top_level: bool;
+      (** Whether the splice is outside any quotation: a top-level
+          splice. *)
+  }
 
 type implementation = {
   structure: structure;

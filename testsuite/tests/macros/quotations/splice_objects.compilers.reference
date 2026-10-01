@@ -1,0 +1,5 @@
+File "splice_objects.ml", line 10, characters 18-47:
+10 | let a = $(let o = object method m = << 1 >> end in o#m)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Objects and classes are not yet supported in quotations,
+       or in compile-time code.

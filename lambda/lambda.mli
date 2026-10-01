@@ -551,6 +551,10 @@ val tag_of_lazy_tag : lazy_block_tag -> int
 (* Get a new static failure ident *)
 val next_raise_count : unit -> int
 
+(* Make every later [next_raise_count] exceed [n].  For a term that
+   holds code whose static exceptions another compilation numbered. *)
+val reserve_raise_count : int -> unit
+
 val staticfail : lambda (* Anticipated static failure *)
 
 (* Check anticipated failure, substitute its final value *)

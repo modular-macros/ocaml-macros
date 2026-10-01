@@ -1,4 +1,5 @@
 File "objects.ml", line 8, characters 11-34:
 8 | let a = << object method m = 1 end >>
                ^^^^^^^^^^^^^^^^^^^^^^^
-Error: Objects and classes are not yet supported in quotations.
+Error: Objects and classes are not yet supported in quotations,
+       or in compile-time code.

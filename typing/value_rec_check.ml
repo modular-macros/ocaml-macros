@@ -133,7 +133,7 @@ let quotation_splices body =
   let splices = ref [] in
   let expr sub e =
     match e.exp_desc with
-    | Texp_splice e -> splices := e :: !splices
+    | Texp_splice { spl_exp } -> splices := spl_exp :: !splices
     | _ -> Tast_iterator.default_iterator.expr sub e
   in
   let iterator = { Tast_iterator.default_iterator with expr } in
@@ -948,7 +948,7 @@ let rec expression : Typedtree.expression -> term_judg =
         G1 + ... + Gn |- << ... $(e1) ... $(en) ... >>: m
       *)
       list expression (quotation_splices e) <<< Dereference <<< Guard
-    | Texp_quote e | Texp_splice e ->
+    | Texp_quote e | Texp_splice { spl_exp = e } ->
       (* A splice outside such a quotation generates code, and its
          quotations are checked as that code. *)
       expression e

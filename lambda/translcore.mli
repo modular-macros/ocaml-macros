@@ -21,23 +21,40 @@ open Typedtree
 open Lambda
 open Debuginfo.Scoped_location
 
+(* The state of a translation: what the translation of a unit, and of
+   the parts of it, depend on.  See the .ml for the meaning of each
+   component. *)
+
+type context =
+  { splice_source : (context -> expression -> lambda_splice) option;
+    closing : Ident.t Ident.Map.t;
+    quoted_variables : Ident.Set.t ref option }
+
+(* The context in which a unit's translation starts *)
+val initial_context: unit -> context
+
 val pure_module : module_expr -> let_kind
 
-val transl_exp: scopes:scopes -> expression -> lambda
-val transl_apply: scopes:scopes
+val transl_exp: ctx:context -> scopes:scopes -> expression -> lambda
+val transl_apply: ctx:context -> scopes:scopes
                   -> ?tailcall:tailcall_attribute
                   -> ?inlined:inline_attribute
                   -> ?specialised:specialise_attribute
                   -> lambda -> (arg_label * apply_arg) list
                   -> scoped_location -> lambda
-val transl_let: scopes:scopes -> ?in_structure:bool -> rec_flag
+val transl_let: ctx:context -> scopes:scopes -> ?in_structure:bool -> rec_flag
                 -> value_binding list -> lambda -> lambda
+
+(* The variables of run-time code that the quotations of the given
+   compile-time code mention: those that the code it builds is closed
+   over *)
+val quoted_variables: ctx:context -> scopes:scopes -> expression -> Ident.Set.t
 
 val transl_extension_constructor: scopes:scopes ->
   Env.t -> Path.t option ->
   extension_constructor -> lambda
 
-val transl_scoped_exp : scopes:scopes -> expression -> lambda
+val transl_scoped_exp : ctx:context -> scopes:scopes -> expression -> lambda
 
 type error =
     Free_super_var
@@ -56,11 +73,11 @@ val report_error_doc: error Format_doc.printer
 
 (* Forward declaration -- to be filled in by Translmod.transl_module *)
 val transl_module :
-      (scopes:scopes -> module_coercion -> Path.t option ->
+      (ctx:context -> scopes:scopes -> module_coercion -> Path.t option ->
        module_expr -> lambda) ref
 val transl_struct_item :
-      (scopes:scopes -> Ident.t list -> Path.t option ->
+      (ctx:context -> scopes:scopes -> Ident.t list -> Path.t option ->
        structure_item -> (Ident.t list -> lambda) -> lambda) ref
 val transl_object :
-      (scopes:scopes -> Ident.t -> string list ->
+      (ctx:context -> scopes:scopes -> Ident.t -> string list ->
        class_expr -> lambda) ref

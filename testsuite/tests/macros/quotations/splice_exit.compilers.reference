@@ -1,0 +1,6 @@
+File "splice_exit.ml", line 1:
+Error: Compile-time evaluation ended before the code of the splices was complete.
+       The static program exited with status 0 before writing it to splice_exit$static.holes;
+       compile-time code calling exit would do this.
+       Its object splice_exit$static.cmo and object list splice_exit$static.objs
+       were kept for inspection.

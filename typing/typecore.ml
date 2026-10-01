@@ -3380,7 +3380,7 @@ let rec is_nonexpansive exp =
      See GPR#1142 *)
   | Texp_assert (exp, _) ->
       is_nonexpansive exp
-  | Texp_quote e | Texp_splice e -> is_nonexpansive e
+  | Texp_quote e | Texp_splice { spl_exp = e } -> is_nonexpansive e
   | Texp_apply ({ exp_desc = Texp_ident (_, _, {val_kind = Val_prim p}) },
                 args) ->
     begin match p, args with
@@ -5363,6 +5363,9 @@ and type_expect_
       }
   | Pexp_splice e ->
       check_env_mode loc [Types.M_C ; Types.M_Q] Splice_in_splice env;
+      (* A splice outside a quotation is a top-level splice. *)
+      let top_level = Env.get_env_mode env = Types.M_C in
+      if top_level then Env.set_unit_has_top_level_splice true;
       let lowered = Env.with_mode M_S (Env.with_level_down env) in
       let body =
         let equations =
@@ -5388,7 +5391,7 @@ and type_expect_
         end
       in
       re {
-        exp_desc = Texp_splice body;
+        exp_desc = Texp_splice { spl_exp = body; spl_top_level = top_level };
         exp_loc = loc;
         exp_extra = [];
         exp_type = instance ty_expected;

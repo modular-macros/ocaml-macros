@@ -195,11 +195,13 @@ camlinternalOO.cmi : \
     stdlib__Obj.cmi
 camlinternalQuote.cmo : \
     stdlib__Set.cmi \
+    stdlib__List.cmi \
     stdlib__Effect.cmi \
     camlinternalLam.cmi \
     camlinternalQuote.cmi
 camlinternalQuote.cmx : \
     stdlib__Set.cmx \
+    stdlib__List.cmx \
     stdlib__Effect.cmx \
     camlinternalLam.cmx \
     camlinternalQuote.cmi

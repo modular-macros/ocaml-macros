@@ -28,20 +28,20 @@ let interface ~source_file ~output_prefix =
 
 (** Bytecode compilation backend for .ml files. *)
 
+let lambda_to_bytecode i { Lambda.code = lambda; required_globals; _ } =
+  lambda
+  |> print_if i.ppf_dump Clflags.dump_rawlambda Printlambda.lambda
+  |> Simplif.simplify_lambda
+  |> print_if i.ppf_dump Clflags.dump_lambda Printlambda.lambda
+  |> Bytegen.compile_implementation (Unit_info.modname i.target)
+  |> print_if i.ppf_dump Clflags.dump_instr Printinstr.instrlist
+  |> fun bytecode -> bytecode, required_globals
+
 let to_bytecode i Typedtree.{structure; coercion; _} =
   (structure, coercion)
   |> Profile.(record transl)
     (Translmod.transl_implementation (Unit_info.modname i.target))
-  |> Profile.(record ~accumulate:true generate)
-    (fun { Lambda.code = lambda; required_globals } ->
-       lambda
-       |> print_if i.ppf_dump Clflags.dump_rawlambda Printlambda.lambda
-       |> Simplif.simplify_lambda
-       |> print_if i.ppf_dump Clflags.dump_lambda Printlambda.lambda
-       |> Bytegen.compile_implementation (Unit_info.modname i.target)
-       |> print_if i.ppf_dump Clflags.dump_instr Printinstr.instrlist
-       |> fun bytecode -> bytecode, required_globals
-    )
+  |> Profile.(record ~accumulate:true generate) (lambda_to_bytecode i)
 
 let emit_bytecode i (bytecode, required_globals) =
   let cmo = Unit_info.cmo i.target in
@@ -59,8 +59,12 @@ let emit_bytecode i (bytecode, required_globals) =
 
 let implementation ~start_from ~source_file ~output_prefix =
   let backend info typed =
-    let bytecode = to_bytecode info typed in
-    emit_bytecode info bytecode
+    Static_link.implementation info typed
+      ~fallback:(fun () -> emit_bytecode info (to_bytecode info typed))
+      ~finish:(fun program ->
+        emit_bytecode info
+          (Profile.(record ~accumulate:true generate)
+             (lambda_to_bytecode info) program))
   in
   let unit_info = Unit_info.make ~source_file Impl output_prefix in
   with_info ~dump_ext:"cmo" unit_info @@ fun info ->

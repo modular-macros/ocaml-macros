@@ -129,6 +129,7 @@ module type Compiler_options = sig
   val _error_style : string -> unit
 
   val _match_context_rows : int -> unit
+  val _dstatic : unit -> unit
   val _dtimings : unit -> unit
   val _dprofile : unit -> unit
   val _dump_into_file : unit -> unit

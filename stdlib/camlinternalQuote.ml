@@ -85,4 +85,18 @@ struct
 
   let merge_free_vars fvs1 fvs2 = IdentSet.union fvs1 fvs2
 
+  let names fvs =
+    let name = let open CamlinternalLam.Ident in function
+      | Local { name; stamp = _ }
+      | Scoped { name; stamp = _; scope = _ }
+      | Predef { name; stamp = _ } -> name
+      | Global name -> name
+      | Unscoped us ->
+          let CamlinternalLam.Ident.Unscoped.{ name; stamp = _ } =
+            CamlinternalLam.Ident.Unscoped.get_desc us
+          in
+          name
+    in
+    List.sort_uniq compare (List.map name (IdentSet.elements fvs))
+
 end

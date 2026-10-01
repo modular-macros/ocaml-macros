@@ -1,0 +1,4 @@
+File "splices_warnings.ml", line 21, characters 35-60:
+21 | let rec f x = if x = 0 then 0 else ((f [@tailcall]) (x - 1)) + 1
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^
+Error (warning 51 [wrong-tailcall-expectation]): expected tailcall

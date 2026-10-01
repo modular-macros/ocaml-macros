@@ -244,9 +244,9 @@ let transl_meth_list lst =
   share (Const_block
             (0, List.map (fun lab -> Const_immstring lab) lst))
 
-let set_inst_var ~scopes obj id expr =
+let set_inst_var ~ctx ~scopes obj id expr =
   Lprim(Psetfield_computed (Typeopt.maybe_pointer expr, Assignment),
-    [Lvar obj; Lvar id; transl_exp ~scopes expr], Loc_unknown)
+    [Lvar obj; Lvar id; transl_exp ~ctx ~scopes expr], Loc_unknown)
 
 let transl_val tbl create name =
   mkappl (oo_prim (if create then "new_variable" else "get_variable"),
@@ -351,7 +351,8 @@ let name_pattern default p =
      returned at the end to be reused in [build_class_init].
    - [cl] is the class we're compiling *)
 
-let rec build_object_init ~scopes cl_table obj params inh_init obj_init cl =
+let rec build_object_init ~ctx ~scopes cl_table obj params inh_init obj_init
+    cl =
   match cl.cl_desc with
     Tcl_ident (path, _, _) ->
       (* The object initialiser for the class in [path], specialised
@@ -386,15 +387,15 @@ let rec build_object_init ~scopes cl_table obj params inh_init obj_init cl =
                    let (inh_init, obj_init') =
                      (* Reset [params]. The current ones will be bound
                         outside the structure. *)
-                     build_object_init ~scopes cl_table (Lvar obj) [] inh_init
-                       (fun _ -> lambda_unit) cl
+                     build_object_init ~ctx ~scopes cl_table (Lvar obj) []
+                       inh_init (fun _ -> lambda_unit) cl
                    in
                    (* Since [obj] is bound to a concrete object,
                       only the side-effects of [obj_init'] are relevant. *)
                    (inh_init, lsequence obj_init' obj_init, true)
                | Tcf_val (_, _, id, Tcfk_concrete (_, exp), _) ->
                    (inh_init,
-                    lsequence (set_inst_var ~scopes obj id exp) obj_init,
+                    lsequence (set_inst_var ~ctx ~scopes obj id exp) obj_init,
                     has_init)
                | Tcf_method _ | Tcf_val _ | Tcf_constraint _ | Tcf_attribute _->
                    (inh_init, obj_init, has_init)
@@ -409,13 +410,14 @@ let rec build_object_init ~scopes cl_table obj params inh_init obj_init cl =
         (inh_init,
          List.fold_right
            (fun (id, expr) rem ->
-              lsequence (Lifused (id, set_inst_var ~scopes obj id expr)) rem)
+              lsequence
+                (Lifused (id, set_inst_var ~ctx ~scopes obj id expr)) rem)
            params obj_init,
          has_init))
   | Tcl_fun (_, pat, vals, cl, partial) ->
       let (inh_init, obj_init) =
         (* [vals] maps all pattern variables to idents for use inside methods *)
-        build_object_init ~scopes cl_table obj (vals @ params)
+        build_object_init ~ctx ~scopes cl_table obj (vals @ params)
           inh_init obj_init cl
       in
       (inh_init,
@@ -435,40 +437,42 @@ let rec build_object_init ~scopes cl_table obj params inh_init obj_init cl =
        end)
   | Tcl_apply (cl, oexprs) ->
       let (inh_init, obj_init) =
-        build_object_init ~scopes cl_table obj params inh_init obj_init cl
+        build_object_init ~ctx ~scopes cl_table obj params inh_init obj_init cl
       in
-      (inh_init, transl_apply ~scopes obj_init oexprs Loc_unknown)
+      (inh_init, transl_apply ~ctx ~scopes obj_init oexprs Loc_unknown)
   | Tcl_let (rec_flag, defs, vals, cl) ->
       (* See comment on the [Tcl_fun] case for the meaning of [vals] *)
       let (inh_init, obj_init) =
-        build_object_init ~scopes cl_table obj (vals @ params)
+        build_object_init ~ctx ~scopes cl_table obj (vals @ params)
           inh_init obj_init cl
       in
-      (inh_init, Translcore.transl_let ~scopes rec_flag defs obj_init)
+      (inh_init, Translcore.transl_let ~ctx ~scopes rec_flag defs obj_init)
   | Tcl_open (_, cl)
     (* Class local opens are restricted to paths only, so no code is generated
      *)
   | Tcl_constraint (cl, _, _, _, _) ->
-      build_object_init ~scopes cl_table obj params inh_init obj_init cl
+      build_object_init ~ctx ~scopes cl_table obj params inh_init obj_init cl
 
 (* The manual specifies that toplevel lets *must* be evaluated outside of the
    class. This piece of code makes sure we skip them. *)
 let rec build_object_init_0
-          ~scopes cl_table params cl copy_env subst_env top ids =
+          ~ctx ~scopes cl_table params cl copy_env subst_env top ids =
   match cl.cl_desc with
     Tcl_let (_rec_flag, _defs, vals, cl) ->
       build_object_init_0
-        ~scopes cl_table (vals@params) cl copy_env subst_env top ids
+        ~ctx ~scopes cl_table (vals@params) cl copy_env subst_env top ids
   | Tcl_open (_descr, cl) ->
       build_object_init_0
-        ~scopes cl_table params cl copy_env subst_env top ids
+        ~ctx ~scopes cl_table params cl copy_env subst_env top ids
   | _ ->
       let self = Ident.create_local "self" in
       let env = Ident.create_local "env" in
       let obj = if ids = [] then lambda_unit else Lvar self in
       let envs = if top then None else Some env in
       let ((_,inh_init), obj_init) =
-        build_object_init ~scopes cl_table obj params (envs,[]) copy_env cl in
+        build_object_init ~ctx ~scopes cl_table obj params (envs,[]) copy_env
+          cl
+      in
       let obj_init =
         if ids = [] then obj_init else lfunction [self, Pgenval] obj_init in
       (inh_init, lfunction [env, Pgenval] (subst_env env inh_init obj_init))
@@ -541,7 +545,8 @@ let bind_id_as_val (id, _) = ("", id)
     - [msubst] replaces methods with builtin methods when possible.
     - [top] is [false] if the current class is under [Translobj.oo_wrap].
     - [cl] is the class we're compiling *)
-let rec build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl =
+let rec build_class_init ~ctx ~scopes cla cstr super inh_init cl_init msubst
+    top cl =
   match cl.cl_desc with
   | Tcl_ident _ ->
       begin match inh_init with
@@ -576,7 +581,7 @@ let rec build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl =
                     plus its wrappers.
                     Make sure the wrappers bind the inherited methods
                     and variables. *)
-                  build_class_init ~scopes cla false
+                  build_class_init ~ctx ~scopes cla false
                     (vals, meths_super cla str.cstr_meths meths)
                     inh_init cl_init msubst top cl in
                 (inh_init, cl_init, [], values)
@@ -595,7 +600,7 @@ let rec build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl =
             | Tcf_method (name, _, Tcfk_concrete (_, exp)) ->
                 let scopes = enter_method_definition ~scopes name.txt in
                 let met_code =
-                  msubst true (transl_scoped_exp ~scopes exp) in
+                  msubst true (transl_scoped_exp ~ctx ~scopes exp) in
                 let met_code =
                   if !Clflags.native_code && List.length met_code = 1 then
                     (* Force correct naming of method for profiles *)
@@ -610,7 +615,7 @@ let rec build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl =
                 (inh_init,
                  Lsequence(mkappl (oo_prim "add_initializer",
                                    Lvar cla :: msubst false
-                                                 (transl_exp ~scopes exp)),
+                                                 (transl_exp ~ctx ~scopes exp)),
                            cl_init),
                  methods, values)
             | Tcf_attribute _ ->
@@ -630,16 +635,19 @@ let rec build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl =
       (inh_init, bind_methods cla str.cstr_meths values cl_init)
   | Tcl_fun (_, _pat, vals, cl, _) ->
       let (inh_init, cl_init) =
-        build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl
+        build_class_init ~ctx ~scopes cla cstr super inh_init cl_init msubst
+          top cl
       in
       (* Create anonymous instance variables and define them in the table *)
       let vals = List.map bind_id_as_val vals in
       (inh_init, transl_vals cla true StrictOpt vals cl_init)
   | Tcl_apply (cl, _exprs) ->
-      build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl
+      build_class_init ~ctx ~scopes cla cstr super inh_init cl_init msubst
+        top cl
   | Tcl_let (_rec_flag, _defs, vals, cl) ->
       let (inh_init, cl_init) =
-        build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl
+        build_class_init ~ctx ~scopes cla cstr super inh_init cl_init msubst
+          top cl
       in
       (* Create anonymous instance variables and define them in the table *)
       let vals = List.map bind_id_as_val vals in
@@ -682,7 +690,7 @@ let rec build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl =
       | _ ->
           let core cl_init =
             build_class_init
-              ~scopes cla true super inh_init cl_init msubst top cl
+              ~ctx ~scopes cla true super inh_init cl_init msubst top cl
           in
           (* Skip narrowing if we're not directly under [inherit] *)
           if cstr then core cl_init else
@@ -694,20 +702,21 @@ let rec build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl =
                      cl_init))
       end
   | Tcl_open (_, cl) ->
-      build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl
+      build_class_init ~ctx ~scopes cla cstr super inh_init cl_init msubst
+        top cl
 
-let rec build_class_lets ~scopes cl =
+let rec build_class_lets ~ctx ~scopes cl =
   match cl.cl_desc with
     Tcl_let (rec_flag, defs, _vals, cl') ->
-      let env, wrap = build_class_lets ~scopes cl' in
+      let env, wrap = build_class_lets ~ctx ~scopes cl' in
       (env, fun lam_and_kind ->
           let lam, rkind = wrap lam_and_kind in
-          Translcore.transl_let ~scopes rec_flag defs lam, rkind)
+          Translcore.transl_let ~ctx ~scopes rec_flag defs lam, rkind)
   | Tcl_open (open_descr, cl) ->
       (* Failsafe to ensure we get a compilation error if arbitrary
          module expressions become allowed *)
       let _ : Path.t * Longident.t loc = open_descr.open_expr in
-      build_class_lets ~scopes cl
+      build_class_lets ~ctx ~scopes cl
   | _ ->
       (cl.cl_env, fun lam_and_kind -> lam_and_kind)
 
@@ -727,7 +736,7 @@ let rec get_class_meths cl =
    |   Writing classes should be cheap
      class c x y = d e f
 *)
-let rec transl_class_rebind ~scopes obj_init cl vf =
+let rec transl_class_rebind ~ctx ~scopes obj_init cl vf =
   match cl.cl_desc with
     Tcl_ident (path, _, _) ->
       if vf = Concrete then begin
@@ -739,7 +748,7 @@ let rec transl_class_rebind ~scopes obj_init cl vf =
       (path, path_lam, obj_init)
   | Tcl_fun (_, pat, _, cl, partial) ->
       let path, path_lam, obj_init =
-        transl_class_rebind ~scopes obj_init cl vf in
+        transl_class_rebind ~ctx ~scopes obj_init cl vf in
       let build params rem =
         let param = name_pattern "param" pat in
         Lambda.lfunction
@@ -756,16 +765,17 @@ let rec transl_class_rebind ~scopes obj_init cl vf =
        | rem                                      -> build [] rem)
   | Tcl_apply (cl, oexprs) ->
       let path, path_lam, obj_init =
-        transl_class_rebind ~scopes obj_init cl vf in
-      (path, path_lam, transl_apply ~scopes obj_init oexprs Loc_unknown)
+        transl_class_rebind ~ctx ~scopes obj_init cl vf in
+      (path, path_lam, transl_apply ~ctx ~scopes obj_init oexprs Loc_unknown)
   | Tcl_let (rec_flag, defs, _vals, cl) ->
       let path, path_lam, obj_init =
-        transl_class_rebind ~scopes obj_init cl vf in
-      (path, path_lam, Translcore.transl_let ~scopes rec_flag defs obj_init)
+        transl_class_rebind ~ctx ~scopes obj_init cl vf in
+      (path, path_lam,
+       Translcore.transl_let ~ctx ~scopes rec_flag defs obj_init)
   | Tcl_structure _ -> raise Exit
   | Tcl_constraint (cl', _, _, _, _) ->
       let path, path_lam, obj_init =
-        transl_class_rebind ~scopes obj_init cl' vf in
+        transl_class_rebind ~ctx ~scopes obj_init cl' vf in
       let rec check_constraint = function
           Cty_constr(path', _, _) when Path.same path path' -> ()
         | Cty_arrow (_, _, cty) -> check_constraint cty
@@ -774,21 +784,22 @@ let rec transl_class_rebind ~scopes obj_init cl vf =
       check_constraint cl.cl_type;
       (path, path_lam, obj_init)
   | Tcl_open (_, cl) ->
-      transl_class_rebind ~scopes obj_init cl vf
+      transl_class_rebind ~ctx ~scopes obj_init cl vf
 
-let rec transl_class_rebind_0 ~scopes (self:Ident.t) obj_init cl vf =
+let rec transl_class_rebind_0 ~ctx ~scopes (self:Ident.t) obj_init cl vf =
   match cl.cl_desc with
     Tcl_let (rec_flag, defs, _vals, cl) ->
       let path, path_lam, obj_init =
-        transl_class_rebind_0 ~scopes self obj_init cl vf
+        transl_class_rebind_0 ~ctx ~scopes self obj_init cl vf
       in
-      (path, path_lam, Translcore.transl_let ~scopes rec_flag defs obj_init)
+      (path, path_lam,
+       Translcore.transl_let ~ctx ~scopes rec_flag defs obj_init)
   | _ ->
       let path, path_lam, obj_init =
-        transl_class_rebind ~scopes obj_init cl vf in
+        transl_class_rebind ~ctx ~scopes obj_init cl vf in
       (path, path_lam, lfunction [self, Pgenval] obj_init)
 
-let transl_class_rebind ~scopes cl vf =
+let transl_class_rebind ~ctx ~scopes cl vf =
   try
     let obj_init = Ident.create_local "obj_init"
     and self = Ident.create_local "self" in
@@ -803,7 +814,7 @@ let transl_class_rebind ~scopes cl vf =
       }
     in
     let _, path_lam, obj_init' =
-      transl_class_rebind_0 ~scopes self obj_init0 cl vf in
+      transl_class_rebind_0 ~ctx ~scopes self obj_init0 cl vf in
     let id = (obj_init' = lfunction [self, Pgenval] obj_init0) in
     if id then path_lam else
 
@@ -986,10 +997,10 @@ let free_methods l =
     | Levent _ | Lifused _ | Lsplice _ -> ()
   in free l; !fv
 
-let transl_class ~scopes ids cl_id pub_meths cl vflag =
+let transl_class ~ctx ~scopes ids cl_id pub_meths cl vflag =
   let open Value_rec_types in
   (* First check if it is not only a rebind *)
-  let rebind = transl_class_rebind ~scopes cl vflag in
+  let rebind = transl_class_rebind ~ctx ~scopes cl vflag in
   if rebind <> lambda_unit then rebind, Dynamic else
 
   (* Prepare for heavy environment handling *)
@@ -999,7 +1010,7 @@ let transl_class ~scopes ids cl_id pub_meths cl vflag =
   let top = not req in
   (* The manual specifies that toplevel lets *must* be evaluated outside of the
      class *)
-  let cl_env, llets = build_class_lets ~scopes cl in
+  let cl_env, llets = build_class_lets ~ctx ~scopes cl in
   let new_ids = if top then [] else Env.diff top_env cl_env in
   let env2 = Ident.create_local "env" in
   let meth_ids = get_class_meths cl in
@@ -1069,10 +1080,11 @@ let transl_class ~scopes ids cl_id pub_meths cl vflag =
   (* Now we start compiling the class *)
   let cla = Ident.create_local "class" in
   let (inh_init, obj_init) =
-    build_object_init_0 ~scopes cla [] cl copy_env subst_env top ids in
+    build_object_init_0 ~ctx ~scopes cla [] cl copy_env subst_env top ids in
   let inh_init' = List.rev inh_init in
   let (inh_init', cl_init) =
-    build_class_init ~scopes cla true ([],[]) inh_init' obj_init msubst top cl
+    build_class_init ~ctx ~scopes cla true ([],[]) inh_init' obj_init msubst
+      top cl
   in
   assert (inh_init' = []);
   let table = Ident.create_local "table"
@@ -1280,12 +1292,12 @@ let transl_class ~scopes ids cl_id pub_meths cl vflag =
   let vflag = vf in
 *)
 
-let transl_class ~scopes ids id pub_meths cl vf =
-  oo_wrap_gen cl.cl_env false (transl_class ~scopes ids id pub_meths cl) vf
+let transl_class ~ctx ~scopes ids id pub_meths cl vf =
+  oo_wrap_gen cl.cl_env false (transl_class ~ctx ~scopes ids id pub_meths cl) vf
 
 let () =
-  transl_object := (fun ~scopes id meths cl ->
-    let lam, _rkind = transl_class ~scopes [] id meths cl Concrete in
+  transl_object := (fun ~ctx ~scopes id meths cl ->
+    let lam, _rkind = transl_class ~ctx ~scopes [] id meths cl Concrete in
     lam)
 
 (* Error report *)

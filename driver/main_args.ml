@@ -689,6 +689,10 @@ let mk_dsource f =
 let mk_dlambda f =
   "-dlambda", Arg.Unit f, " (undocumented)"
 
+let mk_dstatic f =
+  "-dstatic", Arg.Unit f,
+  " Print the static program of a unit with top-level splices"
+
 let mk_drawclambda f =
   "-drawclambda", Arg.Unit f, " (undocumented)"
 
@@ -930,6 +934,7 @@ module type Compiler_options = sig
   val _color : string -> unit
   val _error_style : string -> unit
   val _match_context_rows : int -> unit
+  val _dstatic : unit -> unit
   val _dtimings : unit -> unit
   val _dprofile : unit -> unit
   val _dump_into_file : unit -> unit
@@ -1197,6 +1202,7 @@ struct
     mk_dmatchcomp F._dmatchcomp;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
+    mk_dstatic F._dstatic;
     mk_dinstr F._dinstr;
     mk_dcamlprimc F._dcamlprimc;
     mk_dtimings F._dtimings;
@@ -1423,6 +1429,7 @@ struct
     mk_dmatchcomp F._dmatchcomp;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
+    mk_dstatic F._dstatic;
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
     mk_dcmm_invariants F._dcmm_invariants;
@@ -1853,6 +1860,7 @@ module Default = struct
     let _config = Misc.show_config_and_exit
     let _config_var = Misc.show_config_variable_and_exit
     let _dprofile () = profile_columns := Profile.all_columns
+    let _dstatic = set dump_static
     let _dtimings () = profile_columns := [`Time]
     let _dump_into_file = set dump_into_file
     let _dump_dir s = dump_dir := Some s

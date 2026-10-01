@@ -21,6 +21,15 @@ open Lambda
 
 val transl_implementation:
       string -> structure * module_coercion -> Lambda.program
+(* The static program of a unit with top-level splices, and the
+   run-time term of the unit, with a hole for each top-level splice.
+   The static program evaluates the splices and writes, to
+   [prefix ^ "$static.holes"], the block of the terms that fill the
+   holes ([Translquote.fill_holes]). *)
+val transl_static_program:
+      string -> structure * module_coercion ->
+      source_file:string -> prefix:string ->
+      Lambda.program * Lambda.program
 val transl_store_phrases: string -> structure -> int * lambda
 val transl_store_implementation:
       string -> structure * module_coercion -> Lambda.program
