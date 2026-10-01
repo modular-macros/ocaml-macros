@@ -482,6 +482,8 @@ module E = struct
         sub.binding_op sub let_;
         List.iter (sub.binding_op sub) ands;
         sub.expr sub body
+    | Pexp_quote e -> sub.expr sub e
+    | Pexp_splice e -> sub.expr sub e
     | Pexp_extension x -> sub.extension sub x
     | Pexp_unreachable -> ()
     | Pexp_struct_item (si, e) ->

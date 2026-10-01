@@ -37,6 +37,7 @@ type error =
   | Non_lowercase_delimiter of string
   | Capitalized_raw_identifier of string
   | Unknown_keyword of string
+  | Unstaged_keyword of string
 
 exception Error of error * Location.t
 
@@ -438,6 +439,17 @@ let prepare_error loc = function
       "%a has been defined as an additional keyword.@ \
        This version of OCaml does not support this keyword."
       Style.inline_code name
+  | Unstaged_keyword "_" ->
+      Location.errorf ~loc "%a cannot follow %a"
+        Style.inline_code "_" Style.inline_code "$"
+  | Unstaged_keyword kwd ->
+      let sub =
+        [Location.msg "@{<hint>Hint@}: Did you mean %a?"
+           Style.inline_code ("$\\#" ^ kwd)]
+      in
+      Location.errorf ~loc ~sub
+        "%a is a keyword with no staged form,@ it cannot follow %a"
+        Style.inline_code kwd Style.inline_code "$"
 
 let () =
   Location.register_error_of_exn
@@ -512,6 +524,23 @@ rule token = parse
       { token lexbuf }
   | "_"
       { UNDERSCORE }
+  | "<<"
+      { LESSLESS }
+  | ">>"
+      { GREATERGREATER }
+  | "$("
+      { DOLLARLPAREN }
+  | "$" (lowercase identchar * as s)
+      { if s = "_" || is_keyword s then error lexbuf (Unstaged_keyword s)
+        else DOLLARLIDENT s }
+  | "$" (uppercase identchar * as s)
+      { DOLLARUIDENT s }
+  | "$" (raw_ident_escape? as escape) (ident_ext as raw_name)
+      { let name = ident_for_extended lexbuf raw_name in
+        if Utf8_lexeme.is_capitalized name then begin
+          if escape = "" then DOLLARUIDENT name
+          else error lexbuf (Capitalized_raw_identifier name)
+        end else DOLLARLIDENT name }
   | "~"
       { TILDE }
   | ".~"

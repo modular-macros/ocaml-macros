@@ -434,6 +434,9 @@ and expression_desc =
   | Pexp_letop of letop
       (** - [let* P = E0 in E1]
             - [let* P0 = E00 and* P1 = E01 in E1] *)
+  | Pexp_quote of expression  (** [<< E >>] *)
+  | Pexp_splice of expression
+      (** [$(E)].  [$x] and [$M.x] are [$(x)] and [$(M.x)]. *)
   | Pexp_extension of extension  (** [[%id]] *)
   | Pexp_unreachable  (** [.] *)
 

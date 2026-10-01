@@ -5258,6 +5258,8 @@ and type_expect_
       end
   | Pexp_extension ext ->
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
+  | Pexp_quote _ | Pexp_splice _ ->
+      Misc.fatal_error "quotations and splices: not implemented"
 
   | Pexp_unreachable ->
       re { exp_desc = Texp_unreachable;

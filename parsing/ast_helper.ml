@@ -229,6 +229,8 @@ module Exp = struct
   let pack ?loc ?attrs a b = mk ?loc ?attrs (Pexp_pack (a, b))
   let letop ?loc ?attrs let_ ands body =
     mk ?loc ?attrs (Pexp_letop {let_; ands; body})
+  let quote ?loc ?attrs a = mk ?loc ?attrs (Pexp_quote a)
+  let splice ?loc ?attrs a = mk ?loc ?attrs (Pexp_splice a)
   let extension ?loc ?attrs a = mk ?loc ?attrs (Pexp_extension a)
   let unreachable ?loc ?attrs () = mk ?loc ?attrs Pexp_unreachable
   let struct_item ?loc ?attrs si e = mk ?loc ?attrs (Pexp_struct_item (si, e))

@@ -1,0 +1,4 @@
+File "splices_raw_capitalized.ml", line 12, characters 11-16:
+12 | let a = << $\#If >>
+                ^^^^^
+Error: If cannot be used as a raw identifier, it must start with a lowercase letter

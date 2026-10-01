@@ -1,0 +1,26 @@
+let a = << 1 >>
+let b = << f x; g y >>
+let c = << let y = 1 in y >>
+let d = << x >>
+let e = $(f x)
+let f = $(f x; g y)
+let g = $(x)
+let h = $(M.x)
+let i = $(M.N.x)
+let j = f << x >> $(y) $(z)
+let k = $(f) y
+let l = $(a) b c
+let m = $(x) :: y
+let n = $(x).y
+let o = $(x)#m
+let p = $(x).(0)
+let q = $(x).y <- 1
+let r = $(x.y)
+let s = << $(x) + $(f << y >>) >>
+let ($) f x = f x
+let t = f $ x
+let u = f $ $(x)
+let ($$) f x = f x
+let ($:) f x = f x
+let (<<<) f g x = f (g x)
+let (>>=) x f = f x

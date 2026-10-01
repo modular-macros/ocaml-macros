@@ -194,6 +194,8 @@ module Exp:
                -> expression
     val letop: ?loc:loc -> ?attrs:attrs -> binding_op
                -> binding_op list -> expression -> expression
+    val quote : ?loc:loc -> ?attrs:attrs -> expression -> expression
+    val splice : ?loc:loc -> ?attrs:attrs -> expression -> expression
     val extension: ?loc:loc -> ?attrs:attrs -> extension -> expression
     val unreachable: ?loc:loc -> ?attrs:attrs -> unit -> expression
     val struct_item: ?loc:loc -> ?attrs:attrs -> structure_item -> expression

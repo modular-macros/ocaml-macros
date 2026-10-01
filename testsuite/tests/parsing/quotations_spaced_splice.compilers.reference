@@ -1,0 +1,4 @@
+File "quotations_spaced_splice.ml", line 11, characters 8-9:
+11 | let a = $ x
+             ^
+Error: Syntax error

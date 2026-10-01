@@ -144,6 +144,18 @@ let final_rewrite add_function =
     close_out !outchan;
   *)
 
+(* The bodies of the splices of a quotation *)
+let quotation_splices sexp =
+  let splices = ref [] in
+  let expr iter e =
+    match e.pexp_desc with
+    | Pexp_splice body -> splices := body :: !splices
+    | _ -> Ast_iterator.default_iterator.expr iter e
+  in
+  let iter = { Ast_iterator.default_iterator with expr } in
+  iter.expr iter sexp;
+  List.rev !splices
+
 type case =
   { rhs : expression;
     guard : expression option;
@@ -300,6 +312,13 @@ and rw_exp iflag sexp =
       rewrite_exp iflag let_.pbop_exp;
       List.iter (fun {pbop_exp; _} -> rewrite_exp iflag pbop_exp) ands;
       rewrite_exp iflag body
+  | Pexp_quote expr ->
+      (* Quoted code is not instrumented, but the splices in it are
+         run-time code. *)
+      List.iter (rewrite_exp iflag) (quotation_splices expr)
+  | Pexp_splice _ ->
+      (* A splice outside a quotation is compile-time code. *)
+      ()
   | Pexp_extension _ -> ()
   | Pexp_unreachable -> ()
   | Pexp_struct_item (si, exp) ->

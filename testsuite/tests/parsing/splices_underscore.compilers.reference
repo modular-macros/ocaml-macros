@@ -1,0 +1,4 @@
+File "splices_underscore.ml", line 11, characters 11-13:
+11 | let a = << $_ >>
+                ^^
+Error: _ cannot follow $

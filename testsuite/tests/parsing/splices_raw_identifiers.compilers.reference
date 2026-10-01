@@ -1,0 +1,44 @@
+[
+  structure_item (splices_raw_identifiers.ml[11,225+0]..[11,225+39])
+    Pstr_value Nonrec Value
+    [
+      <def>
+        pattern (splices_raw_identifiers.ml[11,225+4]..[11,225+5])
+          Ppat_var "a" (splices_raw_identifiers.ml[11,225+4]..[11,225+5])
+        expression (splices_raw_identifiers.ml[11,225+8]..[11,225+39])
+          Pexp_quote
+          expression (splices_raw_identifiers.ml[11,225+11]..[11,225+36])
+            Pexp_apply
+            expression (splices_raw_identifiers.ml[11,225+28]..[11,225+29])
+              Pexp_ident "+" (splices_raw_identifiers.ml[11,225+28]..[11,225+29])
+            [
+              <arg>
+              Nolabel
+                expression (splices_raw_identifiers.ml[11,225+11]..[11,225+27])
+                  Pexp_apply
+                  expression (splices_raw_identifiers.ml[11,225+17]..[11,225+18])
+                    Pexp_ident "+" (splices_raw_identifiers.ml[11,225+17]..[11,225+18])
+                  [
+                    <arg>
+                    Nolabel
+                      expression (splices_raw_identifiers.ml[11,225+11]..[11,225+16])
+                        Pexp_splice
+                        expression (splices_raw_identifiers.ml[11,225+11]..[11,225+16])
+                          Pexp_ident "if" (splices_raw_identifiers.ml[11,225+11]..[11,225+16])
+                    <arg>
+                    Nolabel
+                      expression (splices_raw_identifiers.ml[11,225+19]..[11,225+27])
+                        Pexp_splice
+                        expression (splices_raw_identifiers.ml[11,225+19]..[11,225+27])
+                          Pexp_ident "match" (splices_raw_identifiers.ml[11,225+19]..[11,225+27])
+                  ]
+              <arg>
+              Nolabel
+                expression (splices_raw_identifiers.ml[11,225+30]..[11,225+36])
+                  Pexp_splice
+                  expression (splices_raw_identifiers.ml[11,225+30]..[11,225+36])
+                    Pexp_ident "foo" (splices_raw_identifiers.ml[11,225+30]..[11,225+36])
+            ]
+    ]
+]
+

@@ -1,0 +1,6 @@
+File "quotations_unclosed_splice.ml", line 12, characters 0-0:
+Error: Syntax error: ) expected
+File "quotations_unclosed_splice.ml", line 11, characters 8-10:
+11 | let a = $(f x
+             ^^
+  This $( might be unmatched

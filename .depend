@@ -8235,6 +8235,7 @@ tools/ocamlprof.cmo : \
     parsing/parse.cmi \
     parsing/location.cmi \
     utils/clflags.cmi \
+    parsing/ast_iterator.cmi \
     tools/ocamlprof.cmi
 tools/ocamlprof.cmx : \
     utils/warnings.cmx \
@@ -8242,6 +8243,7 @@ tools/ocamlprof.cmx : \
     parsing/parse.cmx \
     parsing/location.cmx \
     utils/clflags.cmx \
+    parsing/ast_iterator.cmx \
     tools/ocamlprof.cmi
 tools/ocamlprof.cmi :
 tools/ocamltex.cmo : \

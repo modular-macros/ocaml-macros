@@ -394,6 +394,12 @@ and expression i ppf x =
       binding_op i ppf let_;
       list i binding_op ppf ands;
       expression i ppf body
+  | Pexp_quote arg ->
+      line i ppf "Pexp_quote\n";
+      expression i ppf arg
+  | Pexp_splice arg ->
+      line i ppf "Pexp_splice\n";
+      expression i ppf arg
   | Pexp_extension (s, arg) ->
       line i ppf "Pexp_extension \"%s\"\n" s.txt;
       payload i ppf arg

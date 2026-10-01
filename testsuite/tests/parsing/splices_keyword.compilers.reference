@@ -1,0 +1,5 @@
+File "splices_keyword.ml", line 11, characters 11-14:
+11 | let a = << $if >>
+                ^^^
+Error: if is a keyword with no staged form, it cannot follow $
+Hint: Did you mean $\#if?

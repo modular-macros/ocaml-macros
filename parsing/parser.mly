@@ -766,6 +766,9 @@ let mk_directive ~loc name arg =
 %token COMMA                  ","
 %token CONSTRAINT             "constraint"
 %token DO                     "do"
+%token <string> DOLLARLIDENT  "$lident" (* just an example *)
+%token DOLLARLPAREN           "$("
+%token <string> DOLLARUIDENT  "$Uident" (* just an example *)
 %token DONE                   "done"
 %token DOT                    "."
 %token DOTDOT                 ".."
@@ -784,6 +787,7 @@ let mk_directive ~loc name arg =
 %token FUNCTION               "function"
 %token FUNCTOR                "functor"
 %token GREATER                ">"
+%token GREATERGREATER         ">>"
 %token GREATERRBRACE          ">}"
 %token GREATERRBRACKET        ">]"
 %token IF                     "if"
@@ -811,6 +815,7 @@ let mk_directive ~loc name arg =
 %token LBRACKETPERCENT        "[%"
 %token LBRACKETPERCENTPERCENT "[%%"
 %token LESS                   "<"
+%token LESSLESS               "<<"
 %token LESSMINUS              "<-"
 %token LET                    "let"
 %token <string> LIDENT        "lident" (* just an example *)
@@ -945,6 +950,7 @@ The precedences must be listed from low to high.
           NEW PREFIXOP STRING TRUE UIDENT
           LBRACKETPERCENT QUOTED_STRING_EXPR
           METAOCAML_BRACKET_OPEN METAOCAML_ESCAPE
+          LESSLESS DOLLARLPAREN DOLLARLIDENT DOLLARUIDENT
 
 /* Entry points */
 
@@ -2684,6 +2690,20 @@ simple_expr:
   | mod_longident DOT
     LPAREN MODULE ext_attributes module_expr COLON error
       { unclosed "(" $loc($3) ")" $loc($8) }
+  | LESSLESS seq_expr GREATERGREATER
+      { Pexp_quote $2 }
+  | LESSLESS seq_expr error
+      { unclosed "<<" $loc($1) ">>" $loc($3) }
+  | DOLLARLPAREN seq_expr RPAREN
+      { Pexp_splice $2 }
+  | DOLLARLPAREN seq_expr error
+      { unclosed "$(" $loc($1) ")" $loc($3) }
+  | id = DOLLARLIDENT
+      { Pexp_splice (mkexpvar ~loc:$sloc id) }
+  | p = dollar_mod_longident DOT id = val_ident
+      { Pexp_splice
+          (mkexp ~loc:$sloc
+             (Pexp_ident (mkrhs (ldot p $loc(p) id $loc(id)) $sloc))) }
 ;
 labeled_simple_expr:
     simple_expr %prec below_HASH
@@ -4115,6 +4135,12 @@ type_longident:
 ;
 mod_longident:
     mk_longident(mod_longident, UIDENT)  { $1 }
+;
+(* A module path with the dollar glued to its first component. *)
+dollar_mod_longident:
+    s = DOLLARUIDENT { Lident s }
+  | p = dollar_mod_longident DOT s = UIDENT
+      { ldot p $loc(p) s $loc(s) }
 ;
 mod_ext_longident:
     mk_longident(mod_ext_longident, UIDENT) { $1 }

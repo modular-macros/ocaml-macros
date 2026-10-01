@@ -544,6 +544,8 @@ module E = struct
     | Pexp_letop {let_; ands; body} ->
         letop ~loc ~attrs (sub.binding_op sub let_)
           (List.map (sub.binding_op sub) ands) (sub.expr sub body)
+    | Pexp_quote e -> quote ~loc ~attrs (sub.expr sub e)
+    | Pexp_splice e -> splice ~loc ~attrs (sub.expr sub e)
     | Pexp_extension x -> extension ~loc ~attrs (sub.extension sub x)
     | Pexp_unreachable -> unreachable ~loc ~attrs ()
     | Pexp_struct_item (si, e) ->

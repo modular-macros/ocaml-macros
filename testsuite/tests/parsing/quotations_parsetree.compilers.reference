@@ -1,0 +1,46 @@
+[
+  structure_item (quotations_parsetree.ml[10,175+0]..[10,175+36])
+    Pstr_value Nonrec Value
+    [
+      <def>
+        pattern (quotations_parsetree.ml[10,175+4]..[10,175+5])
+          Ppat_var "a" (quotations_parsetree.ml[10,175+4]..[10,175+5])
+        expression (quotations_parsetree.ml[10,175+8]..[10,175+36])
+          Pexp_quote
+          expression (quotations_parsetree.ml[10,175+11]..[10,175+33])
+            Pexp_apply
+            expression (quotations_parsetree.ml[10,175+11]..[10,175+12])
+              Pexp_ident "f" (quotations_parsetree.ml[10,175+11]..[10,175+12])
+            [
+              <arg>
+              Nolabel
+                expression (quotations_parsetree.ml[10,175+13]..[10,175+15])
+                  Pexp_splice
+                  expression (quotations_parsetree.ml[10,175+13]..[10,175+15])
+                    Pexp_ident "x" (quotations_parsetree.ml[10,175+13]..[10,175+15])
+              <arg>
+              Nolabel
+                expression (quotations_parsetree.ml[10,175+16]..[10,175+20])
+                  Pexp_splice
+                  expression (quotations_parsetree.ml[10,175+16]..[10,175+20])
+                    Pexp_ident "M.y" (quotations_parsetree.ml[10,175+16]..[10,175+20])
+              <arg>
+              Nolabel
+                expression (quotations_parsetree.ml[10,175+21]..[10,175+33])
+                  Pexp_splice
+                  expression (quotations_parsetree.ml[10,175+23]..[10,175+32])
+                    Pexp_apply
+                    expression (quotations_parsetree.ml[10,175+23]..[10,175+24])
+                      Pexp_ident "g" (quotations_parsetree.ml[10,175+23]..[10,175+24])
+                    [
+                      <arg>
+                      Nolabel
+                        expression (quotations_parsetree.ml[10,175+25]..[10,175+32])
+                          Pexp_quote
+                          expression (quotations_parsetree.ml[10,175+28]..[10,175+29])
+                            Pexp_ident "z" (quotations_parsetree.ml[10,175+28]..[10,175+29])
+                    ]
+            ]
+    ]
+]
+

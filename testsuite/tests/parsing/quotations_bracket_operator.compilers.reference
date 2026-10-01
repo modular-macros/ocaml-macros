@@ -1,0 +1,4 @@
+File "quotations_bracket_operator.ml", line 11, characters 6-8:
+11 | let ( << ) f g x = f (g x)
+           ^^
+Error: Syntax error: operator expected.

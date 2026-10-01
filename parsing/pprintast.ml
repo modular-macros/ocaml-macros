@@ -1005,6 +1005,10 @@ and expression2 ctxt f x =
 and simple_expr ctxt f x =
   if x.pexp_attributes <> [] then expression ctxt f x
   else match x.pexp_desc with
+    | Pexp_quote e ->
+        pp f "@[<2><<@ %a@ >>@]" (expression reset_ctxt) e
+    | Pexp_splice e ->
+        pp f "@[<2>$(%a)@]" (expression reset_ctxt) e
     | Pexp_construct _  when is_simple_construct (view_expr x) ->
         (match view_expr x with
          | `nil -> pp f "[]"
