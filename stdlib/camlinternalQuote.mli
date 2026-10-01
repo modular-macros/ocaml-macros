@@ -24,6 +24,9 @@ module Identifier : sig
 
   val rename : t -> t
 
+  (* A new identifier of the given name, distinct from every other *)
+  val fresh : string -> t
+
   val new_scope : t list -> (unit -> 'a * set_of_t) -> 'a * set_of_t
 
   val empty : set_of_t

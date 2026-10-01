@@ -85,8 +85,16 @@ type lam = Obj.t
 (* The layout of [lambda] that the builders below rely on, and that
    test_quote_layout checks: the tag of each constructor built, and the
    value of each constant constructor stored. *)
+let lvar_tag = 0
 let lconst_tag = 2
+let lfunction_tag = 4
+let lletrec_tag = 7
 let lprim_tag = 8
+let lswitch_tag = 9
+let lstringswitch_tag = 10
+let lstaticraise_tag = 11
+let lstaticcatch_tag = 12
+let lsequence_tag = 15
 let pmakearray_tag = 19  (* among the constructors of [primitive] *)
 let pgenarray = 0        (* [array_kind] *)
 let immutable = 0        (* [mutable_flag] *)
@@ -108,6 +116,34 @@ let boxed_number_kind o =
   else if Nativeint.equal ops nativeint_ops then `Nativeint
   else `Other
 
+let var (id : Ident.t) : lam =
+  let b = Obj.new_block lvar_tag 1 in
+  Obj.set_field b 0 (Obj.repr id);
+  b
+
+type rec_binding = { id : Ident.t; def : Obj.t }
+[@@warning "-69"]
+
+let is_function (l : lam) =
+  let o = Obj.repr l in
+  Obj.is_block o && Obj.tag o = lfunction_tag && Obj.size o = 1
+
+let letrec (bindings : (Ident.t * lam) list) (body : lam) : lam =
+  match bindings with
+  | [] -> body
+  | _ ->
+      let binding (id, rhs) =
+        if not (is_function rhs) then
+          invalid_arg
+            "CamlinternalLam.letrec: right-hand side is not a syntactic \
+             function";
+        { id; def = Obj.field (Obj.repr rhs) 0 }
+      in
+      let b = Obj.new_block lletrec_tag 2 in
+      Obj.set_field b 0 (Obj.repr (List.map binding bindings));
+      Obj.set_field b 1 body;
+      b
+
 let make_iarray (elems : lam list) : lam =
   match elems with
   | [] ->
@@ -121,6 +157,165 @@ let make_iarray (elems : lam list) : lam =
       Obj.set_field b 1 (Obj.repr elems);
       Obj.set_field b 2 (Obj.repr loc_unknown);
       b
+
+(* The size of a jump table is bounded by bytecode, whose SWITCH
+   instruction gives it in 16 bits (bytecomp/emitcode.ml). *)
+let max_table = 65535
+
+let sequence (a : lam) (b : lam) : lam =
+  let s = Obj.new_block lsequence_tag 2 in
+  Obj.set_field s 0 a;
+  Obj.set_field s 1 b;
+  s
+
+type lambda_switch =
+  { sw_numconsts : int;
+    sw_consts : (int * lam) list;
+    sw_numblocks : int;
+    sw_blocks : (int * lam) list;
+    sw_failaction : lam option }
+[@@warning "-69"]
+
+let switch (arg : lam) ~numconsts (cases : (int * lam) list)
+    (fail : lam option) : lam =
+  if numconsts <= 0 then
+    invalid_arg "CamlinternalLam.switch: numconsts is not positive";
+  if numconsts > max_table then
+    invalid_arg "CamlinternalLam.switch: numconsts exceeds 65535";
+  let cases = List.stable_sort (fun (i, _) (j, _) -> compare i j) cases in
+  let rec check previous = function
+    | [] -> ()
+    | (i, _) :: rest ->
+        if i < 0 || i >= numconsts then
+          invalid_arg "CamlinternalLam.switch: case out of range";
+        if i = previous then
+          invalid_arg "CamlinternalLam.switch: duplicate case";
+        check i rest
+  in
+  check (-1) cases;
+  if Option.is_none fail && List.length cases < numconsts then
+    invalid_arg
+      "CamlinternalLam.switch: incomplete cases and no failure action";
+  (* A switch with a case for every integer has no failure action. *)
+  let fail = if List.length cases = numconsts then None else fail in
+  match cases, fail with
+  | [], Some fail -> sequence arg fail
+  | _ ->
+      let sw =
+        { sw_numconsts = numconsts; sw_consts = cases;
+          sw_numblocks = 0; sw_blocks = []; sw_failaction = fail }
+      in
+      let b = Obj.new_block lswitch_tag 3 in
+      Obj.set_field b 0 arg;
+      Obj.set_field b 1 (Obj.repr sw);
+      Obj.set_field b 2 (Obj.repr loc_unknown);
+      b
+
+(* Negative exit numbers do not coincide with the compiler's. *)
+let exit_count = ref 0
+
+let fresh_exit () =
+  decr exit_count;
+  !exit_count
+
+let exit_to k : lam =
+  let b = Obj.new_block lstaticraise_tag 2 in
+  Obj.set_field b 0 (Obj.repr k);
+  Obj.set_field b 1 (Obj.repr []);
+  b
+
+let catch (body : lam) k (handler : lam) : lam =
+  let b = Obj.new_block lstaticcatch_tag 3 in
+  Obj.set_field b 0 body;
+  Obj.set_field b 1 (Obj.repr (k, []));
+  Obj.set_field b 2 handler;
+  b
+
+(* Give each body one occurrence: keys with equal bodies share it. *)
+let share (groups : ('k list * lam) list) (fail : lam option)
+  : ('k * lam) list * (lam -> lam) =
+  let groups =
+    match fail with
+    | None -> groups
+    | Some f -> List.filter (fun (_, body) -> compare body f <> 0) groups
+  in
+  let rec merge = function
+    | [] -> []
+    | (keys, body) :: rest ->
+        let same, others =
+          List.partition (fun (_, b) -> compare b body = 0) rest in
+        (List.concat (keys :: List.map fst same), body) :: merge others
+  in
+  List.fold_left
+    (fun (cases, handled) (keys, body) ->
+       match keys with
+       | [ k ] -> ((k, body) :: cases, handled)
+       | ks ->
+           let e = fresh_exit () in
+           (List.map (fun k -> (k, exit_to e)) ks @ cases,
+            fun sw -> catch (handled sw) e body))
+    ([], Fun.id) (merge groups)
+
+let switch_intervals (arg : lam) ~numconsts
+    (groups : ((int * int) list * lam) list) (fail : lam option) : lam =
+  let invalid what = invalid_arg ("CamlinternalLam.switch_intervals: " ^ what) in
+  if numconsts <= 0 then invalid "numconsts is not positive";
+  if numconsts > max_table then invalid "numconsts exceeds 65535";
+  List.iter
+    (fun (intervals, _) ->
+       if intervals = [] then invalid "group without intervals";
+       List.iter
+         (fun (lo, hi) ->
+            if lo > hi then invalid "empty interval";
+            if lo < 0 || hi >= numconsts then invalid "interval out of range")
+         intervals)
+    groups;
+  let rec covering next = function
+    | [] -> next = numconsts
+    | (lo, hi) :: rest ->
+        if lo < next then invalid "overlapping intervals";
+        let contiguous = lo = next in
+        covering (hi + 1) rest && contiguous
+  in
+  let complete =
+    covering 0 (List.sort compare (List.concat_map fst groups)) in
+  if Option.is_none fail && not complete then
+    invalid "incomplete intervals and no failure action";
+  let integers intervals =
+    List.concat_map
+      (fun (lo, hi) -> List.init (hi - lo + 1) (fun i -> lo + i)) intervals
+  in
+  let cases, handled =
+    share
+      (List.map (fun (intervals, body) -> (integers intervals, body)) groups)
+      fail
+  in
+  handled (switch arg ~numconsts cases fail)
+
+let string_switch (arg : lam) (cases : (string * lam) list) (default : lam)
+  : lam =
+  let cases =
+    List.stable_sort (fun (s, _) (t, _) -> String.compare s t) cases in
+  let rec check = function
+    | (s, _) :: ((t, _) :: _ as rest) ->
+        if String.equal s t then
+          invalid_arg "CamlinternalLam.string_switch: duplicate case";
+        check rest
+    | [ _ ] | [] -> ()
+  in
+  check cases;
+  let cases, handled =
+    share (List.map (fun (s, body) -> ([ s ], body)) cases) (Some default)
+  in
+  match List.stable_sort (fun (s, _) (t, _) -> String.compare s t) cases with
+  | [] -> sequence arg default
+  | cases ->
+      let b = Obj.new_block lstringswitch_tag 4 in
+      Obj.set_field b 0 arg;
+      Obj.set_field b 1 (Obj.repr cases);
+      Obj.set_field b 2 (Obj.repr (Some default));
+      Obj.set_field b 3 (Obj.repr loc_unknown);
+      handled b
 
 let const : 'a. 'a -> lam =
   let rec constant_of : 'a. 'a -> structured_constant = fun o ->

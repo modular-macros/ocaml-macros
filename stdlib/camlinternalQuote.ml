@@ -46,6 +46,8 @@ struct
      in
      failwith ("CamlinternalQuote.rename " ^ name)
 
+  let fresh name = rename (CamlinternalLam.Ident.Local { name; stamp = 0 })
+
   let check vars = if not (IdentSet.is_empty vars) then perform (FreeVar vars)
 
   let exec_in_current_scope scope f =

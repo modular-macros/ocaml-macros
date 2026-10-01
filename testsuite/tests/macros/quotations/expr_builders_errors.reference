@@ -1,0 +1,14 @@
+no table: Expr.switch: numconsts is not positive
+table too large: Expr.switch: numconsts exceeds 65535
+intervals' table too large: Expr.switch_intervals: numconsts exceeds 65535
+repeated key: Expr.switch: duplicate case
+key out of range: Expr.switch: case out of range
+negative key: Expr.switch: case out of range
+incomplete, no default: built
+empty interval: Expr.switch_intervals: empty interval
+overlapping intervals: Expr.switch_intervals: overlapping intervals
+no intervals: Expr.switch_intervals: group without intervals
+repeated string: Expr.string_switch: duplicate case
+not a function: Expr.Letrec.bind: the definition is not a function
+outside its group: Expr.Letrec.bind: outside its group
+escaped: extrusion

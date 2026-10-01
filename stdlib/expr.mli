@@ -114,3 +114,80 @@ val unsafe_lift_constant : 'a -> 'a expr
     @raise Invalid_argument on a value whose representation constants
     cannot express: a function, an object, a lazy value, or a custom
     block that is not a boxed number. *)
+
+(** {1 Dispatch and recursion}
+
+    These build code that no quotation of fixed shape can express: a
+    dispatch on a value among cases whose number is known only when
+    the code is built, and a group of recursive functions whose
+    members are added as the code is built.  Like quotations, they keep
+    track of the variables that the code combined mentions, and make
+    fresh binders. *)
+
+module type immediate = sig type t [@@immediate] end
+(** A type whose values are immediate: [char], [bool], [int], or a
+    variant whose constructors take no arguments.  A value is
+    dispatched on by the integer that represents it: the code of a
+    character, the position of a constructor in its declaration. *)
+
+val switch :
+  (module I : immediate) -> I.t expr -> numconsts:int ->
+  (I.t * 'a expr) list -> 'a expr option -> 'a expr
+(** [switch (module I) e ~numconsts cases default] is a code expression
+    that evaluates [e] and then the expression of the case whose key
+    is [e]'s value, by a jump table of [numconsts] entries, at most
+    65535, the largest that bytecode can index.  A value
+    with no case, and a value whose integer is not between [0] and
+    [numconsts - 1], evaluates [default]; with no [default], it raises
+    [Invalid_argument "Expr.switch"].
+
+    @raise Invalid_argument if [numconsts] is not positive or exceeds
+    65535, or if a key is repeated or its integer is not between [0]
+    and [numconsts - 1]. *)
+
+val switch_intervals :
+  (module I : immediate) -> I.t expr -> numconsts:int ->
+  ((I.t * I.t) list * 'a expr) list -> 'a expr option -> 'a expr
+(** As {!switch}, each case serving the values in a list of inclusive
+    intervals.  The expression of a case is built once, however many
+    values it serves, and equal expressions are shared.  With no
+    [default], a value without a case raises
+    [Invalid_argument "Expr.switch_intervals"].
+
+    @raise Invalid_argument also on a case without intervals, and on
+    intervals that are empty, out of range, or overlapping. *)
+
+val string_switch : string expr -> (string * 'a expr) list -> 'a expr ->
+  'a expr
+(** [string_switch e cases default] is a code expression that
+    evaluates [e] and then the expression of the case whose string is
+    equal to [e]'s value, or [default] if there is none.  Equal
+    expressions are shared.
+
+    @raise Invalid_argument if a string is repeated. *)
+
+(** Groups of recursive functions. *)
+module Letrec : sig
+  type group
+  (** A group of recursive functions being built *)
+
+  val group : (group -> 'a expr) -> 'a expr
+  (** [group f] is the code expression [f g], in the scope of the
+      functions bound in [g] while [f g] is built: a [let rec] of
+      those functions around it.
+
+      @raise Invalid_argument if a function of the group has no
+      definition. *)
+
+  val bind : group -> ('a expr -> 'a expr) -> 'a expr
+  (** [bind g d] binds a new function in [g], whose definition is
+      [d f], [f] being the code of the function, and returns [f].  [f]
+      may be used in the definitions of [g] and in the expression of
+      its [group], and nowhere else: a code value that mentions it
+      outside them is a scope extrusion, as for a variable bound in a
+      quotation.
+
+      @raise Invalid_argument if [d f] is not a function
+      ([<< fun x -> ... >>]), or if [bind] is called outside the
+      building of [g]. *)
+end

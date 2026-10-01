@@ -304,6 +304,34 @@ type fr = { fx : float; fy : float; }
 val float_block_drift : string list = []
 |}]
 
+(* The term builders [CamlinternalLam.var] and [CamlinternalLam.letrec]
+   (serving the letrec library) construct [Lvar] and [Lletrec] nodes as
+   raw blocks, [letrec] unwrapping each [Lfunction] right-hand side
+   into a [rec_binding]; they must coincide with the compiler's own
+   construction, and [letrec] must reject a right-hand side that is not
+   a syntactic function. *)
+let builder_drift =
+  let lam (l : lambda) : CamlinternalLam.lam = Obj.magic l in
+  let mid : CamlinternalLam.Ident.t = Obj.magic id in
+  (match (Obj.magic (CamlinternalLam.var mid) : lambda) with
+   | Lvar i when i == id -> []
+   | _ -> [ "var built a different term" ])
+  @ (match (Obj.magic (CamlinternalLam.letrec [ (mid, lam fn) ] (lam u))
+            : lambda) with
+     | Lletrec ([ { id = i; def } ], b)
+       when i == id && b == u
+            && (match fn with
+                | Lfunction f -> Obj.repr def == Obj.repr f
+                | _ -> false) -> []
+     | _ -> [ "letrec built a different term" ])
+  @ (match CamlinternalLam.letrec [ (mid, lam u) ] (lam u) with
+     | exception Invalid_argument _ -> []
+     | _ -> [ "letrec accepted a non-function right-hand side" ])
+;;
+[%%expect{|
+val builder_drift : string list = []
+|}]
+
 (* [CamlinternalLam.make_iarray] (serving [Expr.iarray]) constructs
    [Lprim (Pmakearray (Pgenarray, Immutable), els, Loc_unknown)] as a
    raw block -- [Lprim]'s tag among [lambda]'s constructors,
@@ -324,4 +352,157 @@ let make_iarray_drift =
 ;;
 [%%expect{|
 val make_iarray_drift : string list = []
+|}]
+
+(* [CamlinternalLam.switch] (serving matcher generators) constructs
+   [Lswitch (arg, sw, Loc_unknown)] as a raw block with a mirrored
+   [lambda_switch] record, the cases sorted; [Lswitch]'s tag and the
+   record's field order are pinned here, and the builder must refuse a
+   non-positive range, a duplicate or out-of-range case, and an
+   incomplete switch without a failure action. *)
+let switch_drift =
+  let lam (l : lambda) : CamlinternalLam.lam = Obj.magic l in
+  let e = Lvar id in
+  (match (Obj.magic (CamlinternalLam.switch (lam e) ~numconsts:3
+                       [ (2, lam u); (0, lam e) ] (Some (lam u)))
+          : lambda) with
+   | Lswitch (a, { sw_numconsts = 3; sw_consts = [ (0, b); (2, c) ];
+                   sw_numblocks = 0; sw_blocks = [];
+                   sw_failaction = Some d }, Loc_unknown)
+     when a == e && b == e && c == u && d == u -> []
+   | _ -> [ "switch built a different term" ])
+  @ (match CamlinternalLam.switch (lam e) ~numconsts:2
+             [ (1, lam u); (0, lam u) ] None with
+     | exception Invalid_argument _ -> [ "switch refused complete cases" ]
+     | _ -> [])
+  @ List.concat_map
+      (fun (numconsts, cases, fail) ->
+         match CamlinternalLam.switch (lam e) ~numconsts cases fail with
+         | exception Invalid_argument _ -> []
+         | _ -> [ Printf.sprintf "switch accepted numconsts %d with %d cases"
+                    numconsts (List.length cases) ])
+      [ (0, [], Some (lam u));
+        (2, [ (0, lam u); (0, lam u) ], Some (lam u));
+        (2, [ (2, lam u) ], Some (lam u));
+        (2, [ (-1, lam u) ], Some (lam u));
+        (2, [ (0, lam u) ], None) ]
+;;
+[%%expect{|
+val switch_drift : string list = []
+|}]
+
+(* [CamlinternalLam.switch_intervals] hoists a body used for several
+   integers into a static handler the cases exit to, merging groups
+   with equal bodies, and leaves a body used once inline; [Lstaticraise]
+   and [Lstaticcatch] are built as raw blocks, pinned here, with
+   negative exit numbers.  The builder must refuse an empty group, an
+   empty or out-of-range interval, an overlap, and an incomplete cover
+   without a failure action; a group whose body equals the failure
+   action's falls through to it. *)
+let switch_intervals_drift =
+  let lam (l : lambda) : CamlinternalLam.lam = Obj.magic l in
+  let e = Lvar id in
+  let big = Lsequence (u, u) in
+  let unit' = Lconst const_unit in
+  (match (Obj.magic (CamlinternalLam.switch_intervals (lam e) ~numconsts:5
+                       [ ([ (0, 1) ], lam big); ([ (4, 4) ], lam e);
+                         ([ (2, 2) ], lam u); ([ (3, 3) ], lam unit') ]
+                       None) : lambda) with
+   | Lstaticcatch
+       (Lstaticcatch
+          (Lswitch (a, { sw_numconsts = 5;
+                         sw_consts = [ (0, Lstaticraise (k1, []));
+                                       (1, Lstaticraise (k1', []));
+                                       (2, Lstaticraise (k2, []));
+                                       (3, Lstaticraise (k2', []));
+                                       (4, b) ];
+                         sw_numblocks = 0; sw_blocks = [];
+                         sw_failaction = None }, Loc_unknown),
+           (h1, []), body1),
+        (h2, []), body2)
+     when a == e && b == e && body1 == big && body2 == u
+          && k1 = k1' && k1 = h1 && k2 = k2' && k2 = h2
+          && k1 < 0 && k2 < 0 && k1 <> k2 -> []
+   | _ -> [ "switch_intervals built a different term" ])
+  @ (match (Obj.magic (CamlinternalLam.switch_intervals (lam e) ~numconsts:4
+                         [ ([ (0, 1) ], lam unit'); ([ (2, 2) ], lam e) ]
+                         (Some (lam u))) : lambda) with
+     | Lswitch (_, { sw_consts = [ (2, b) ]; sw_failaction = Some f }, _)
+       when b == e && f == u -> []
+     | _ -> [ "switch_intervals kept a group equal to the failure action" ])
+  @ List.concat_map
+      (fun (numconsts, groups, fail) ->
+         match CamlinternalLam.switch_intervals (lam e) ~numconsts groups fail
+         with
+         | exception Invalid_argument _ -> []
+         | _ -> [ Printf.sprintf "switch_intervals accepted numconsts %d \
+                                   with %d groups"
+                    numconsts (List.length groups) ])
+      [ (0, [], Some (lam u));
+        (3, [ ([], lam u) ], Some (lam u));
+        (3, [ ([ (2, 1) ], lam u) ], Some (lam u));
+        (3, [ ([ (1, 3) ], lam u) ], Some (lam u));
+        (3, [ ([ (0, 1) ], lam u); ([ (1, 2) ], lam e) ], Some (lam u));
+        (3, [ ([ (0, 0); (2, 2) ], lam u) ], None) ]
+;;
+[%%expect{|
+val switch_intervals_drift : string list = []
+|}]
+
+(* [CamlinternalLam.string_switch] constructs [Lstringswitch (arg,
+   cases, Some default, Loc_unknown)] as a raw block, the cases sorted
+   and their bodies shared as by [switch_intervals]; a switch left
+   without cases is [Lsequence] of the argument and the default, as
+   the backends accept none; it must refuse a duplicated string. *)
+let string_switch_drift =
+  let lam (l : lambda) : CamlinternalLam.lam = Obj.magic l in
+  let e = Lvar id in
+  let big = Lsequence (u, u) in
+  (match (Obj.magic (CamlinternalLam.string_switch (lam e)
+                       [ ("b", lam big); ("a", lam e); ("c", lam big);
+                         ("d", lam u) ]
+                       (lam u)) : lambda) with
+   | Lstaticcatch
+       (Lstringswitch (a, [ ("a", x); ("b", Lstaticraise (k, []));
+                            ("c", Lstaticraise (k', [])) ],
+                       Some d, Loc_unknown),
+        (h, []), body)
+     when a == e && x == e && d == u && body == big
+          && k = k' && k = h && k < 0 -> []
+   | _ -> [ "string_switch built a different term" ])
+  @ (match (Obj.magic (CamlinternalLam.string_switch (lam e)
+                         [ ("a", lam u) ] (lam u)) : lambda),
+           (Obj.magic (CamlinternalLam.switch (lam e) ~numconsts:2 []
+                         (Some (lam u))) : lambda) with
+     | Lsequence (a, d), Lsequence (a', d')
+       when a == e && d == u && a' == e && d' == u -> []
+     | _ -> [ "a switch without cases is not a sequence" ])
+  @ (match CamlinternalLam.string_switch (lam e)
+             [ ("a", lam u); ("a", lam e) ] (lam u) with
+     | exception Invalid_argument _ -> []
+     | _ -> [ "string_switch accepted a duplicated string" ])
+;;
+[%%expect{|
+val string_switch_drift : string list = []
+|}]
+
+(* The builders that [Expr] also calls directly: [is_function] tells an
+   [Lfunction], [fresh_exit] gives a new negative exit number, and
+   [exit_to] and [catch] build [Lstaticraise] and [Lstaticcatch]. *)
+let exits_drift =
+  let lam (l : lambda) : CamlinternalLam.lam = Obj.magic l in
+  let k = CamlinternalLam.fresh_exit () in
+  (if CamlinternalLam.is_function (lam fn)
+      && not (CamlinternalLam.is_function (lam u))
+   then [] else [ "is_function misjudged a term" ])
+  @ (if k < 0 && CamlinternalLam.fresh_exit () <> k then []
+     else [ "fresh_exit gave a number that may be the compiler's" ])
+  @ (match (Obj.magic (CamlinternalLam.catch (CamlinternalLam.exit_to k) k
+                         (lam u)) : lambda) with
+     | Lstaticcatch (Lstaticraise (k1, []), (k2, []), h)
+       when k1 = k && k2 = k && h == u -> []
+     | _ -> [ "exit_to or catch built a different term" ])
+;;
+[%%expect{|
+val exits_drift : string list = []
 |}]
