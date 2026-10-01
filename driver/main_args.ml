@@ -121,6 +121,13 @@ let mk_stop_after ~native f =
   "-stop-after", Arg.Symbol (pass_names, f),
   " Stop after the given compilation pass."
 
+let mk_macros_object f =
+  "-macros-object", Arg.Symbol (["auto"; "always"; "none"], f),
+  " Whether to write the compile-time part of the unit (m$macros.cmo):\n\
+  \     auto (default) writes it if the unit has compile-time components;\n\
+  \     always writes it in every case, so that a build system can\n\
+  \     declare it as a target; none never writes it."
+
 let mk_save_ir_after ~native f =
   let pass_names =
     Clflags.Compiler_pass.(available_pass_names
@@ -901,6 +908,7 @@ module type Compiler_options = sig
   val _g : unit -> unit
   val _no_g : unit -> unit
   val _stop_after : string -> unit
+  val _macros_object : string -> unit
   val _i : unit -> unit
   val _i_variance : unit -> unit
   val _impl : string -> unit
@@ -1111,6 +1119,7 @@ struct
     mk_g_byt F._g;
     mk_no_g F._no_g;
     mk_stop_after ~native:false F._stop_after;
+    mk_macros_object F._macros_object;
     mk_i F._i;
     mk_i_variance F._i_variance;
     mk_I F._I;
@@ -1322,6 +1331,7 @@ struct
     mk_no_g F._no_g;
     mk_function_sections F._function_sections;
     mk_stop_after ~native:true F._stop_after;
+    mk_macros_object F._macros_object;
     mk_save_ir_after ~native:true F._save_ir_after;
     mk_i F._i;
     mk_i_variance F._i_variance;
@@ -1885,6 +1895,11 @@ module Default = struct
     let _pp s = preprocessor := (Some s)
     let _runtime_variant s = runtime_variant := s
     let _set_runtime_default s = Compenv.parse_runtime_parameter s
+    let _macros_object mode =
+      macros_object := (match mode with
+        | "always" -> Macros_object_always
+        | "none" -> Macros_object_none
+        | _ -> Macros_object_auto)
     let _stop_after pass =
       let module P = Compiler_pass in
         match P.of_string pass with

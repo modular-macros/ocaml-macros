@@ -95,6 +95,7 @@ module type Compiler_options = sig
   val _g : unit -> unit
   val _no_g : unit -> unit
   val _stop_after : string -> unit
+  val _macros_object : string -> unit
   val _i : unit -> unit
   val _i_variance : unit -> unit
   val _impl : string -> unit

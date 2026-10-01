@@ -76,6 +76,13 @@ and match_context_rows = ref 32         (* -match-context-rows *)
 and safer_matching = ref false          (* -safer-matching *)
 and preprocessor = ref(None : string option) (* -pp *)
 and all_ppx = ref ([] : string list)        (* -ppx *)
+
+(* Whether to write the compile-time part of a unit, [m$macros.cmo] *)
+type macros_object_mode = Macros_object_auto
+                        | Macros_object_always
+                        | Macros_object_none
+let macros_object = ref Macros_object_auto  (* -macros-object *)
+
 let absname = ref false                 (* -absname *)
 let annotations = ref false             (* -annot *)
 let binary_annotations = ref false      (* -bin-annot *)

@@ -179,6 +179,12 @@ let simplify_compile_time lam =
   Misc.protect_refs [ Misc.R (Clflags.native_code, false) ]
     (fun () -> Simplif.simplify_lambda lam)
 
+let should_emit_macros_object ~exports =
+  match !Clflags.macros_object with
+  | Clflags.Macros_object_none -> false
+  | Clflags.Macros_object_auto -> exports
+  | Clflags.Macros_object_always -> true
+
 let emit_macros_object i Typedtree.{structure; coercion; _} =
   let source_file = Unit_info.source_file i.target in
   let prog =
@@ -253,7 +259,8 @@ let implementation ~native i typed ~fallback ~finish =
          typed.Typedtree.structure.str_final_env
          (Types.Mty_signature typed.Typedtree.signature)
   in
-  if exports then emit_macros_object i typed;
+  if should_emit_macros_object ~exports then
+    emit_macros_object i typed;
   if Env.get_unit_has_top_level_splice ()
   then finish (build_static_program ~native i typed)
   else fallback ()

@@ -76,6 +76,17 @@ val compile_only : bool ref
 val output_name : string option ref
 val include_dirs : string list ref
 val hidden_include_dirs : string list ref
+
+(** Whether to write the compile-time part of a unit, [m$macros.cmo]:
+    if the unit has compile-time components ([Macros_object_auto], the
+    default), in every case, an empty one if it has none
+    ([Macros_object_always]), or never ([Macros_object_none]).  The last
+    two are for build systems. *)
+type macros_object_mode = Macros_object_auto
+                        | Macros_object_always
+                        | Macros_object_none
+val macros_object : macros_object_mode ref
+
 val standard_library_default : string option ref
 val no_std_include : bool ref
 val no_cwd : bool ref
