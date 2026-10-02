@@ -1,0 +1,13 @@
+File "link_line_errors.ml", line 1:
+Error: Wrong link order:
+         Twice (lib/twice.cmo) depends on Counter (lib/counter.cmo)
+File "link_line_errors.ml", line 1:
+Error: Linking this unit's compile-time part failed:
+       Counter referenced from Twice
+       The implementation of a unit that compile-time code uses
+       must be given to -static-use.
+File "link_line_errors.ml", line 1:
+Error: Linking this unit's compile-time part failed:
+       Counter referenced from Link_line_one$macros
+       The implementation of a unit that compile-time code uses
+       must be given to -static-use.

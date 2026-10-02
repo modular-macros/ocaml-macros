@@ -1,0 +1,8 @@
+File "duplicate.ml", line 1:
+Error:  Duplicated implementations:
+         Multiple definitions of module Counter in files lib/counter.cmo,
+         ./lib/counter.cmo
+File "duplicate.ml", line 1:
+Error:  Duplicated implementations:
+         Multiple definitions of module Counter in files lib/counter.cmo,
+         lib/counters.cma

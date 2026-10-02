@@ -18,6 +18,8 @@ open Compile_common
 
 type error =
   | Not_a_bytecode_object of string
+  | Static_archive_not_found of string
+  | Static_archives_inconsistent of Linkdeps.error
   | Static_runner_not_found of string
   | Static_link_failed of string
   | Macro_object_not_found of { file : string; unit_name : string }
@@ -60,35 +62,67 @@ let static_runner () =
 (* The compile-time parts that a static program needs are read from
    relocation tables: the compile-time part of a unit may itself use
    that of another.  The run-time objects are not loaded. *)
-let read_compunit ~loc filename =
+let read_compunits ~loc filename =
   let ic = open_in_bin filename in
   Misc.try_finally ~always:(fun () -> close_in ic)
     (fun () ->
        (* A file that cannot be read as an object, such as an
           interrupted build leaves, is reported as not being one. *)
        match
-         let magic = String.length Config.cmo_magic_number in
-         if really_input_string ic magic <> Config.cmo_magic_number then
-           raise (Error (loc, Not_a_bytecode_object filename));
+         let magic =
+           really_input_string ic (String.length Config.cmo_magic_number)
+         in
          seek_in ic (input_binary_int ic);
-         (input_value ic : Cmo_format.compilation_unit)
+         if magic = Config.cmo_magic_number then
+           [ (input_value ic : Cmo_format.compilation_unit) ]
+         else if magic = Config.cma_magic_number then
+           (input_value ic : Cmo_format.library).lib_units
+         else raise (Error (loc, Not_a_bytecode_object filename))
        with
-       | cu -> cu
+       | cus -> cus
        | exception (End_of_file | Failure _ | Sys_error _) ->
            raise (Error (loc, Not_a_bytecode_object filename)))
 
-let macro_units_of compunit =
-  List.filter_map
-    (function
-      | (Cmo_format.Reloc_getcompunit (Cmo_format.Compunit name), _)
-        when Filename.check_suffix name "$macros" -> Some name
-      | _ -> None)
-    compunit.Cmo_format.cu_reloc
+let read_compunit ~loc filename =
+  match read_compunits ~loc filename with
+  | [ cu ] -> cu
+  | _ -> raise (Error (loc, Not_a_bytecode_object filename))
 
-(* Depth first, emitting each object after the ones it depends on, since a
-   bytecode link requires that order. *)
+let used_units compunit =
+  Symtable.required_compunits compunit.Cmo_format.cu_reloc
+  @ compunit.Cmo_format.cu_required_compunits
+  |> List.map (fun (Cmo_format.Compunit name) -> name)
+
+let macro_units_of compunit =
+  List.filter
+    (fun name -> Filename.check_suffix name "$macros")
+    (used_units compunit)
+
+(* The files given to -static-use are linked in the order given, as the
+   files of a program are, and are checked as those are: a file that
+   uses a unit of a later file, and two files that define the same unit,
+   are errors.  A unit that no file defines may be one that the runner
+   is linked with: its absence is left for the link to report. *)
+let check_link_order ~loc files =
+  let ldeps = Linkdeps.create ~complete:false in
+  List.iter
+    (fun filename ->
+       List.iter
+         (fun cu ->
+            let Cmo_format.Compunit compunit = cu.Cmo_format.cu_name in
+            Linkdeps.add ldeps ~filename ~compunit ~provides:[compunit]
+              ~requires:(used_units cu))
+         (List.rev (read_compunits ~loc filename)))
+    (List.rev files);
+  Option.iter
+    (fun err -> raise (Error (loc, Static_archives_inconsistent err)))
+    (Linkdeps.check ldeps)
+
+(* The objects that hold the compile-time definitions of [roots] and of
+   the units that they depend on, in link order. *)
 let macro_object_closure ~loc roots =
-  let seen = Hashtbl.create 8 and order = ref [] in
+  let seen = Hashtbl.create 8 in
+  let objects = ref [] in
   let rec visit name =
     if not (Hashtbl.mem seen name) then begin
       Hashtbl.add seen name ();
@@ -100,15 +134,17 @@ let macro_object_closure ~loc roots =
                                  unit_name =
                                    Filename.chop_suffix name "$macros" }))
       | path ->
-          let cu = read_compunit ~loc path in
-          List.iter visit (macro_units_of cu);
-          order := path :: !order
+          List.iter visit (macro_units_of (read_compunit ~loc path));
+          objects := path :: !objects
     end
   in
   List.iter visit roots;
-  List.rev !order
+  List.rev !objects
 
-(* The objects that the runner loads *)
+(* What the runner loads on top of the libraries that it is linked
+   with: the files given to -static-use, the objects that hold the
+   compile-time definitions of other units, and the static program
+   itself. *)
 let static_objfiles ~loc ~static_cmo =
   (* [Dynlink] resolves a relative name against the current directory. *)
   let static_cmo =
@@ -116,8 +152,21 @@ let static_objfiles ~loc ~static_cmo =
     then Filename.concat (Sys.getcwd ()) static_cmo
     else static_cmo
   in
-  macro_object_closure ~loc (macro_units_of (read_compunit ~loc static_cmo))
-  @ [ static_cmo ]
+  let resolve f =
+    if Filename.is_implicit f then
+      match Load_path.find f with
+      | file -> file
+      | exception Not_found ->
+          raise (Error (loc, Static_archive_not_found f))
+    else f
+  in
+  let static_use = List.rev_map resolve !Clflags.static_use in
+  check_link_order ~loc static_use;
+  let macro_objects =
+    macro_object_closure ~loc
+      (macro_units_of (read_compunit ~loc static_cmo))
+  in
+  static_use @ macro_objects @ [ static_cmo ]
 
 (* The failures of the run are read from files.  A failure to load the
    static program is text in [base ^ ".linkerr"], which the runner
@@ -288,6 +337,14 @@ let report_error loc = function
   | Not_a_bytecode_object file ->
       Location.errorf ~loc "%a is not a bytecode object file."
         Style.inline_code file
+  | Static_archive_not_found f ->
+      Location.errorf ~loc
+        "Cannot find %a (given to -static-use) in the load path."
+        Style.inline_code f
+  | Static_archives_inconsistent err ->
+      Location.errorf ~loc "%a"
+        (Linkdeps.report_error_doc ~print_filename:Location.Doc.filename)
+        err
   | Static_runner_not_found file ->
       Location.errorf ~loc
         "Cannot find %a,@ the static-program runner built with the \
@@ -295,7 +352,11 @@ let report_error loc = function
         Style.inline_code file
   | Static_link_failed msg ->
       Location.errorf ~loc
-        "Linking this unit's compile-time part failed:@ %s" msg
+        "Linking this unit's compile-time part failed:@ %s\
+       @ The implementation of a unit that compile-time code uses\
+       @ must be given to %a."
+        msg
+        Style.inline_code "-static-use"
   | Macro_object_not_found { file; unit_name } ->
       Location.errorf ~loc
         "Cannot find %a, which holds the compile-time definitions of %a."

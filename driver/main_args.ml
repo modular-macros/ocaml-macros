@@ -180,6 +180,11 @@ let mk_I_static f =
   "<dir>  Add <dir> to the list of include directories, for the modules\n\
     \     that compile-time code uses"
 
+let mk_static_use f =
+  "-static-use", Arg.String f,
+  "<file>  Link <file> (.cma or .cmo) with the compile-time code of\n\
+    \     the units compiled"
+
 let mk_set_runtime_default f =
   "-set-runtime-default", Arg.String f, "<param>=<value>  Set the default for \
       runtime parameter <param> to <value> (see the manual for further details)"
@@ -841,6 +846,7 @@ module type Common_options = sig
   val _I : string -> unit
   val _H : string -> unit
   val _I_static : string -> unit
+  val _static_use : string -> unit
   val _labels : unit -> unit
   val _alias_deps : unit -> unit
   val _no_alias_deps : unit -> unit
@@ -1131,6 +1137,7 @@ struct
     mk_I F._I;
     mk_H F._H;
     mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_impl F._impl;
     mk_intf F._intf;
     mk_intf_suffix F._intf_suffix;
@@ -1345,6 +1352,7 @@ struct
     mk_I F._I;
     mk_H F._H;
     mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_impl F._impl;
     mk_inline F._inline;
     mk_inline_toplevel F._inline_toplevel;
@@ -1604,6 +1612,7 @@ struct
     mk_I F._I;
     mk_H F._H;
     mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_impl F._impl;
     mk_intf F._intf;
     mk_intf_suffix F._intf_suffix;
@@ -1736,6 +1745,7 @@ module Default = struct
     let _I dir = include_dirs := dir :: (!include_dirs)
     let _H dir = hidden_include_dirs := dir :: (!hidden_include_dirs)
     let _I_static dir = static_include_dirs := dir :: (!static_include_dirs)
+    let _static_use f = static_use := f :: (!static_use)
     let _color = Misc.set_or_ignore color_reader.parse color
     let _dlambda = set dump_lambda
     let _dparsetree = set dump_parsetree
@@ -2007,6 +2017,7 @@ module Default = struct
            (s :: (!Odoc_global.hidden_include_dirs))
       *) ()
     let _I_static(_:string) = ()
+    let _static_use(_:string) = ()
     let _impl (_:string) =
       (* placeholder:
          Odoc_global.files := ((!Odoc_global.files) @ [Odoc_global.Impl_file s])

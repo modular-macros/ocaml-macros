@@ -1,0 +1,7 @@
+File "missing.ml", line 1:
+Error: Linking this unit's compile-time part failed:
+       Counter referenced from Missing$static
+       The implementation of a unit that compile-time code uses
+       must be given to -static-use.
+File "missing.ml", line 1:
+Error: Cannot find absent.cma (given to -static-use) in the load path.

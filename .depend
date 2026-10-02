@@ -7433,6 +7433,7 @@ driver/static_link.cmo : \
     typing/typedtree.cmi \
     lambda/translquote.cmi \
     lambda/translmod.cmi \
+    bytecomp/symtable.cmi \
     bytecomp/static_report.cmi \
     lambda/simplif.cmi \
     utils/profile.cmi \
@@ -7441,6 +7442,7 @@ driver/static_link.cmo : \
     utils/misc.cmi \
     parsing/location.cmi \
     utils/load_path.cmi \
+    utils/linkdeps.cmi \
     lambda/lambda.cmi \
     typing/env.cmi \
     bytecomp/emit_cmo.cmi \
@@ -7455,6 +7457,7 @@ driver/static_link.cmx : \
     typing/typedtree.cmx \
     lambda/translquote.cmx \
     lambda/translmod.cmx \
+    bytecomp/symtable.cmx \
     bytecomp/static_report.cmx \
     lambda/simplif.cmx \
     utils/profile.cmx \
@@ -7463,6 +7466,7 @@ driver/static_link.cmx : \
     utils/misc.cmx \
     parsing/location.cmx \
     utils/load_path.cmx \
+    utils/linkdeps.cmx \
     lambda/lambda.cmx \
     typing/env.cmx \
     bytecomp/emit_cmo.cmx \
@@ -7474,6 +7478,7 @@ driver/static_link.cmx : \
 driver/static_link.cmi : \
     typing/typedtree.cmi \
     parsing/location.cmi \
+    utils/linkdeps.cmi \
     lambda/lambda.cmi \
     driver/compile_common.cmi
 driver/staticrun.cmo : \

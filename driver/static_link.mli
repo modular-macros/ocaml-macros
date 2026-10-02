@@ -53,6 +53,8 @@ val implementation :
 
 type error =
   | Not_a_bytecode_object of string
+  | Static_archive_not_found of string
+  | Static_archives_inconsistent of Linkdeps.error
   | Static_runner_not_found of string
   | Static_link_failed of string
   | Macro_object_not_found of { file : string; unit_name : string }

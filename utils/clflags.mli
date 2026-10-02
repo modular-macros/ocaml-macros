@@ -77,6 +77,7 @@ val output_name : string option ref
 val include_dirs : string list ref
 val hidden_include_dirs : string list ref
 val static_include_dirs : string list ref
+val static_use : string list ref
 
 (** Whether to write the compile-time part of a unit, [m$macros.cmo]:
     if the unit has compile-time components ([Macros_object_auto], the
