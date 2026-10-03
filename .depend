@@ -2120,6 +2120,7 @@ typing/typemod.cmo : \
     utils/load_path.cmi \
     typing/includemod_errorprinter.cmi \
     typing/includemod.cmi \
+    typing/includecore.cmi \
     typing/ident.cmi \
     utils/format_doc.cmi \
     typing/errortrace.cmi \
@@ -2160,6 +2161,7 @@ typing/typemod.cmx : \
     utils/load_path.cmx \
     typing/includemod_errorprinter.cmx \
     typing/includemod.cmx \
+    typing/includecore.cmx \
     typing/ident.cmx \
     utils/format_doc.cmx \
     typing/errortrace.cmx \
@@ -2322,7 +2324,6 @@ typing/typetexp.cmi : \
     typing/env.cmi \
     parsing/asttypes.cmi
 typing/untypeast.cmo : \
-    typing/types.cmi \
     typing/typedtree.cmi \
     typing/path.cmi \
     parsing/parsetree.cmi \
@@ -2333,7 +2334,6 @@ typing/untypeast.cmo : \
     parsing/ast_helper.cmi \
     typing/untypeast.cmi
 typing/untypeast.cmx : \
-    typing/types.cmx \
     typing/typedtree.cmx \
     typing/path.cmx \
     parsing/parsetree.cmi \
@@ -4875,11 +4875,13 @@ lambda/translmod.cmo : \
     lambda/translclass.cmi \
     lambda/translattribute.cmi \
     typing/tast_iterator.cmi \
+    typing/shape.cmi \
     typing/primitive.cmi \
     typing/predef.cmi \
     typing/path.cmi \
     typing/mtype.cmi \
     utils/misc.cmi \
+    parsing/longident.cmi \
     parsing/location.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
@@ -4904,11 +4906,13 @@ lambda/translmod.cmx : \
     lambda/translclass.cmx \
     lambda/translattribute.cmx \
     typing/tast_iterator.cmx \
+    typing/shape.cmx \
     typing/primitive.cmx \
     typing/predef.cmx \
     typing/path.cmx \
     typing/mtype.cmx \
     utils/misc.cmx \
+    parsing/longident.cmx \
     parsing/location.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
@@ -4924,6 +4928,7 @@ lambda/translmod.cmi : \
     typing/typedtree.cmi \
     typing/primitive.cmi \
     typing/path.cmi \
+    utils/misc.cmi \
     parsing/location.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi
@@ -7574,10 +7579,12 @@ toplevel/topcommon.cmo : \
     typing/typemod.cmi \
     typing/typedtree.cmi \
     typing/typecore.cmi \
+    lambda/translmod.cmi \
     bytecomp/symtable.cmi \
     typing/shape_reduce.cmi \
     typing/shape.cmi \
     typing/printtyped.cmi \
+    lambda/printlambda.cmi \
     parsing/printast.cmi \
     typing/predef.cmi \
     parsing/pprintast.cmi \
@@ -7592,6 +7599,7 @@ toplevel/topcommon.cmo : \
     parsing/location.cmi \
     utils/load_path.cmi \
     parsing/lexer.cmi \
+    lambda/lambda.cmi \
     typing/includemod.cmi \
     typing/ident.cmi \
     toplevel/genprintval.cmi \
@@ -7611,10 +7619,12 @@ toplevel/topcommon.cmx : \
     typing/typemod.cmx \
     typing/typedtree.cmx \
     typing/typecore.cmx \
+    lambda/translmod.cmx \
     bytecomp/symtable.cmx \
     typing/shape_reduce.cmx \
     typing/shape.cmx \
     typing/printtyped.cmx \
+    lambda/printlambda.cmx \
     parsing/printast.cmx \
     typing/predef.cmx \
     parsing/pprintast.cmx \
@@ -7629,6 +7639,7 @@ toplevel/topcommon.cmx : \
     parsing/location.cmx \
     utils/load_path.cmx \
     parsing/lexer.cmx \
+    lambda/lambda.cmx \
     typing/includemod.cmx \
     typing/ident.cmx \
     toplevel/genprintval.cmx \
@@ -7663,6 +7674,7 @@ toplevel/topdirs.cmo : \
     toplevel/topprinters.cmi \
     toplevel/toploop.cmi \
     toplevel/topeval.cmi \
+    toplevel/topcommon.cmi \
     typing/printtyp.cmi \
     typing/predef.cmi \
     typing/path.cmi \
@@ -7690,6 +7702,7 @@ toplevel/topdirs.cmx : \
     toplevel/topprinters.cmx \
     toplevel/toploop.cmx \
     toplevel/topeval.cmi \
+    toplevel/topcommon.cmx \
     typing/printtyp.cmx \
     typing/predef.cmx \
     typing/path.cmx \
