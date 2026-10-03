@@ -175,8 +175,12 @@ module Doc = struct
     | Lident s -> ident_of_name ~kind f s
     | Ldot(y,s) ->
         protect_longident ~kind f (any_longident ~kind:Other) y.txt s.txt
-    | Lapply (y,s) ->
+    | Lapply (Plain,y,s) ->
         Format_doc.fprintf f "%a(%a)"
+          (any_longident ~kind:Other) y.txt
+          (any_longident ~kind:Other) s.txt
+    | Lapply (Template,y,s) ->
+        Format_doc.fprintf f "%a$(%a)"
           (any_longident ~kind:Other) y.txt
           (any_longident ~kind:Other) s.txt
 
@@ -1286,21 +1290,55 @@ and class_expr ctxt f x =
           (override o.popen_override) longident_loc o.popen_expr
           (class_expr ctxt) e
 
+(* Whether the type of a template's parameter is a name, which the
+   short form "$A -> B" takes.  The dollar is glued to the head of the
+   name, which must then be written as it is: not a keyword, which is
+   written with an escape, and beginning with a letter that the lexer
+   reads after a dollar. *)
+and short_template_domain mt =
+  let gluable s =
+    s <> "" && not (Lexer.is_keyword s)
+    && (match s.[0] with 'a'..'z' | 'A'..'Z' | '_' -> true | _ -> false)
+  in
+  let rec head = function
+    | Lident s -> Some s
+    | Ldot (l, _) -> head l.txt
+    | Lapply _ -> None
+  in
+  match mt with
+  | { pmty_desc = Pmty_ident lid; pmty_attributes = []; _ } ->
+      (match head lid.txt with Some s -> gluable s | None -> false)
+  | _ -> false
+
 and module_type ctxt f x =
   if x.pmty_attributes <> [] then begin
     pp f "((%a)%a)" (module_type ctxt) {x with pmty_attributes=[]}
       (attributes ctxt) x.pmty_attributes
   end else
     match x.pmty_desc with
-    | Pmty_functor (Unit, mt2) ->
+    | Pmty_functor (Plain, Unit, mt2) ->
         pp f "@[<hov2>() ->@ %a@]" (module_type ctxt) mt2
-    | Pmty_functor (Named (s, mt1), mt2) ->
+    | Pmty_functor (Plain, Named (s, mt1), mt2) ->
         begin match s.txt with
         | None ->
             pp f "@[<hov2>%a@ ->@ %a@]"
               (module_type1 ctxt) mt1 (module_type ctxt) mt2
         | Some name ->
             pp f "@[<hov2>(%s@ :@ %a)@ ->@ %a@]" name
+              (module_type ctxt) mt1 (module_type ctxt) mt2
+        end
+    | Pmty_functor (Template, Unit, mt2) ->
+        pp f "@[<hov2>$() ->@ %a@]" (module_type ctxt) mt2
+    | Pmty_functor (Template, Named (s, mt1), mt2) ->
+        begin match s.txt with
+        | None when short_template_domain mt1 ->
+            pp f "@[<hov2>$%a@ ->@ %a@]"
+              (module_type ctxt) mt1 (module_type ctxt) mt2
+        | None ->
+            pp f "@[<hov2>$(%a)@ ->@ %a@]"
+              (module_type ctxt) mt1 (module_type ctxt) mt2
+        | Some name ->
+            pp f "@[<hov2>$(%s@ :@ %a)@ ->@ %a@]" name
               (module_type ctxt) mt1 (module_type ctxt) mt2
         end
     | Pmty_with (mt, []) -> module_type ctxt f mt
@@ -1470,17 +1508,27 @@ and module_expr ctxt f x =
           (module_type ctxt) mt
     | Pmod_ident (li) ->
         pp f "%a" longident_loc li;
-    | Pmod_functor (Unit, me) ->
+    | Pmod_functor (Plain, Unit, me) ->
         pp f "functor ()@;->@;%a" (module_expr ctxt) me
-    | Pmod_functor (Named (s, mt), me) ->
+    | Pmod_functor (Plain, Named (s, mt), me) ->
         pp f "functor@ (%s@ :@ %a)@;->@;%a"
           (Option.value s.txt ~default:"_")
           (module_type ctxt) mt (module_expr ctxt) me
-    | Pmod_apply (me1, me2) ->
+    | Pmod_functor (Template, Unit, me) ->
+        pp f "functor $()@;->@;%a" (module_expr ctxt) me
+    | Pmod_functor (Template, Named (s, mt), me) ->
+        pp f "functor@ $(%s@ :@ %a)@;->@;%a"
+          (Option.value s.txt ~default:"_")
+          (module_type ctxt) mt (module_expr ctxt) me
+    | Pmod_apply (Plain, me1, me2) ->
         pp f "(%a)(%a)" (module_expr ctxt) me1 (module_expr ctxt) me2
         (* Cf: #7200 *)
-    | Pmod_apply_unit me1 ->
+    | Pmod_apply_unit (Plain, me1) ->
         pp f "(%a)()" (module_expr ctxt) me1
+    | Pmod_apply (Template, me1, me2) ->
+        pp f "(%a)$(%a)" (module_expr ctxt) me1 (module_expr ctxt) me2
+    | Pmod_apply_unit (Template, me1) ->
+        pp f "(%a)$()" (module_expr ctxt) me1
     | Pmod_unpack e ->
         pp f "(val@ %a)" (expression ctxt) e
     | Pmod_extension e -> extension ctxt f e
@@ -1586,11 +1634,15 @@ and structure_item ctxt f x =
   | Pstr_exception ed -> exception_declaration ctxt f ed
   | Pstr_module x ->
       let rec module_helper = function
-        | {pmod_desc=Pmod_functor(arg_opt,me'); pmod_attributes = []} ->
-            begin match arg_opt with
-            | Unit -> pp f "()"
-            | Named (s, mt) ->
+        | {pmod_desc=Pmod_functor(kind,arg_opt,me'); pmod_attributes = []} ->
+            begin match kind, arg_opt with
+            | Plain, Unit -> pp f "()"
+            | Plain, Named (s, mt) ->
               pp f "(%s:%a)" (Option.value s.txt ~default:"_")
+                (module_type ctxt) mt
+            | Template, Unit -> pp f " $()"
+            | Template, Named (s, mt) ->
+              pp f " $(%s:%a)" (Option.value s.txt ~default:"_")
                 (module_type ctxt) mt
             end;
             module_helper me'

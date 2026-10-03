@@ -3447,7 +3447,9 @@ and lookup_all_args ~errors ~use lid0 env =
   let rec loop_lid_arg args = function
     | Lident _ | Ldot _ as f_lid ->
         (f_lid, args)
-    | Lapply (f_lid, arg_lid) ->
+    | Lapply (Template, _, _) ->
+        Misc.fatal_error "templates: not implemented"
+    | Lapply (Plain, f_lid, arg_lid) ->
         let { txt = arg_lid; loc } = arg_lid in
         let arg_path, arg_md = lookup_module ~errors ~use ~loc arg_lid env in
         loop_lid_arg ((f_lid,arg_path,arg_md.md_type)::args) f_lid.txt

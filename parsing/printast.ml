@@ -39,8 +39,10 @@ let rec fmt_longident_aux f x =
   match x with
   | Longident.Lident (s) -> fprintf f "%s" s
   | Longident.Ldot (y, s) -> fprintf f "%a.%s" fmt_longident_aux y.txt s.txt
-  | Longident.Lapply (y, z) ->
+  | Longident.Lapply (Plain, y, z) ->
       fprintf f "%a(%a)" fmt_longident_aux y.txt fmt_longident_aux z.txt
+  | Longident.Lapply (Template, y, z) ->
+      fprintf f "%a$(%a)" fmt_longident_aux y.txt fmt_longident_aux z.txt
 
 let fmt_longident f x = fprintf f "\"%a\"" fmt_longident_aux x
 
@@ -87,6 +89,11 @@ let fmt_mac_flag f x =
   | Macro -> fprintf f "Macro"
   | Value -> fprintf f "Value"
   | Static -> fprintf f "Static"
+
+let fmt_functor_kind f x =
+  match x with
+  | Template -> fprintf f "Template"
+  | Plain -> fprintf f "Plain"
 
 let fmt_direction_flag f x =
   match x with
@@ -724,11 +731,11 @@ and module_type i ppf x =
   | Pmty_signature (s) ->
       line i ppf "Pmty_signature\n";
       signature i ppf s;
-  | Pmty_functor (Unit, mt2) ->
-      line i ppf "Pmty_functor ()\n";
+  | Pmty_functor (k, Unit, mt2) ->
+      line i ppf "Pmty_functor %a ()\n" fmt_functor_kind k;
       module_type i ppf mt2;
-  | Pmty_functor (Named (s, mt1), mt2) ->
-      line i ppf "Pmty_functor %a\n" fmt_str_opt_loc s;
+  | Pmty_functor (k, Named (s, mt1), mt2) ->
+      line i ppf "Pmty_functor %a %a\n" fmt_functor_kind k fmt_str_opt_loc s;
       module_type i ppf mt1;
       module_type i ppf mt2;
   | Pmty_with (mt, l) ->
@@ -842,19 +849,19 @@ and module_expr i ppf x =
   | Pmod_structure (s) ->
       line i ppf "Pmod_structure\n";
       structure i ppf s;
-  | Pmod_functor (Unit, me) ->
-      line i ppf "Pmod_functor ()\n";
+  | Pmod_functor (k, Unit, me) ->
+      line i ppf "Pmod_functor %a ()\n" fmt_functor_kind k;
       module_expr i ppf me;
-  | Pmod_functor (Named (s, mt), me) ->
-      line i ppf "Pmod_functor %a\n" fmt_str_opt_loc s;
+  | Pmod_functor (k, Named (s, mt), me) ->
+      line i ppf "Pmod_functor %a %a\n" fmt_functor_kind k fmt_str_opt_loc s;
       module_type i ppf mt;
       module_expr i ppf me;
-  | Pmod_apply (me1, me2) ->
-      line i ppf "Pmod_apply\n";
+  | Pmod_apply (k, me1, me2) ->
+      line i ppf "Pmod_apply %a\n" fmt_functor_kind k;
       module_expr i ppf me1;
       module_expr i ppf me2;
-  | Pmod_apply_unit me1 ->
-      line i ppf "Pmod_apply_unit\n";
+  | Pmod_apply_unit (k, me1) ->
+      line i ppf "Pmod_apply_unit %a\n" fmt_functor_kind k;
       module_expr i ppf me1
   | Pmod_constraint (me, mt) ->
       line i ppf "Pmod_constraint\n";

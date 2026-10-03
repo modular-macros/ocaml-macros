@@ -323,8 +323,10 @@ module Pp = struct
   let rec longident ppf = function
     | Longident.Lident s -> fprintf ppf "%s" s
     | Longident.Ldot (l,s) -> fprintf ppf "%a.%s"  longident l.txt s.txt
-    | Longident.Lapply(f,x) ->
+    | Longident.Lapply(Plain,f,x) ->
         fprintf ppf "%a(%a)" longident f.txt longident x.txt
+    | Longident.Lapply(Template,f,x) ->
+        fprintf ppf "%a$(%a)" longident f.txt longident x.txt
 
   let color ppf = function
     | Decoration.Named s -> fprintf ppf "%s" s

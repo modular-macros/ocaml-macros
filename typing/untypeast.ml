@@ -93,7 +93,8 @@ let rec lident_of_path =
   function
   | Path.Pident id -> Longident.Lident (Ident.name id)
   | Path.Papply (p1, p2) ->
-      Longident.Lapply (noloc_lident_of_path p1, noloc_lident_of_path p2)
+      Longident.Lapply
+        (Plain, noloc_lident_of_path p1, noloc_lident_of_path p2)
   | Path.Pdot (p, s) | Path.Pextra_ty (p, Pcstr_ty s) ->
       Longident.Ldot (noloc_lident_of_path p, mknoloc s)
   | Path.Pextra_ty (p, _) -> lident_of_path p
@@ -684,7 +685,8 @@ let module_type (sub : mapper) mty =
     | Tmty_alias (_path, lid) -> Pmty_alias (map_loc sub lid)
     | Tmty_signature sg -> Pmty_signature (sub.signature sub sg)
     | Tmty_functor (arg, mtype2) ->
-        Pmty_functor (functor_parameter sub arg, sub.module_type sub mtype2)
+        Pmty_functor
+          (Plain, functor_parameter sub arg, sub.module_type sub mtype2)
     | Tmty_with (mtype, list) ->
         Pmty_with (sub.module_type sub mtype,
           List.map (sub.with_constraint sub) list)
@@ -722,12 +724,12 @@ let module_expr (sub : mapper) mexpr =
           | Tmod_structure st -> Pmod_structure (sub.structure sub st)
           | Tmod_functor (arg, mexpr) ->
               Pmod_functor
-                (functor_parameter sub arg, sub.module_expr sub mexpr)
+                (Plain, functor_parameter sub arg, sub.module_expr sub mexpr)
           | Tmod_apply (mexp1, mexp2, _) ->
-              Pmod_apply (sub.module_expr sub mexp1,
+              Pmod_apply (Plain, sub.module_expr sub mexp1,
                           sub.module_expr sub mexp2)
           | Tmod_apply_unit mexp1 ->
-              Pmod_apply_unit (sub.module_expr sub mexp1)
+              Pmod_apply_unit (Plain, sub.module_expr sub mexp1)
           | Tmod_constraint (mexpr, _, Tmodtype_explicit mtype, _) ->
               Pmod_constraint (sub.module_expr sub mexpr,
                 sub.module_type sub mtype)

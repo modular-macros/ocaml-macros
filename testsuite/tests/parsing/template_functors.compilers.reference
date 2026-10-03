@@ -1,0 +1,568 @@
+[
+  structure_item (template_functors.ml[12,334+0]..[12,334+30])
+    Pstr_modtype "S" (template_functors.ml[12,334+12]..[12,334+13])
+      module_type (template_functors.ml[12,334+16]..[12,334+30])
+        Pmty_signature
+        [
+          signature_item (template_functors.ml[12,334+20]..[12,334+26])
+            Psig_type Rec
+            [
+              type_declaration "t" (template_functors.ml[12,334+25]..[12,334+26]) (template_functors.ml[12,334+20]..[12,334+26])
+                ptype_params =
+                  []
+                ptype_constraints =
+                  []
+                ptype_kind =
+                  Ptype_abstract
+                ptype_private = Public
+                ptype_manifest =
+                  None
+            ]
+        ]
+  structure_item (template_functors.ml[16,386+0]..[16,386+43])
+    Pstr_module
+    "F1" (template_functors.ml[16,386+7]..[16,386+9])
+      module_expr (template_functors.ml[16,386+9]..[16,386+43])
+        Pmod_functor Template "X" (template_functors.ml[16,386+11]..[16,386+12])
+        module_type (template_functors.ml[16,386+15]..[16,386+16])
+          Pmty_ident "S" (template_functors.ml[16,386+15]..[16,386+16])
+        module_expr (template_functors.ml[16,386+20]..[16,386+43])
+          Pmod_structure
+          [
+            structure_item (template_functors.ml[16,386+27]..[16,386+39])
+              Pstr_type Rec
+              [
+                type_declaration "t" (template_functors.ml[16,386+32]..[16,386+33]) (template_functors.ml[16,386+27]..[16,386+39])
+                  ptype_params =
+                    []
+                  ptype_constraints =
+                    []
+                  ptype_kind =
+                    Ptype_abstract
+                  ptype_private = Public
+                  ptype_manifest =
+                    Some
+                      core_type (template_functors.ml[16,386+36]..[16,386+39])
+                        Ptyp_constr "X.t" (template_functors.ml[16,386+36]..[16,386+39])
+                        []
+              ]
+          ]
+  structure_item (template_functors.ml[17,430+0]..[17,430+55])
+    Pstr_module
+    "F2" (template_functors.ml[17,430+7]..[17,430+9])
+      module_expr (template_functors.ml[17,430+20]..[17,430+55])
+        Pmod_functor Template "X" (template_functors.ml[17,430+22]..[17,430+23])
+        module_type (template_functors.ml[17,430+26]..[17,430+27])
+          Pmty_ident "S" (template_functors.ml[17,430+26]..[17,430+27])
+        module_expr (template_functors.ml[17,430+32]..[17,430+55])
+          Pmod_structure
+          [
+            structure_item (template_functors.ml[17,430+39]..[17,430+51])
+              Pstr_type Rec
+              [
+                type_declaration "t" (template_functors.ml[17,430+44]..[17,430+45]) (template_functors.ml[17,430+39]..[17,430+51])
+                  ptype_params =
+                    []
+                  ptype_constraints =
+                    []
+                  ptype_kind =
+                    Ptype_abstract
+                  ptype_private = Public
+                  ptype_manifest =
+                    Some
+                      core_type (template_functors.ml[17,430+48]..[17,430+51])
+                        Ptyp_constr "X.t" (template_functors.ml[17,430+48]..[17,430+51])
+                        []
+              ]
+          ]
+  structure_item (template_functors.ml[20,534+0]..[20,534+43])
+    Pstr_module
+    "F3" (template_functors.ml[20,534+7]..[20,534+9])
+      module_expr (template_functors.ml[20,534+9]..[20,534+43])
+        Pmod_functor Template "_" (template_functors.ml[20,534+11]..[20,534+12])
+        module_type (template_functors.ml[20,534+15]..[20,534+16])
+          Pmty_ident "S" (template_functors.ml[20,534+15]..[20,534+16])
+        module_expr (template_functors.ml[20,534+20]..[20,534+43])
+          Pmod_structure
+          [
+            structure_item (template_functors.ml[20,534+27]..[20,534+39])
+              Pstr_type Rec
+              [
+                type_declaration "t" (template_functors.ml[20,534+32]..[20,534+33]) (template_functors.ml[20,534+27]..[20,534+39])
+                  ptype_params =
+                    []
+                  ptype_constraints =
+                    []
+                  ptype_kind =
+                    Ptype_abstract
+                  ptype_private = Public
+                  ptype_manifest =
+                    Some
+                      core_type (template_functors.ml[20,534+36]..[20,534+39])
+                        Ptyp_constr "int" (template_functors.ml[20,534+36]..[20,534+39])
+                        []
+              ]
+          ]
+  structure_item (template_functors.ml[23,636+0]..[23,636+38])
+    Pstr_module
+    "F4" (template_functors.ml[23,636+7]..[23,636+9])
+      module_expr (template_functors.ml[23,636+9]..[23,636+38])
+        Pmod_functor Template ()
+        module_expr (template_functors.ml[23,636+15]..[23,636+38])
+          Pmod_structure
+          [
+            structure_item (template_functors.ml[23,636+22]..[23,636+34])
+              Pstr_type Rec
+              [
+                type_declaration "t" (template_functors.ml[23,636+27]..[23,636+28]) (template_functors.ml[23,636+22]..[23,636+34])
+                  ptype_params =
+                    []
+                  ptype_constraints =
+                    []
+                  ptype_kind =
+                    Ptype_abstract
+                  ptype_private = Public
+                  ptype_manifest =
+                    Some
+                      core_type (template_functors.ml[23,636+31]..[23,636+34])
+                        Ptyp_constr "int" (template_functors.ml[23,636+31]..[23,636+34])
+                        []
+              ]
+          ]
+  structure_item (template_functors.ml[24,675+0]..[24,675+50])
+    Pstr_module
+    "F5" (template_functors.ml[24,675+7]..[24,675+9])
+      module_expr (template_functors.ml[24,675+20]..[24,675+50])
+        Pmod_functor Template ()
+        module_expr (template_functors.ml[24,675+27]..[24,675+50])
+          Pmod_structure
+          [
+            structure_item (template_functors.ml[24,675+34]..[24,675+46])
+              Pstr_type Rec
+              [
+                type_declaration "t" (template_functors.ml[24,675+39]..[24,675+40]) (template_functors.ml[24,675+34]..[24,675+46])
+                  ptype_params =
+                    []
+                  ptype_constraints =
+                    []
+                  ptype_kind =
+                    Ptype_abstract
+                  ptype_private = Public
+                  ptype_manifest =
+                    Some
+                      core_type (template_functors.ml[24,675+43]..[24,675+46])
+                        Ptyp_constr "int" (template_functors.ml[24,675+43]..[24,675+46])
+                        []
+              ]
+          ]
+  structure_item (template_functors.ml[27,800+0]..[27,800+56])
+    Pstr_module
+    "F6" (template_functors.ml[27,800+7]..[27,800+9])
+      module_expr (template_functors.ml[27,800+9]..[27,800+56])
+        Pmod_functor Plain "X" (template_functors.ml[27,800+10]..[27,800+11])
+        module_type (template_functors.ml[27,800+14]..[27,800+15])
+          Pmty_ident "S" (template_functors.ml[27,800+14]..[27,800+15])
+        module_expr (template_functors.ml[27,800+16]..[27,800+56])
+          Pmod_functor Template "Y" (template_functors.ml[27,800+18]..[27,800+19])
+          module_type (template_functors.ml[27,800+22]..[27,800+23])
+            Pmty_ident "S" (template_functors.ml[27,800+22]..[27,800+23])
+          module_expr (template_functors.ml[27,800+27]..[27,800+56])
+            Pmod_structure
+            [
+              structure_item (template_functors.ml[27,800+34]..[27,800+52])
+                Pstr_type Rec
+                [
+                  type_declaration "t" (template_functors.ml[27,800+39]..[27,800+40]) (template_functors.ml[27,800+34]..[27,800+52])
+                    ptype_params =
+                      []
+                    ptype_constraints =
+                      []
+                    ptype_kind =
+                      Ptype_abstract
+                    ptype_private = Public
+                    ptype_manifest =
+                      Some
+                        core_type (template_functors.ml[27,800+43]..[27,800+52])
+                          Ptyp_tuple
+                          [
+                            None
+                            core_type (template_functors.ml[27,800+43]..[27,800+46])
+                              Ptyp_constr "X.t" (template_functors.ml[27,800+43]..[27,800+46])
+                              []
+                            None
+                            core_type (template_functors.ml[27,800+49]..[27,800+52])
+                              Ptyp_constr "Y.t" (template_functors.ml[27,800+49]..[27,800+52])
+                              []
+                          ]
+                ]
+            ]
+  structure_item (template_functors.ml[28,857+0]..[28,857+56])
+    Pstr_module
+    "F7" (template_functors.ml[28,857+7]..[28,857+9])
+      module_expr (template_functors.ml[28,857+9]..[28,857+56])
+        Pmod_functor Template "X" (template_functors.ml[28,857+11]..[28,857+12])
+        module_type (template_functors.ml[28,857+15]..[28,857+16])
+          Pmty_ident "S" (template_functors.ml[28,857+15]..[28,857+16])
+        module_expr (template_functors.ml[28,857+17]..[28,857+56])
+          Pmod_functor Plain "Y" (template_functors.ml[28,857+18]..[28,857+19])
+          module_type (template_functors.ml[28,857+22]..[28,857+23])
+            Pmty_ident "S" (template_functors.ml[28,857+22]..[28,857+23])
+          module_expr (template_functors.ml[28,857+27]..[28,857+56])
+            Pmod_structure
+            [
+              structure_item (template_functors.ml[28,857+34]..[28,857+52])
+                Pstr_type Rec
+                [
+                  type_declaration "t" (template_functors.ml[28,857+39]..[28,857+40]) (template_functors.ml[28,857+34]..[28,857+52])
+                    ptype_params =
+                      []
+                    ptype_constraints =
+                      []
+                    ptype_kind =
+                      Ptype_abstract
+                    ptype_private = Public
+                    ptype_manifest =
+                      Some
+                        core_type (template_functors.ml[28,857+43]..[28,857+52])
+                          Ptyp_tuple
+                          [
+                            None
+                            core_type (template_functors.ml[28,857+43]..[28,857+46])
+                              Ptyp_constr "X.t" (template_functors.ml[28,857+43]..[28,857+46])
+                              []
+                            None
+                            core_type (template_functors.ml[28,857+49]..[28,857+52])
+                              Ptyp_constr "Y.t" (template_functors.ml[28,857+49]..[28,857+52])
+                              []
+                          ]
+                ]
+            ]
+  structure_item (template_functors.ml[33,1014+0]..[33,1014+40])
+    Pstr_module
+    "A1" (template_functors.ml[33,1014+7]..[33,1014+9])
+      module_expr (template_functors.ml[33,1014+12]..[33,1014+40])
+        Pmod_apply Template
+        module_expr (template_functors.ml[33,1014+12]..[33,1014+14])
+          Pmod_ident "F1" (template_functors.ml[33,1014+12]..[33,1014+14])
+        module_expr (template_functors.ml[33,1014+16]..[33,1014+39])
+          Pmod_structure
+          [
+            structure_item (template_functors.ml[33,1014+23]..[33,1014+35])
+              Pstr_type Rec
+              [
+                type_declaration "t" (template_functors.ml[33,1014+28]..[33,1014+29]) (template_functors.ml[33,1014+23]..[33,1014+35])
+                  ptype_params =
+                    []
+                  ptype_constraints =
+                    []
+                  ptype_kind =
+                    Ptype_abstract
+                  ptype_private = Public
+                  ptype_manifest =
+                    Some
+                      core_type (template_functors.ml[33,1014+32]..[33,1014+35])
+                        Ptyp_constr "int" (template_functors.ml[33,1014+32]..[33,1014+35])
+                        []
+              ]
+          ]
+  structure_item (template_functors.ml[34,1055+0]..[34,1055+17])
+    Pstr_module
+    "A2" (template_functors.ml[34,1055+7]..[34,1055+9])
+      module_expr (template_functors.ml[34,1055+12]..[34,1055+17])
+        Pmod_apply_unit Template
+        module_expr (template_functors.ml[34,1055+12]..[34,1055+14])
+          Pmod_ident "F4" (template_functors.ml[34,1055+12]..[34,1055+14])
+  structure_item (template_functors.ml[35,1073+0]..[35,1073+46])
+    Pstr_module
+    "A3" (template_functors.ml[35,1073+7]..[35,1073+9])
+      module_expr (template_functors.ml[35,1073+12]..[35,1073+46])
+        Pmod_apply Template
+        module_expr (template_functors.ml[35,1073+12]..[35,1073+14])
+          Pmod_ident "F1" (template_functors.ml[35,1073+12]..[35,1073+14])
+        module_expr (template_functors.ml[35,1073+16]..[35,1073+45])
+          Pmod_constraint
+          module_expr (template_functors.ml[35,1073+17]..[35,1073+40])
+            Pmod_structure
+            [
+              structure_item (template_functors.ml[35,1073+24]..[35,1073+36])
+                Pstr_type Rec
+                [
+                  type_declaration "t" (template_functors.ml[35,1073+29]..[35,1073+30]) (template_functors.ml[35,1073+24]..[35,1073+36])
+                    ptype_params =
+                      []
+                    ptype_constraints =
+                      []
+                    ptype_kind =
+                      Ptype_abstract
+                    ptype_private = Public
+                    ptype_manifest =
+                      Some
+                        core_type (template_functors.ml[35,1073+33]..[35,1073+36])
+                          Ptyp_constr "int" (template_functors.ml[35,1073+33]..[35,1073+36])
+                          []
+                ]
+            ]
+          module_type (template_functors.ml[35,1073+43]..[35,1073+44])
+            Pmty_ident "S" (template_functors.ml[35,1073+43]..[35,1073+44])
+  structure_item (template_functors.ml[38,1152+0]..[38,1152+45])
+    Pstr_module
+    "A4" (template_functors.ml[38,1152+7]..[38,1152+9])
+      module_expr (template_functors.ml[38,1152+12]..[38,1152+45])
+        Pmod_apply Template
+        module_expr (template_functors.ml[38,1152+12]..[38,1152+14])
+          Pmod_ident "F1" (template_functors.ml[38,1152+12]..[38,1152+14])
+        module_expr (template_functors.ml[38,1152+16]..[38,1152+44])
+          Pmod_apply Template
+          module_expr (template_functors.ml[38,1152+16]..[38,1152+18])
+            Pmod_ident "F1" (template_functors.ml[38,1152+16]..[38,1152+18])
+          module_expr (template_functors.ml[38,1152+20]..[38,1152+43])
+            Pmod_structure
+            [
+              structure_item (template_functors.ml[38,1152+27]..[38,1152+39])
+                Pstr_type Rec
+                [
+                  type_declaration "t" (template_functors.ml[38,1152+32]..[38,1152+33]) (template_functors.ml[38,1152+27]..[38,1152+39])
+                    ptype_params =
+                      []
+                    ptype_constraints =
+                      []
+                    ptype_kind =
+                      Ptype_abstract
+                    ptype_private = Public
+                    ptype_manifest =
+                      Some
+                        core_type (template_functors.ml[38,1152+36]..[38,1152+39])
+                          Ptyp_constr "int" (template_functors.ml[38,1152+36]..[38,1152+39])
+                          []
+                ]
+            ]
+  structure_item (template_functors.ml[39,1198+0]..[39,1198+65])
+    Pstr_module
+    "A5" (template_functors.ml[39,1198+7]..[39,1198+9])
+      module_expr (template_functors.ml[39,1198+12]..[39,1198+65])
+        Pmod_apply Template
+        module_expr (template_functors.ml[39,1198+12]..[39,1198+39])
+          Pmod_apply Plain
+          module_expr (template_functors.ml[39,1198+12]..[39,1198+14])
+            Pmod_ident "F6" (template_functors.ml[39,1198+12]..[39,1198+14])
+          module_expr (template_functors.ml[39,1198+15]..[39,1198+38])
+            Pmod_structure
+            [
+              structure_item (template_functors.ml[39,1198+22]..[39,1198+34])
+                Pstr_type Rec
+                [
+                  type_declaration "t" (template_functors.ml[39,1198+27]..[39,1198+28]) (template_functors.ml[39,1198+22]..[39,1198+34])
+                    ptype_params =
+                      []
+                    ptype_constraints =
+                      []
+                    ptype_kind =
+                      Ptype_abstract
+                    ptype_private = Public
+                    ptype_manifest =
+                      Some
+                        core_type (template_functors.ml[39,1198+31]..[39,1198+34])
+                          Ptyp_constr "int" (template_functors.ml[39,1198+31]..[39,1198+34])
+                          []
+                ]
+            ]
+        module_expr (template_functors.ml[39,1198+41]..[39,1198+64])
+          Pmod_structure
+          [
+            structure_item (template_functors.ml[39,1198+48]..[39,1198+60])
+              Pstr_type Rec
+              [
+                type_declaration "t" (template_functors.ml[39,1198+53]..[39,1198+54]) (template_functors.ml[39,1198+48]..[39,1198+60])
+                  ptype_params =
+                    []
+                  ptype_constraints =
+                    []
+                  ptype_kind =
+                    Ptype_abstract
+                  ptype_private = Public
+                  ptype_manifest =
+                    Some
+                      core_type (template_functors.ml[39,1198+57]..[39,1198+60])
+                        Ptyp_constr "int" (template_functors.ml[39,1198+57]..[39,1198+60])
+                        []
+              ]
+          ]
+  structure_item (template_functors.ml[42,1331+0]..[42,1331+66])
+    Pstr_module
+    "A6" (template_functors.ml[42,1331+7]..[42,1331+9])
+      module_expr (template_functors.ml[42,1331+12]..[42,1331+66])
+        Pmod_apply Template
+        module_expr (template_functors.ml[42,1331+12]..[42,1331+40])
+          Pmod_apply Template
+          module_expr (template_functors.ml[42,1331+12]..[42,1331+14])
+            Pmod_ident "F1" (template_functors.ml[42,1331+12]..[42,1331+14])
+          module_expr (template_functors.ml[42,1331+16]..[42,1331+39])
+            Pmod_structure
+            [
+              structure_item (template_functors.ml[42,1331+23]..[42,1331+35])
+                Pstr_type Rec
+                [
+                  type_declaration "t" (template_functors.ml[42,1331+28]..[42,1331+29]) (template_functors.ml[42,1331+23]..[42,1331+35])
+                    ptype_params =
+                      []
+                    ptype_constraints =
+                      []
+                    ptype_kind =
+                      Ptype_abstract
+                    ptype_private = Public
+                    ptype_manifest =
+                      Some
+                        core_type (template_functors.ml[42,1331+32]..[42,1331+35])
+                          Ptyp_constr "int" (template_functors.ml[42,1331+32]..[42,1331+35])
+                          []
+                ]
+            ]
+        module_expr (template_functors.ml[42,1331+42]..[42,1331+65])
+          Pmod_structure
+          [
+            structure_item (template_functors.ml[42,1331+49]..[42,1331+61])
+              Pstr_type Rec
+              [
+                type_declaration "t" (template_functors.ml[42,1331+54]..[42,1331+55]) (template_functors.ml[42,1331+49]..[42,1331+61])
+                  ptype_params =
+                    []
+                  ptype_constraints =
+                    []
+                  ptype_kind =
+                    Ptype_abstract
+                  ptype_private = Public
+                  ptype_manifest =
+                    Some
+                      core_type (template_functors.ml[42,1331+58]..[42,1331+61])
+                        Ptyp_constr "int" (template_functors.ml[42,1331+58]..[42,1331+61])
+                        []
+              ]
+          ]
+  structure_item (template_functors.ml[46,1467+0]..[46,1467+30])
+    Pstr_modtype "T1" (template_functors.ml[46,1467+12]..[46,1467+14])
+      module_type (template_functors.ml[46,1467+17]..[46,1467+30])
+        Pmty_functor Template "X" (template_functors.ml[46,1467+19]..[46,1467+20])
+        module_type (template_functors.ml[46,1467+23]..[46,1467+24])
+          Pmty_ident "S" (template_functors.ml[46,1467+23]..[46,1467+24])
+        module_type (template_functors.ml[46,1467+29]..[46,1467+30])
+          Pmty_ident "S" (template_functors.ml[46,1467+29]..[46,1467+30])
+  structure_item (template_functors.ml[47,1498+0]..[47,1498+30])
+    Pstr_modtype "T2" (template_functors.ml[47,1498+12]..[47,1498+14])
+      module_type (template_functors.ml[47,1498+17]..[47,1498+30])
+        Pmty_functor Template "_" (template_functors.ml[47,1498+19]..[47,1498+20])
+        module_type (template_functors.ml[47,1498+23]..[47,1498+24])
+          Pmty_ident "S" (template_functors.ml[47,1498+23]..[47,1498+24])
+        module_type (template_functors.ml[47,1498+29]..[47,1498+30])
+          Pmty_ident "S" (template_functors.ml[47,1498+29]..[47,1498+30])
+  structure_item (template_functors.ml[48,1529+0]..[48,1529+26])
+    Pstr_modtype "T3" (template_functors.ml[48,1529+12]..[48,1529+14])
+      module_type (template_functors.ml[48,1529+17]..[48,1529+26])
+        Pmty_functor Template "_" (_none_[0,0+-1]..[0,0+-1]) ghost
+        module_type (template_functors.ml[48,1529+19]..[48,1529+20])
+          Pmty_ident "S" (template_functors.ml[48,1529+19]..[48,1529+20])
+        module_type (template_functors.ml[48,1529+25]..[48,1529+26])
+          Pmty_ident "S" (template_functors.ml[48,1529+25]..[48,1529+26])
+  structure_item (template_functors.ml[49,1556+0]..[49,1556+25])
+    Pstr_modtype "T4" (template_functors.ml[49,1556+12]..[49,1556+14])
+      module_type (template_functors.ml[49,1556+17]..[49,1556+25])
+        Pmty_functor Template ()
+        module_type (template_functors.ml[49,1556+24]..[49,1556+25])
+          Pmty_ident "S" (template_functors.ml[49,1556+24]..[49,1556+25])
+  structure_item (template_functors.ml[53,1694+0]..[53,1694+31])
+    Pstr_modtype "T5" (template_functors.ml[53,1694+12]..[53,1694+14])
+      module_type (template_functors.ml[53,1694+17]..[53,1694+31])
+        Pmty_functor Template "_" (_none_[0,0+-1]..[0,0+-1]) ghost
+        module_type (template_functors.ml[53,1694+19]..[53,1694+20])
+          Pmty_ident "S" (template_functors.ml[53,1694+19]..[53,1694+20])
+        module_type (template_functors.ml[53,1694+25]..[53,1694+31])
+          Pmty_functor Plain "_" (_none_[0,0+-1]..[0,0+-1]) ghost
+          module_type (template_functors.ml[53,1694+25]..[53,1694+26])
+            Pmty_ident "S" (template_functors.ml[53,1694+25]..[53,1694+26])
+          module_type (template_functors.ml[53,1694+30]..[53,1694+31])
+            Pmty_ident "S" (template_functors.ml[53,1694+30]..[53,1694+31])
+  structure_item (template_functors.ml[55,1727+0]..[55,1727+41])
+    Pstr_modtype "T6" (template_functors.ml[55,1727+12]..[55,1727+14])
+      module_type (template_functors.ml[55,1727+17]..[55,1727+41])
+        Pmty_functor Plain "X" (template_functors.ml[55,1727+18]..[55,1727+19])
+        module_type (template_functors.ml[55,1727+22]..[55,1727+23])
+          Pmty_ident "S" (template_functors.ml[55,1727+22]..[55,1727+23])
+        module_type (template_functors.ml[55,1727+28]..[55,1727+41])
+          Pmty_functor Template "Y" (template_functors.ml[55,1727+30]..[55,1727+31])
+          module_type (template_functors.ml[55,1727+34]..[55,1727+35])
+            Pmty_ident "S" (template_functors.ml[55,1727+34]..[55,1727+35])
+          module_type (template_functors.ml[55,1727+40]..[55,1727+41])
+            Pmty_ident "S" (template_functors.ml[55,1727+40]..[55,1727+41])
+  structure_item (template_functors.ml[56,1769+0]..[56,1769+41])
+    Pstr_modtype "T7" (template_functors.ml[56,1769+12]..[56,1769+14])
+      module_type (template_functors.ml[56,1769+17]..[56,1769+41])
+        Pmty_functor Template "X" (template_functors.ml[56,1769+19]..[56,1769+20])
+        module_type (template_functors.ml[56,1769+23]..[56,1769+24])
+          Pmty_ident "S" (template_functors.ml[56,1769+23]..[56,1769+24])
+        module_type (template_functors.ml[56,1769+29]..[56,1769+41])
+          Pmty_functor Plain "Y" (template_functors.ml[56,1769+30]..[56,1769+31])
+          module_type (template_functors.ml[56,1769+34]..[56,1769+35])
+            Pmty_ident "S" (template_functors.ml[56,1769+34]..[56,1769+35])
+          module_type (template_functors.ml[56,1769+40]..[56,1769+41])
+            Pmty_ident "S" (template_functors.ml[56,1769+40]..[56,1769+41])
+  structure_item (template_functors.ml[58,1812+0]..[62,1904+3])
+    Pstr_modtype "T8" (template_functors.ml[58,1812+12]..[58,1812+14])
+      module_type (template_functors.ml[58,1812+17]..[62,1904+3])
+        Pmty_signature
+        [
+          signature_item (template_functors.ml[59,1833+2]..[59,1833+22])
+            Psig_module "F" (template_functors.ml[59,1833+9]..[59,1833+10])
+            module_type (template_functors.ml[59,1833+10]..[59,1833+22])
+              Pmty_functor Template "X" (template_functors.ml[59,1833+12]..[59,1833+13])
+              module_type (template_functors.ml[59,1833+16]..[59,1833+17])
+                Pmty_ident "S" (template_functors.ml[59,1833+16]..[59,1833+17])
+              module_type (template_functors.ml[59,1833+21]..[59,1833+22])
+                Pmty_ident "S" (template_functors.ml[59,1833+21]..[59,1833+22])
+          signature_item (template_functors.ml[60,1856+2]..[60,1856+17])
+            Psig_module "G" (template_functors.ml[60,1856+9]..[60,1856+10])
+            module_type (template_functors.ml[60,1856+10]..[60,1856+17])
+              Pmty_functor Template ()
+              module_type (template_functors.ml[60,1856+16]..[60,1856+17])
+                Pmty_ident "S" (template_functors.ml[60,1856+16]..[60,1856+17])
+          signature_item (template_functors.ml[61,1874+2]..[61,1874+29])
+            Psig_module "H" (template_functors.ml[61,1874+9]..[61,1874+10])
+            module_type (template_functors.ml[61,1874+10]..[61,1874+29])
+              Pmty_functor Plain "X" (template_functors.ml[61,1874+11]..[61,1874+12])
+              module_type (template_functors.ml[61,1874+15]..[61,1874+16])
+                Pmty_ident "S" (template_functors.ml[61,1874+15]..[61,1874+16])
+              module_type (template_functors.ml[61,1874+17]..[61,1874+29])
+                Pmty_functor Template "Y" (template_functors.ml[61,1874+19]..[61,1874+20])
+                module_type (template_functors.ml[61,1874+23]..[61,1874+24])
+                  Pmty_ident "S" (template_functors.ml[61,1874+23]..[61,1874+24])
+                module_type (template_functors.ml[61,1874+28]..[61,1874+29])
+                  Pmty_ident "S" (template_functors.ml[61,1874+28]..[61,1874+29])
+        ]
+  structure_item (template_functors.ml[66,1994+0]..[66,1994+25])
+    Pstr_modtype "T10" (template_functors.ml[66,1994+12]..[66,1994+15])
+      module_type (template_functors.ml[66,1994+18]..[66,1994+25])
+        Pmty_functor Template "_" (_none_[0,0+-1]..[0,0+-1]) ghost
+        module_type (template_functors.ml[66,1994+18]..[66,1994+20])
+          Pmty_ident "S" (template_functors.ml[66,1994+18]..[66,1994+20])
+        module_type (template_functors.ml[66,1994+24]..[66,1994+25])
+          Pmty_ident "S" (template_functors.ml[66,1994+24]..[66,1994+25])
+  structure_item (template_functors.ml[67,2020+0]..[67,2020+49])
+    Pstr_modtype "T11" (template_functors.ml[67,2020+12]..[67,2020+15])
+      module_type (template_functors.ml[67,2020+18]..[67,2020+49])
+        Pmty_functor Template "_" (_none_[0,0+-1]..[0,0+-1]) ghost
+        module_type (template_functors.ml[67,2020+18]..[67,2020+22])
+          Pmty_ident "M.S" (template_functors.ml[67,2020+18]..[67,2020+22])
+        module_type (template_functors.ml[67,2020+26]..[67,2020+49])
+          Pmty_functor Template "_" (_none_[0,0+-1]..[0,0+-1]) ghost
+          module_type (template_functors.ml[67,2020+26]..[67,2020+28])
+            Pmty_ident "S" (template_functors.ml[67,2020+26]..[67,2020+28])
+          module_type (template_functors.ml[67,2020+32]..[67,2020+49])
+            Pmty_functor Plain "X" (template_functors.ml[67,2020+33]..[67,2020+34])
+            module_type (template_functors.ml[67,2020+37]..[67,2020+38])
+              Pmty_ident "S" (template_functors.ml[67,2020+37]..[67,2020+38])
+            module_type (template_functors.ml[67,2020+43]..[67,2020+49])
+              Pmty_functor Plain "_" (_none_[0,0+-1]..[0,0+-1]) ghost
+              module_type (template_functors.ml[67,2020+43]..[67,2020+44])
+                Pmty_ident "S" (template_functors.ml[67,2020+43]..[67,2020+44])
+              module_type (template_functors.ml[67,2020+48]..[67,2020+49])
+                Pmty_ident "S" (template_functors.ml[67,2020+48]..[67,2020+49])
+]
+

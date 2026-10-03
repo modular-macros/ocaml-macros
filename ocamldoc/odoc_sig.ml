@@ -1636,7 +1636,7 @@ module Analyser =
                raise (Failure "Parsetree.Pmty_signature signature but not Types.Mty_signature signat")
           )
 
-      | Parsetree.Pmty_functor (param2, module_type2) ->
+      | Parsetree.Pmty_functor (_, param2, module_type2) ->
           (
            let loc = match param2 with Parsetree.Unit -> Location.none
                      | Parsetree.Named (_, pmty) -> pmty.Parsetree.pmty_loc in
@@ -1733,7 +1733,7 @@ module Analyser =
                (* if we're here something's wrong *)
                raise (Failure "Parsetree.Pmty_signature signature but not Types.Mty_signature signat")
           )
-      | Parsetree.Pmty_functor (param2,module_type2) (* of string * module_type * module_type *) ->
+      | Parsetree.Pmty_functor (_, param2,module_type2) (* of string * module_type * module_type *) ->
           (
            match sig_module_type with
              Types.Mty_functor (param, body_module_type) ->

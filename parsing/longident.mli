@@ -28,7 +28,8 @@ open Location
 type t =
     Lident of string
   | Ldot of t loc * string loc
-  | Lapply of t loc * t loc
+  | Lapply of Asttypes.functor_kind * t loc * t loc
+      (** [F(M)], or [F$(M)] for a template *)
 
 (** [same t t'] compares the longidents [t] and [t'] without taking locations
     into account. *)

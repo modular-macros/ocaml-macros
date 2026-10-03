@@ -383,7 +383,7 @@ let index_occurrences binary_annots =
       | Longident.Ldot (lid', _), Path.Pdot (path', _) ->
         reduce_and_store ~namespace lid path;
         index_components module_ lid' path'
-      | Longident.Lapply (lid', lid''), Path.Papply (path', path'') ->
+      | Longident.Lapply (_, lid', lid''), Path.Papply (path', path'') ->
         index_components module_ lid'' path'';
         index_components module_ lid' path'
       | Longident.Lident _, _ ->

@@ -107,7 +107,7 @@ let rec iter_lid sub lid =
   | Ldot (lid, id) ->
     iter_loc_lid sub lid;
     iter_loc iter_string sub id
-  | Lapply (lid, lid') ->
+  | Lapply (_, lid, lid') ->
     iter_loc_lid sub lid;
     iter_loc_lid sub lid'
 
@@ -293,7 +293,7 @@ module MT = struct
     | Pmty_ident s -> iter_loc_lid sub s
     | Pmty_alias s -> iter_loc_lid sub s
     | Pmty_signature sg -> sub.signature sub sg
-    | Pmty_functor (param, mt2) ->
+    | Pmty_functor (_, param, mt2) ->
         iter_functor_param sub param;
         sub.module_type sub mt2
     | Pmty_with (mt, l) ->
@@ -351,13 +351,13 @@ module M = struct
     match desc with
     | Pmod_ident x -> iter_loc_lid sub x
     | Pmod_structure str -> sub.structure sub str
-    | Pmod_functor (param, body) ->
+    | Pmod_functor (_, param, body) ->
         iter_functor_param sub param;
         sub.module_expr sub body
-    | Pmod_apply (m1, m2) ->
+    | Pmod_apply (_, m1, m2) ->
         sub.module_expr sub m1;
         sub.module_expr sub m2
-    | Pmod_apply_unit m1 ->
+    | Pmod_apply_unit (_, m1) ->
         sub.module_expr sub m1
     | Pmod_constraint (m, mty) ->
         sub.module_expr sub m; sub.module_type sub mty

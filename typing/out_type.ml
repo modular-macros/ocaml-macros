@@ -575,7 +575,8 @@ let rec lid_of_path = function
       Longident.Ldot (Location.mknoloc (lid_of_path p1), Location.mknoloc s)
   | Path.Papply (p1, p2) ->
       Longident.Lapply
-        (Location.mknoloc (lid_of_path p1), Location.mknoloc (lid_of_path p2))
+        (Plain,
+         Location.mknoloc (lid_of_path p1), Location.mknoloc (lid_of_path p2))
   | Path.Pextra_ty (p, Pext_ty) -> lid_of_path p
 
 let is_unambiguous path env =

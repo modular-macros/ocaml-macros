@@ -433,9 +433,9 @@ let indexop_unclosed_error loc_s s loc_e =
   let left, right = paren_to_strings s in
   unclosed left loc_s right loc_e
 
-let lapply ~loc p1 loc_p1 p2 loc_p2 =
+let lapply ~loc kind p1 loc_p1 p2 loc_p2 =
   if !Clflags.applicative_functors
-  then Lapply(mkrhs p1 loc_p1, mkrhs p2 loc_p2)
+  then Lapply(kind, mkrhs p1 loc_p1, mkrhs p2 loc_p2)
   else raise (Syntaxerr.Error(
                   Syntaxerr.Applicative_path (make_loc loc)))
 
@@ -685,8 +685,9 @@ let mkfunction params body_constraint body =
           mkghost_newtype_function_body newtypes body_constraint body_exp
 
 let mk_functor_typ args mty =
-  List.fold_left (fun acc (startpos, arg) ->
-      mkmty ~loc:(startpos, mty.pmty_loc.loc_end) (Pmty_functor (arg, acc)))
+  List.fold_left (fun acc (startpos, kind, arg) ->
+      mkmty ~loc:(startpos, mty.pmty_loc.loc_end)
+        (Pmty_functor (kind, arg, acc)))
     mty args
 
 (* Alternatively, we could keep the generic module type in the Parsetree
@@ -1415,12 +1416,33 @@ parse_any_longident:
        later processed using [fold_left]. *)
 ;
 
+(* A functor argument, of either kind.  The two kinds of parameter may
+   be mixed in a single curried definition or type, as in
+   [functor (X : A) $(Y : B) -> ME]. *)
 functor_arg:
+    arg = plain_functor_arg
+      { let (startpos, param) = arg in startpos, Plain, param }
+  | arg = template_functor_arg
+      { let (startpos, param) = arg in startpos, Template, param }
+;
+
+plain_functor_arg:
     (* An anonymous and untyped argument. *)
     LPAREN RPAREN
       { $startpos, Unit }
   | (* An argument accompanied with an explicit type. *)
     LPAREN x = mkrhs(module_name) COLON mty = module_type RPAREN
+      { $startpos, Named (x, mty) }
+;
+
+(* A template's parameter opens with "$(", a single token: the dollar
+   is glued to the parenthesis, as in a splice. *)
+template_functor_arg:
+    (* An anonymous and untyped argument. *)
+    DOLLARLPAREN RPAREN
+      { $startpos, Unit }
+  | (* An argument accompanied with an explicit type. *)
+    DOLLARLPAREN x = mkrhs(module_name) COLON mty = module_type RPAREN
       { $startpos, Named (x, mty) }
 ;
 
@@ -1451,8 +1473,8 @@ module_expr:
       { expecting $loc($1) "struct" }
   | FUNCTOR attrs = attributes args = functor_args MINUSGREATER me = module_expr
       { wrap_mod_attrs ~loc:$sloc attrs (
-          List.fold_left (fun acc (startpos, arg) ->
-            mkmod ~loc:(startpos, $endpos) (Pmod_functor (arg, acc))
+          List.fold_left (fun acc (startpos, kind, arg) ->
+            mkmod ~loc:(startpos, $endpos) (Pmod_functor (kind, arg, acc))
           ) me args
         ) }
   | me = paren_module_expr
@@ -1465,10 +1487,17 @@ module_expr:
         { Pmod_ident x }
     | (* In a functor application, the actual argument must be parenthesized. *)
       me1 = module_expr me2 = paren_module_expr
-        { Pmod_apply(me1, me2) }
+        { Pmod_apply(Plain, me1, me2) }
     | (* Functor applied to unit. *)
       me = module_expr LPAREN RPAREN
-        { Pmod_apply_unit me }
+        { Pmod_apply_unit (Plain, me) }
+    | (* In a template application the argument is delimited already,
+         so it need not be parenthesized again. *)
+      me1 = module_expr DOLLARLPAREN me2 = module_expr RPAREN
+        { Pmod_apply(Template, me1, me2) }
+    | (* Template applied to unit. *)
+      me = module_expr DOLLARLPAREN RPAREN
+        { Pmod_apply_unit (Template, me) }
     | (* An extension. *)
       ex = extension
         { Pmod_extension ex }
@@ -1625,8 +1654,8 @@ module_binding_body:
       COLON mty = module_type EQUAL me = module_expr
         { Pmod_constraint(me, mty) }
     | arg_and_pos = functor_arg body = module_binding_body
-        { let (_, arg) = arg_and_pos in
-          Pmod_functor(arg, body) }
+        { let (_, kind, arg) = arg_and_pos in
+          Pmod_functor(kind, arg, body) }
   ) { $1 }
 ;
 
@@ -1778,7 +1807,16 @@ module_type:
         { Pmty_ident $1 }
     | module_type MINUSGREATER module_type
         %prec below_WITH
-        { Pmty_functor(Named (mknoloc None, $1), $3) }
+        { Pmty_functor(Plain, Named (mknoloc None, $1), $3) }
+    | (* A template type whose parameter is not named. *)
+      DOLLARLPAREN dom = module_type RPAREN MINUSGREATER cod = module_type
+        %prec below_WITH
+        { Pmty_functor(Template, Named (mknoloc None, dom), cod) }
+    | (* The same, for a parameter whose type is a name: "$A -> B". *)
+      dom = mkrhs(dollar_mty_longident) MINUSGREATER cod = module_type
+        %prec below_WITH
+        { let dom = mkmty ~loc:$loc(dom) (Pmty_ident dom) in
+          Pmty_functor(Template, Named (mknoloc None, dom), cod) }
     | module_type WITH separated_nonempty_llist(AND, with_constraint)
         { Pmty_with($1, $3) }
 /*  | LPAREN MODULE mkrhs(mod_longident) RPAREN
@@ -1873,8 +1911,8 @@ module_declaration_body:
       { expecting $loc($1) ":" }
   | mkmty(
       arg_and_pos = functor_arg body = module_declaration_body
-        { let (_, arg) = arg_and_pos in
-          Pmty_functor(arg, body) }
+        { let (_, kind, arg) = arg_and_pos in
+          Pmty_functor(kind, arg, body) }
     )
     { $1 }
 ;
@@ -2859,6 +2897,7 @@ static_bindings:
        mklbs ext rec_flag (mklb ~loc:$sloc true body attrs)
      }
 ;
+
 (* A generator, [$let[..] f x = e] *)
 %inline macro_binding:
    DOLLARLET LBRACKETDOTDOTRBRACKET
@@ -4235,6 +4274,13 @@ type_longident:
 mod_longident:
     mk_longident(mod_longident, UIDENT)  { $1 }
 ;
+(* The name of a module type, with the dollar glued to it. *)
+dollar_mty_longident:
+    dollar_mod_longident { $1 }
+  | s = DOLLARLIDENT { Lident s }
+  | p = dollar_mod_longident DOT s = LIDENT
+      { ldot p $loc(p) s $loc(s) }
+;
 (* A module path with the dollar glued to its first component. *)
 dollar_mod_longident:
     s = DOLLARUIDENT { Lident s }
@@ -4244,7 +4290,9 @@ dollar_mod_longident:
 mod_ext_longident:
     mk_longident(mod_ext_longident, UIDENT) { $1 }
   | mod_ext_longident LPAREN mod_ext_longident RPAREN
-      { lapply ~loc:$sloc $1 $loc($1) $3 $loc($3) }
+      { lapply ~loc:$sloc Plain $1 $loc($1) $3 $loc($3) }
+  | mod_ext_longident DOLLARLPAREN mod_ext_longident RPAREN
+      { lapply ~loc:$sloc Template $1 $loc($1) $3 $loc($3) }
   | mod_ext_longident LPAREN error
       { expecting $loc($3) "module path" }
 ;

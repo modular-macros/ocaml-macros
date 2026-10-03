@@ -110,10 +110,10 @@ let rec map_lid sub lid =
       let lid = map_loc_lid sub lid in
       let id = map_loc map_string sub id in
       Ldot (lid, id)
-  | Lapply (lid, lid') ->
+  | Lapply (kind, lid, lid') ->
     let lid = map_loc_lid sub lid in
     let lid' = map_loc_lid sub lid' in
-    Lapply(lid, lid')
+    Lapply(kind, lid, lid')
 
 and map_loc_lid sub loc_lid =
   map_loc map_lid sub loc_lid
@@ -337,8 +337,8 @@ module MT = struct
     | Pmty_ident s -> ident ~loc ~attrs (map_loc_lid sub s)
     | Pmty_alias s -> alias ~loc ~attrs (map_loc_lid sub s)
     | Pmty_signature sg -> signature ~loc ~attrs (sub.signature sub sg)
-    | Pmty_functor (param, mt) ->
-        functor_ ~loc ~attrs
+    | Pmty_functor (kind, param, mt) ->
+        functor_ ~loc ~attrs kind
           (map_functor_param sub param)
           (sub.module_type sub mt)
     | Pmty_with (mt, l) ->
@@ -401,14 +401,15 @@ module M = struct
     match desc with
     | Pmod_ident x -> ident ~loc ~attrs (map_loc_lid sub x)
     | Pmod_structure str -> structure ~loc ~attrs (sub.structure sub str)
-    | Pmod_functor (param, body) ->
-        functor_ ~loc ~attrs
+    | Pmod_functor (kind, param, body) ->
+        functor_ ~loc ~attrs kind
           (map_functor_param sub param)
           (sub.module_expr sub body)
-    | Pmod_apply (m1, m2) ->
-        apply ~loc ~attrs (sub.module_expr sub m1) (sub.module_expr sub m2)
-    | Pmod_apply_unit m1 ->
-        apply_unit ~loc ~attrs (sub.module_expr sub m1)
+    | Pmod_apply (kind, m1, m2) ->
+        apply ~loc ~attrs kind
+          (sub.module_expr sub m1) (sub.module_expr sub m2)
+    | Pmod_apply_unit (kind, m1) ->
+        apply_unit ~loc ~attrs kind (sub.module_expr sub m1)
     | Pmod_constraint (m, mty) ->
         constraint_ ~loc ~attrs (sub.module_expr sub m)
                     (sub.module_type sub mty)

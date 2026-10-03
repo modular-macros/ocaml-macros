@@ -84,8 +84,10 @@ let rec string_of_longident li =
   match li with
   | Longident.Lident s -> s
   | Longident.Ldot(li, s) -> string_of_longident li.txt ^ "." ^ s.txt
-  | Longident.Lapply(l1, l2) ->
+  | Longident.Lapply(Plain, l1, l2) ->
       string_of_longident l1.txt ^ "(" ^ string_of_longident l2.txt ^ ")"
+  | Longident.Lapply(Template, l1, l2) ->
+      string_of_longident l1.txt ^ "$(" ^ string_of_longident l2.txt ^ ")"
 
 let rec string_of_text t =
   let rec iter t_ele =

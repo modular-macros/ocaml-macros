@@ -902,19 +902,30 @@ and module_type =
 and module_type_desc =
   | Pmty_ident of Longident.t loc  (** [Pmty_ident(S)] represents [S] *)
   | Pmty_signature of signature  (** [sig ... end] *)
-  | Pmty_functor of functor_parameter * module_type
-      (** [functor(X : MT1) -> MT2] *)
+  | Pmty_functor of functor_kind * functor_parameter * module_type
+      (** - [functor(X : MT1) -> MT2] when [kind] is
+            {{!Asttypes.functor_kind.Plain}[Plain]},
+          - [$(X : MT1) -> MT2] when [kind] is
+            {{!Asttypes.functor_kind.Template}[Template]}.
+
+          A parameter that is not named is written [MT1 -> MT2] in a
+          functor type, and [$(MT1) -> MT2] in a template type, or
+          [$S -> MT2] when [MT1] is the name [S], capitalised or
+          not. *)
   | Pmty_with of module_type * with_constraint list  (** [MT with ...] *)
   | Pmty_typeof of module_expr  (** [module type of ME] *)
   | Pmty_extension of extension  (** [[%id]] *)
   | Pmty_alias of Longident.t loc  (** [(module M)] *)
 
 and functor_parameter =
-  | Unit  (** [()] *)
+  | Unit  (** [()], or [$()] in a template *)
   | Named of string option loc * module_type
       (** [Named(name, MT)] represents:
             - [(X : MT)] when [name] is [Some X],
-            - [(_ : MT)] when [name] is [None] *)
+            - [(_ : MT)] when [name] is [None].
+
+          In a template the parameter opens with a dollar:
+          [$(X : MT)] and [$(_ : MT)]. *)
 
 and signature = signature_item list
 
@@ -1053,10 +1064,24 @@ and module_expr =
 and module_expr_desc =
   | Pmod_ident of Longident.t loc  (** [X] *)
   | Pmod_structure of structure  (** [struct ... end] *)
-  | Pmod_functor of functor_parameter * module_expr
-      (** [functor(X : MT1) -> ME] *)
-  | Pmod_apply of module_expr * module_expr (** [ME1(ME2)] *)
-  | Pmod_apply_unit of module_expr (** [ME1()] *)
+  | Pmod_functor of functor_kind * functor_parameter * module_expr
+      (** - [functor(X : MT1) -> ME] when [kind] is
+            {{!Asttypes.functor_kind.Plain}[Plain]},
+          - [functor $(X : MT1) -> ME] when [kind] is
+            {{!Asttypes.functor_kind.Template}[Template]}.
+
+          The two kinds may be mixed in one curried definition, as in
+          [functor (X : A) $(Y : B) -> ME]. *)
+  | Pmod_apply of functor_kind * module_expr * module_expr
+      (** - [ME1(ME2)] when [kind] is
+            {{!Asttypes.functor_kind.Plain}[Plain]},
+          - [ME1$(ME2)] when [kind] is
+            {{!Asttypes.functor_kind.Template}[Template]}. *)
+  | Pmod_apply_unit of functor_kind * module_expr
+      (** - [ME1()] when [kind] is
+            {{!Asttypes.functor_kind.Plain}[Plain]},
+          - [ME1$()] when [kind] is
+            {{!Asttypes.functor_kind.Template}[Template]}. *)
   | Pmod_constraint of module_expr * module_type  (** [(ME : MT)] *)
   | Pmod_unpack of expression  (** [(val E)] *)
   | Pmod_extension of extension  (** [[%id]] *)

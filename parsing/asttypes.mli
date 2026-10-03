@@ -52,6 +52,12 @@ type closed_flag = Closed | Open
    closed over the run-time names that the code it builds mentions. *)
 type macro_flag = Macro | Value | Static
 
+(** Templates ([$(X : S) -> ...], applied as [F$(M)]) differ from
+    functors ([(X : S) -> ...], applied as [F(M)]) in that they
+    may mention level -1 components such as macros, and are compiled by
+    instantiation at each application. *)
+type functor_kind = Template | Plain
+
 type label = string
 
 type arg_label =

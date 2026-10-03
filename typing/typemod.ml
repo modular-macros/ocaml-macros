@@ -1112,7 +1112,9 @@ let rec approx_modtype env smty =
       Mty_alias(path)
   | Pmty_signature ssg ->
       Mty_signature(approx_sig env ssg)
-  | Pmty_functor(param, sres) ->
+  | Pmty_functor(Template, _, _) ->
+      Misc.fatal_error "templates: not implemented"
+  | Pmty_functor(Plain, param, sres) ->
       let (param, newenv) =
         match param with
         | Unit -> Types.Unit, env
@@ -1646,7 +1648,9 @@ and transl_modtype_aux env smty =
       let sg = transl_signature env ssg in
       mkmty (Tmty_signature sg) (Mty_signature sg.sig_type) env loc
         smty.pmty_attributes
-  | Pmty_functor(sarg_opt, sres) ->
+  | Pmty_functor(Template, _, _) ->
+      Misc.fatal_error "templates: not implemented"
+  | Pmty_functor(Plain, sarg_opt, sres) ->
       let t_arg, ty_arg, newenv =
         match sarg_opt with
         | Unit -> Unit, Types.Unit, env
@@ -2696,7 +2700,9 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
       if List.length sg' = List.length sg then md, shape else
       wrap_constraint_with_shape env false md
         (Mty_signature sg') shape Tmodtype_implicit
-  | Pmod_functor(arg_opt, sbody) ->
+  | Pmod_functor(Template, _, _) ->
+      Misc.fatal_error "templates: not implemented"
+  | Pmod_functor(Plain, arg_opt, sbody) ->
       let t_arg, ty_arg, newenv, funct_shape_param, funct_body =
         match arg_opt with
         | Unit ->
@@ -2788,7 +2794,9 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
 and type_application loc ~strengthen ~funct_body env smod =
   let rec extract_application ~funct_body env sargs smod =
     match smod.pmod_desc with
-    | Pmod_apply (f, sarg) ->
+    | Pmod_apply (Template, _, _) | Pmod_apply_unit (Template, _) ->
+        Misc.fatal_error "templates: not implemented"
+    | Pmod_apply (Plain, f, sarg) ->
         let arg, shape =
           type_module ~strengthen:true ~funct_body None env sarg
         in
@@ -2804,7 +2812,7 @@ and type_application loc ~strengthen ~funct_body env smod =
           }
         } in
         extract_application ~funct_body env (summary::sargs) f
-    | Pmod_apply_unit f ->
+    | Pmod_apply_unit (Plain, f) ->
         let summary = {
           loc = smod.pmod_loc;
           attributes = smod.pmod_attributes;

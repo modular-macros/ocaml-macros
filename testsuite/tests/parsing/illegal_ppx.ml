@@ -18,7 +18,7 @@ let tfunctor_opt_arg loc =
   H.Typ.(functor_ ~loc (Optional "lbl") (Location.mkloc "M" loc)
     (package_type (Location.mkloc (Longident.Lident "S") loc) []) (any ()))
 let functor_id loc = Location.mkloc (Longident.(
-  Lapply (Location.mknoloc (Lident "F"),  Location.mknoloc (Lident "X")))) loc
+  Lapply (Plain, Location.mknoloc (Lident "F"),  Location.mknoloc (Lident "X")))) loc
 let complex_record loc =
   H.Pat.record ~loc [functor_id loc, H.Pat.any ~loc () ] Asttypes.Closed
 

@@ -52,6 +52,8 @@ type closed_flag = Closed | Open
    closed over the run-time names that the code it builds mentions. *)
 type macro_flag = Macro | Value | Static
 
+type functor_kind = Template | Plain
+
 type label = string
 
 type arg_label =
