@@ -530,11 +530,20 @@ and value_binding =
     vb_loc: Location.t;
   }
 
+(* What the compile-time value of a functor is, for the translation of
+   a coercion: nothing for an ordinary functor; for a mixed functor,
+   one whose result has compile-time components, the block of those of
+   its body. *)
+and functor_coercion_face =
+    Fcf_plain
+  | Fcf_mixed
+
 and module_coercion =
     Tcoerce_none
   | Tcoerce_structure of (int * module_coercion) list *
                          (Ident.t * int * module_coercion) list
-  | Tcoerce_functor of module_coercion * module_coercion
+  | Tcoerce_functor of
+      functor_coercion_face * module_coercion * module_coercion
   | Tcoerce_primitive of primitive_coercion
   (** External declaration coerced to a regular value.
       {[

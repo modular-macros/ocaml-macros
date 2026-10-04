@@ -150,7 +150,7 @@ let rec apply_coercion ~ctx loc strict restr arg =
                 loc)
         in
         wrap_id_pos_list ~ctx loc id_pos_list get_field lam)
-  | Tcoerce_functor(cc_arg, cc_res) ->
+  | Tcoerce_functor(_, cc_arg, cc_res) ->
       let param = Ident.create_local "funarg" in
       let carg = apply_coercion ~ctx loc Alias cc_arg (Lvar param) in
       apply_coercion_result ~ctx loc strict arg [param, Pgenval] [carg] cc_res
@@ -166,7 +166,7 @@ and apply_coercion_field ~ctx loc get_field (pos, cc) =
 
 and apply_coercion_result ~ctx loc strict funct params args cc_res =
   match cc_res with
-  | Tcoerce_functor(cc_arg, cc_res) ->
+  | Tcoerce_functor(_, cc_arg, cc_res) ->
     let param = Ident.create_local "funarg" in
     let arg = apply_coercion ~ctx loc Alias cc_arg (Lvar param) in
     apply_coercion_result ~ctx loc strict funct
@@ -245,8 +245,8 @@ let rec compose_coercions c1 c2 =
                 (p2, compose_coercions c1 c2))
           pc1,
          ids1 @ ids2)
-  | (Tcoerce_functor(arg1, res1), Tcoerce_functor(arg2, res2)) ->
-      Tcoerce_functor(compose_coercions arg2 arg1,
+  | (Tcoerce_functor(face, arg1, res1), Tcoerce_functor(_, arg2, res2)) ->
+      Tcoerce_functor(face, compose_coercions arg2 arg1,
                       compose_coercions res1 res2)
   | (c1, Tcoerce_alias (env, path, c2)) ->
       Tcoerce_alias (env, path, compose_coercions c1 c2)
@@ -540,7 +540,7 @@ let merge_functors ~scopes mexp coercion root_path =
       let arg_coercion, res_coercion =
         match coercion with
         | Tcoerce_none -> Tcoerce_none, Tcoerce_none
-        | Tcoerce_functor (arg_coercion, res_coercion) ->
+        | Tcoerce_functor (_, arg_coercion, res_coercion) ->
           arg_coercion, res_coercion
         | _ -> fatal_error "Translmod.merge_functors: bad coercion"
       in

@@ -110,7 +110,7 @@ module Runtime_coercion = struct
         either
           (first_item_transposition path 0) c
           (first_non_id path 0) c
-    | Tcoerce_functor(arg,res) ->
+    | Tcoerce_functor(_,arg,res) ->
         either
           (first_change_under (InArg::path)) arg
           (first_change_under (InBody::path)) res

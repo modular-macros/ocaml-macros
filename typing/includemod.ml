@@ -388,7 +388,7 @@ let rec print_coercion ppf c =
       pr "@[<2>struct@ %a@ %a@]"
         (print_list print_coercion2) fl
         (print_list print_coercion3) nl
-  | Tcoerce_functor (inp, out) ->
+  | Tcoerce_functor (_, inp, out) ->
       pr "@[<2>functor@ (%a)@ (%a)@]"
         print_coercion inp
         print_coercion out
@@ -623,7 +623,11 @@ and try_modtypes ~core ~direction ~loc env subst mty1 mty2 orig_shape =
             then orig_shape
             else Shape.abs var final_res_shape
           in
-          Ok (Tcoerce_functor(cc_arg, cc_res), final_shape)
+          let face =
+            if Mtype.has_macro_components env res1
+            then Fcf_mixed else Fcf_plain
+          in
+          Ok (Tcoerce_functor(face, cc_arg, cc_res), final_shape)
       | _, Error {Error.symptom = Error.Functor Error.Params res; _} ->
           let got = Error.cons_arg param1 res.got in
           let expected = Error.cons_arg param2 res.expected in
