@@ -1,0 +1,17 @@
+val scale : int
+$val[..] scaled : int expr -> int expr
+$val[..] power : int -> int expr -> int expr
+$val[..] twice : ('a -> 'a) -> 'a -> 'a
+$val[..] constant : unit -> int expr
+val a : int
+val b : int
+val c : int
+$val depth : int
+$val[..] deep : int expr -> int expr
+val d : int
+module M : sig val unit : int $val[..] succ : int expr -> int expr end
+val e : int
+module type S = sig val unit : int $val[..] succ : int expr -> int expr end
+module N : S
+module O : sig val unit : int end
+val f : int

@@ -80,6 +80,8 @@ type error =
   | Non_packable_local_modtype_subst of Path.t
   | With_cannot_remove_packed_modtype of Path.t * module_type
   | Cannot_alias of Path.t
+  | Macro_is_not_function
+  | Macro_binds_not_one_name
   | Macro_in_functor_argument
   | Macro_in_package
   | Macro_in_abstract_modtype
@@ -214,7 +216,7 @@ let has_compile_time_bindings (me : Typedtree.module_expr) =
   let exception Found in
   let structure_item iter (item : Typedtree.structure_item) =
     begin match item.str_desc with
-    | Tstr_value (_, Static, _) -> raise Found
+    | Tstr_value (_, (Macro | Static), _) -> raise Found
     | _ -> ()
     end;
     Tast_iterator.default_iterator.structure_item iter item
@@ -237,6 +239,22 @@ let check_plain_functor_range loc env ~arg =
 
 (* Additional validity checks on type definitions arising from
    recursive modules *)
+
+(* A generator binds one name to a literal function. *)
+let check_macros_are_arrows env valbinds =
+  List.iter
+    (fun {vb_pat; vb_expr} ->
+      (match let_bound_idents [{vb_pat; vb_expr;
+                                vb_rec_kind = Dynamic;
+                                vb_attributes = []; vb_loc = vb_pat.pat_loc}]
+       with
+       | [_] -> ()
+       | _ -> raise (Error (vb_pat.pat_loc, env, Macro_binds_not_one_name)));
+      match vb_expr.exp_desc with
+      | Texp_function _ -> ()
+      | _ -> raise(Error(vb_expr.exp_loc, env, Macro_is_not_function))
+    )
+    valbinds
 
 let check_recmod_typedecls ~abs_env env decls =
   let recmod_ids = List.map fst decls in
@@ -2418,9 +2436,9 @@ let not_principal msg = Warnings.Not_principal (Format_doc.Doc.msg msg)
    recursive bindings are annotated.  [record] is applied to the
    environment of the bindings before the identifiers that they bind
    are read from it. *)
-let type_value_bindings ~names ~shape_map ~def_env ~rec_env ~record
+let type_value_bindings ?macro ~names ~shape_map ~def_env ~rec_env ~record
       rec_flag sdefs =
-  let (defs, newenv) = Typecore.type_binding def_env rec_flag sdefs in
+  let (defs, newenv) = Typecore.type_binding ?macro def_env rec_flag sdefs in
   let defs =
     match rec_flag with
     | Recursive -> Typecore.annotate_recursive_bindings rec_env defs
@@ -2853,14 +2871,31 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         items,
         shape_map,
         newenv
-    | Pstr_value (_, Macro, _) ->
-        Misc.fatal_error "generators: not implemented"
+    | Pstr_value (rec_flag, Macro, sdefs) ->
+        (* The right-hand sides are compile-time code, typed one level
+           down.  The values bound are generators at that level, within
+           a recursive group as well as after it. *)
+        let original_level = Env.get_env_level env in
+        let static_level_env = Env.with_level_down env in
+        let record defs newenv =
+          check_macros_are_arrows static_level_env defs;
+          newenv
+        in
+        let defs, items, shape_map, newenv =
+          type_value_bindings ~macro:Macro ~names ~shape_map
+            ~def_env:static_level_env ~rec_env:env ~record rec_flag sdefs
+        in
+        Tstr_value(rec_flag, Macro, defs),
+        items,
+        shape_map,
+        Env.with_level original_level newenv
     | Pstr_value (rec_flag, Static, sdefs) ->
         (* The right-hand sides are compile-time code, typed one level
            down.  The values bound are static bindings, which record the
            level of the binding. *)
         let original_level = Env.get_env_level env in
-        let static_level_env = Env.with_level_down env in
+        let static_level_env =
+          Env.with_static_init true (Env.with_level_down env) in
         let record defs newenv =
           List.fold_left
             (fun env (id, _, _, _) ->
@@ -2879,7 +2914,7 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         Tstr_value(rec_flag, Static, defs),
         items,
         shape_map,
-        Env.with_level original_level newenv
+        Env.with_static_init false (Env.with_level original_level newenv)
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
         Signature_names.check_value names desc.val_loc desc.val_id;
@@ -3846,14 +3881,26 @@ let report_error ~loc _env = function
          for an anonymous module type.@ %a"
         Style.inline_code (Path.name p)
         Misc.print_see_manual manual_ref
+  | Macro_binds_not_one_name ->
+      Location.errorf ~loc
+        "A generator must bind exactly one name.@ \
+         Its compile-time function occupies that name's position in the\
+       @ module's compile-time block, so a pattern binding none, or\
+       @ several, has nowhere to go."
+  | Macro_is_not_function ->
+      Location.errorf ~loc
+        "A generator must be defined as a function.\
+       @ It is called at compile time, so its definition has to be a\
+       @ literal function rather than an expression of function type."
   | Macro_in_functor_argument ->
       Location.errorf ~loc
         "The argument of a functor cannot contain compile-time components\
-       @ (static bindings)."
+       @ (generators and static bindings)."
   | Macro_in_package ->
       Location.errorf ~loc
         "This module type cannot be used as a first-class module:@ \
-         it has compile-time components (static bindings)."
+         it has compile-time components@ (generators and static \
+         bindings)."
   | Macro_in_packed_unit file ->
       Location.errorf ~loc
         "%a has compile-time components,@ and %a packs only run-time \
@@ -3863,11 +3910,12 @@ let report_error ~loc _env = function
   | Macro_in_abstract_modtype ->
       Location.errorf ~loc
         "An abstract module type cannot be instantiated with this module@ \
-         type: it has compile-time components (static bindings)."
+         type: it has compile-time components@ (generators and static \
+         bindings)."
   | Macro_in_local_module ->
       Location.errorf ~loc
         "A locally bound module cannot have compile-time components@ \
-         (static bindings).@ \
+         (generators and static bindings).@ \
          Bind it at the top level of a structure instead."
 
 let report_error env ~loc err =

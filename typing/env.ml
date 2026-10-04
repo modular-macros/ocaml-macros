@@ -576,6 +576,9 @@ type t = {
   flags: int;
   env_staging_level: staging_level;
   env_staging_mode: staging_mode;
+  (* Whether typing is inside the right-hand side of a static binding,
+     where a generator may not be used *)
+  env_in_static_init: bool;
 }
 
 and module_components =
@@ -804,6 +807,7 @@ let empty = {
   not_aliasable = Ident.empty;
   env_staging_level = 0;
   env_staging_mode = M_C;
+  env_in_static_init = false;
  }
 
 let in_signature b env =
@@ -865,6 +869,9 @@ let with_level_down env = with_level (get_env_level env - 1) env
 
 let get_env_mode env = env.env_staging_mode
 let with_mode mode env = {env with env_staging_mode = mode}
+
+let in_static_init env = env.env_in_static_init
+let with_static_init b env = {env with env_in_static_init = b}
 
 let describe_level = function
   | 0 -> "at run time"

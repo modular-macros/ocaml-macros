@@ -138,6 +138,8 @@ type error =
   | Non_packable_local_modtype_subst of Path.t
   | With_cannot_remove_packed_modtype of Path.t * module_type
   | Cannot_alias of Path.t
+  | Macro_is_not_function
+  | Macro_binds_not_one_name
   | Macro_in_functor_argument
   | Macro_in_package
   | Macro_in_abstract_modtype

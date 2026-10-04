@@ -472,8 +472,9 @@ type value_description =
     val_kind: value_kind;
     val_staging_level: staging_level;
     val_macro: macro_flag;
-    (* A static binding ([Static]) records the level of its definition
-       and serves one level lower. *)
+    (* A generator ([Macro]) is bound at level -1, as a variable of
+       compile-time code is.  A static binding ([Static]) records the
+       level of its definition and serves one level lower. *)
     val_loc: Location.t;
     val_attributes: Parsetree.attributes;
     val_uid: Uid.t;

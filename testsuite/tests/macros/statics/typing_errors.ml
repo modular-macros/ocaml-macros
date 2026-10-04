@@ -111,7 +111,7 @@ Line 1, characters 9-29:
 1 | module F (X : S) = struct end
              ^^^^^^^^^^^^^^^^^^^^
 Error: The argument of a functor cannot contain compile-time components
-       (static bindings).
+       (generators and static bindings).
 |}]
 
 module type F = (X : S) -> sig end
@@ -121,7 +121,7 @@ Line 1, characters 16-34:
 1 | module type F = (X : S) -> sig end
                     ^^^^^^^^^^^^^^^^^^
 Error: The argument of a functor cannot contain compile-time components
-       (static bindings).
+       (generators and static bindings).
 |}]
 
 let f (m : (module S)) = m
@@ -131,7 +131,7 @@ Line 1, characters 19-20:
 1 | let f (m : (module S)) = m
                        ^
 Error: This module type cannot be used as a first-class module:
-       it has compile-time components (static bindings).
+       it has compile-time components (generators and static bindings).
 |}]
 
 let x = let module M = struct $let v = 1 end in 1
@@ -141,7 +141,8 @@ Line 1, characters 12-44:
 1 | let x = let module M = struct $let v = 1 end in 1
                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: A locally bound module cannot have compile-time components
-       (static bindings). Bind it at the top level of a structure instead.
+       (generators and static bindings).
+       Bind it at the top level of a structure instead.
 |}]
 
 module type T = sig module type A module X : A end
@@ -157,7 +158,7 @@ Line 1, characters 16-40:
 1 | module type U = T with module type A = S
                     ^^^^^^^^^^^^^^^^^^^^^^^^
 Error: An abstract module type cannot be instantiated with this module
-       type: it has compile-time components (static bindings).
+       type: it has compile-time components (generators and static bindings).
 |}]
 
 module X : sig module type A end = struct module type A = S end
@@ -175,7 +176,8 @@ Error: Signature mismatch:
          module type A = S
        does not match
          module type A
-       The module type given for "A" has compile-time (static binding)
+       The module type given for "A" has compile-time
+       (generator or static binding)
        components, so it cannot match its abstract declaration.
        An abstract module type may only be instantiated with a module type
        whose components all exist at run time.
@@ -204,7 +206,8 @@ Line 3, characters 6-65:
 3 |   let module L : W = struct $let s = 1  let w = $(Expr.int s) end in
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: A locally bound module cannot have compile-time components
-       (static bindings). Bind it at the top level of a structure instead.
+       (generators and static bindings).
+       Bind it at the top level of a structure instead.
 |}]
 
 let p = (module struct $let s = 1  let w = $(Expr.int s) end : W)
@@ -214,5 +217,6 @@ Line 1, characters 16-60:
 1 | let p = (module struct $let s = 1  let w = $(Expr.int s) end : W)
                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: A locally bound module cannot have compile-time components
-       (static bindings). Bind it at the top level of a structure instead.
+       (generators and static bindings).
+       Bind it at the top level of a structure instead.
 |}]

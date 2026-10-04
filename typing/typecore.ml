@@ -217,6 +217,7 @@ type error =
   | Splice_outside_quotation of int
   | Quotation_in_quotation
   | Splice_in_splice
+  | Generator_in_static_binding of Path.t
 
 
 let not_principal fmt =
@@ -2315,17 +2316,18 @@ and type_pat_aux
 let iter_pattern_variables_type f : pattern_variable list -> unit =
   List.iter (fun {pv_type; _} -> f pv_type)
 
-let add_pattern_variables ?check ?check_as env pv =
+let add_pattern_variables ?check ?check_as ?(macro = Asttypes.Value) env pv =
   List.fold_right
     (fun {pv_id; pv_type; pv_loc; pv_kind; pv_attributes; pv_uid} env ->
        let check = if pv_kind=As_var then check_as else check in
        Env.add_value ?check pv_id
          {val_type = pv_type; val_kind = Val_reg; Types.val_loc = pv_loc;
           val_staging_level = Env.get_env_level env;
-          val_macro = Asttypes.Value;
+          val_macro = macro;
           val_attributes = pv_attributes;
           val_uid = pv_uid;
-         } env
+         }
+         env
     )
     pv env
 
@@ -4143,7 +4145,7 @@ let check_env_mode loc accepted err env =
     raise (Error (loc, env, err))
 
 (* A value may be used only at the level at which it is bound. *)
-let check_value_staging_level loc lid _path (value : Types.value_description)
+let check_value_staging_level loc lid path (value : Types.value_description)
     env =
   match value.val_kind with
   | Val_prim _ ->
@@ -4152,6 +4154,11 @@ let check_value_staging_level loc lid _path (value : Types.value_description)
   | _ ->
       let bound = Types.val_serving_level value in
       let used = Env.get_env_level env in
+      (* The code a generator builds reaches run-time values through
+         the environment that the calling splice supplies; a static
+         initialiser has none. *)
+      if value.val_macro = Asttypes.Macro && Env.in_static_init env then
+        raise (Error (loc, env, Generator_in_static_binding path));
       if bound <> used then
         Env.lookup_error loc env
           (Level_mismatch
@@ -7152,7 +7159,7 @@ and type_effect_cases
 
 (* Typing of let bindings *)
 
-and type_let ?check ?check_strict
+and type_let ?check ?check_strict ?macro
     existential_context env rec_flag spat_sexp_list allow_modules =
   let spatl =  List.map vb_pat_constraint spat_sexp_list in
   let attrs_list = List.map fst spatl in
@@ -7210,7 +7217,7 @@ and type_let ?check ?check_strict
          we type-checked expressions before patterns, then we could call
          [add_module_variables] here.
       *)
-      let new_env = add_pattern_variables new_env pvs in
+      let new_env = add_pattern_variables ?macro new_env pvs in
       let pat_list =
         List.map
           (fun pat -> {pat with pat_type = instance pat.pat_type}, pat.pat_type)
@@ -7548,11 +7555,12 @@ let () = type_argument' := type_argument
 
 (* Typing of toplevel bindings *)
 
-let type_binding env rec_flag spat_sexp_list =
+let type_binding ?macro env rec_flag spat_sexp_list =
   let (pat_exp_list, new_env) =
     type_let
       ~check:(fun s -> Warnings.Unused_value_declaration s)
       ~check_strict:(fun s -> Warnings.Unused_value_declaration s)
+      ?macro
       At_toplevel
       env rec_flag spat_sexp_list Modules_rejected
   in
@@ -8343,6 +8351,14 @@ let report_error ~loc env = function
         "A splice cannot appear directly inside another splice.\
        @ Splices nest only through a quotation:@ %a."
         Style.inline_code "$( ... << ... $( ... ) ... >> ... )"
+  | Generator_in_static_binding path ->
+      Location.errorf ~loc
+        "The generator %a cannot be used in a static binding ($let):\
+       @ the code a generator builds refers to run-time values through\
+       @ the environment its caller supplies, and a static binding runs\
+       @ with no run-time context to supply one.\
+       @ Call it from a splice, or from another generator, instead."
+        (Style.as_inline_code Printtyp.path) path
 
 let report_error ~loc env err =
   Printtyp.wrap_printing_env ~error:true env

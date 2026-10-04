@@ -1,0 +1,57 @@
+\documentclass[11pt]{article} 
+\usepackage[latin1]{inputenc} 
+\usepackage[T1]{fontenc} 
+\usepackage{textcomp}
+\usepackage{fullpage} 
+\usepackage{url} 
+\usepackage{ocamldoc}
+\begin{document}
+\tableofcontents
+\section{Module {\tt{Staged\_values}} : Static bindings and generators are documented with their keywords.}
+\label{Staged-underscorevalues}\index{Staged-underscorevalues@\verb`Staged_values`}
+
+
+
+
+\ocamldocvspace{0.5cm}
+
+
+
+\label{Staged-underscorevalues.run}\begin{ocamldoccode}
+val run : int
+\end{ocamldoccode}
+\index{run@\verb`run`}
+\begin{ocamldocdescription}
+A value of run-time code
+
+
+\end{ocamldocdescription}
+
+
+
+
+\label{Staged-underscorevalues.static}\begin{ocamldoccode}
+$val static : int
+\end{ocamldoccode}
+\index{static@\verb`static`}
+\begin{ocamldocdescription}
+A static binding
+
+
+\end{ocamldocdescription}
+
+
+
+
+\label{Staged-underscorevalues.generator}\begin{ocamldoccode}
+$val[..] generator : int expr -> int expr
+\end{ocamldoccode}
+\index{generator@\verb`generator`}
+\begin{ocamldocdescription}
+A generator
+
+
+\end{ocamldocdescription}
+
+
+\end{document}

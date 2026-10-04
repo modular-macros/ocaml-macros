@@ -105,9 +105,13 @@ type existential_restriction =
   | In_self_pattern (** or in self pattern *)
 
 val type_binding:
+        ?macro:macro_flag ->
         Env.t -> rec_flag ->
           Parsetree.value_binding list ->
           Typedtree.value_binding list * Env.t
+(* [macro] is the kind of each variable bound, from the moment it is
+   bound: for a recursive binding, while the right-hand sides are
+   typed. *)
 val type_let:
         existential_restriction -> Env.t -> rec_flag ->
           Parsetree.value_binding list ->
@@ -258,6 +262,7 @@ type error =
   | Splice_outside_quotation of int
   | Quotation_in_quotation
   | Splice_in_splice
+  | Generator_in_static_binding of Path.t
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

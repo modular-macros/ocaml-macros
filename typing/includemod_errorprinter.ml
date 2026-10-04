@@ -774,7 +774,8 @@ let eq_module_types {Err.got=mty1; expected=mty2} =
 
 let macro_components id =
   Location.msg
-    "The module type given for %a has compile-time (static binding)@ \
+    "The module type given for %a has compile-time@ \
+     (generator or static binding)@ \
      components, so it cannot match its abstract declaration.@ \
      An abstract module type may only be instantiated with a module type@ \
      whose components all exist at run time."

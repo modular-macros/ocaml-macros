@@ -89,6 +89,13 @@ val with_level_down: t -> t
 val get_env_mode : t -> staging_mode
 val with_mode: staging_mode -> t -> t
 
+(* Whether typing is inside the right-hand side of a static binding,
+   where a generator may not be used: the code that a generator builds
+   refers to run-time values through an environment that the splice
+   calling it supplies. *)
+val in_static_init : t -> bool
+val with_static_init : bool -> t -> t
+
 (* A staging level as an error message describes it: "at run time",
    "in compile-time code", "inside a quotation". *)
 val describe_level : staging_level -> string

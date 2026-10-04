@@ -1,0 +1,42 @@
+.SH NAME
+Staged_values \- Static bindings and generators are documented with their keywords.
+.SH Module
+Module   Staged_values
+.SH Documentation
+.sp
+Module
+.BI "Staged_values"
+ : 
+.B sig end
+
+.sp
+Static bindings and generators are documented with their keywords\&.
+
+.sp
+
+.sp
+.sp
+
+.I val run 
+: 
+.B int
+.sp
+A value of run\-time code
+
+.sp
+
+.I $val static 
+: 
+.B int
+.sp
+A static binding
+
+.sp
+
+.I $val[..] generator 
+: 
+.B int expr -> int expr
+.sp
+A generator
+
+.sp
