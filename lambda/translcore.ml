@@ -54,8 +54,20 @@ let use_dup_for_constant_mutable_arrays_bigger_than = 4
 
 (* The state of a translation *)
 
+(* The closure backend translates a unit in the store form: its
+   components are fields of the block of the unit, and the scope of a
+   local binding does not span the items that follow.  Quoted code
+   therefore names a component by its field.  [nsl_pos] gives the field
+   of each identifier of the unit. *)
+type native_slot_layout =
+  { nsl_module : Ident.t;
+    nsl_pos : Ident.t -> int option }
+
 type context =
-  { splice_source : (context -> expression -> lambda_splice) option;
+  { native_slot_layout : native_slot_layout option;
+    (* The fields of the unit's block, in the compile-time part of a
+       native static program *)
+    splice_source : (context -> expression -> lambda_splice) option;
     (* How the hole of a top-level splice is filled when the run-time
        term is translated: the function gives the contents of the hole,
        in the context of the splice. *)
@@ -69,9 +81,24 @@ type context =
        as its arguments *) }
 
 let initial_context () =
-  { splice_source = None;
+  { native_slot_layout = None;
+    splice_source = None;
     closing = Ident.Map.empty;
     quoted_variables = None }
+
+let rec name_slots_through_block nsl lam =
+  match lam with
+  | Lvar r ->
+      begin match nsl.nsl_pos r with
+      | Some pos ->
+          Lprim (Pfield (pos, Pointer, Immutable),
+                 [Lprim (Pgetglobal nsl.nsl_module, [], Loc_unknown)],
+                 Loc_unknown)
+      | None -> lam
+      end
+  | Lsplice _ ->
+      lam
+  | _ -> Lambda.shallow_map (name_slots_through_block nsl) lam
 
 (* Forward declaration -- to be filled in by Translmod.transl_module *)
 let transl_module =
@@ -639,9 +666,13 @@ and transl_exp0 ~in_new_scope ~ctx ~scopes e =
            partial)
   | Texp_quote e ->
     check_no_objects e;
+    let body = transl_exp ~ctx ~scopes e in
     let body =
-      Translquote.close_quoted ctx.closing (transl_exp ~ctx ~scopes e)
+      match ctx.native_slot_layout with
+      | Some nsl -> name_slots_through_block nsl body
+      | None -> body
     in
+    let body = Translquote.close_quoted ctx.closing body in
     Option.iter
       (fun vars -> vars := Ident.Set.union !vars (free_variables body))
       ctx.quoted_variables;

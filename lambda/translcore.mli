@@ -25,8 +25,18 @@ open Debuginfo.Scoped_location
    the parts of it, depend on.  See the .ml for the meaning of each
    component. *)
 
+(* The field each ident of the unit occupies in the module block of the
+   native closure backend's store form.  While set, an environment access
+   baked into returned code names the block field rather than the local,
+   whose scope the store form does not extend over later items.  Given
+   by Translmod for the compile-time part of a native static program. *)
+type native_slot_layout =
+  { nsl_module : Ident.t;
+    nsl_pos : Ident.t -> int option }
+
 type context =
-  { splice_source : (context -> expression -> lambda_splice) option;
+  { native_slot_layout : native_slot_layout option;
+    splice_source : (context -> expression -> lambda_splice) option;
     closing : Ident.t Ident.Map.t;
     quoted_variables : Ident.Set.t ref option }
 

@@ -1,0 +1,11 @@
+(seq
+  (let (x =[int] 2) (setfield_ptr(root-init) 0 (global Splices_dlambda!) x))
+  (let (f = (function y[int] : int (+ y 40)))
+    (setfield_ptr(root-init) 1 (global Splices_dlambda!) f))
+  (let
+    (*match* =
+       (apply (field_imm 43 (global Stdlib!))
+         (apply (field_imm 1 (global Splices_dlambda!))
+           (field_imm 0 (global Splices_dlambda!)))))
+    0)
+  0)

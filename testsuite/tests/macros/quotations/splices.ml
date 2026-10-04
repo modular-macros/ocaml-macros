@@ -1,5 +1,9 @@
 (* TEST
- bytecode;
+ {
+   bytecode;
+ }{
+   native;
+ }
 *)
 
 (* A splice outside a quotation is evaluated when its unit is compiled,

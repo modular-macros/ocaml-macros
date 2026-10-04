@@ -821,116 +821,6 @@ let transl_implementation ~ctx module_name (str, cc) =
   in
   { implementation with code }
 
-(* A function of the compiler that the static program calls.  The
-   function is the only component of the unit [m], which the program
-   that runs the static program is linked with. *)
-let call_static_support m args =
-  let unit = Lprim (Pgetglobal (Ident.create_persistent m), [], Loc_unknown) in
-  Lapply { ap_func = Lprim (Pfield (0, Pointer, Immutable), [unit],
-                            Loc_unknown);
-           ap_args = args;
-           ap_loc = Loc_unknown;
-           ap_tailcall = Default_tailcall;
-           ap_inlined = Default_inline;
-           ap_specialised = Default_specialise }
-
-(* The static program of a unit with top-level splices, and the run-time
-   term of the unit, with a hole for each top-level splice.
-
-   The static program evaluates the code of each splice and writes the
-   terms that fill the holes; the compiler fills the holes of its own
-   term with them, and compiles it.  The term is not simplified before
-   because a hole hides the binders that its contents mention. *)
-let transl_static_program module_name (str, cc) ~source_file ~prefix =
-  let module_id = Ident.create_persistent module_name in
-  let scopes = enter_module_definition ~scopes:empty_scopes module_id in
-  let ctx = initial_context () in
-  (* A failure of an evaluation is written to [err_file], where the
-     driver finds it. *)
-  let err_file = prefix ^ "$static.err" in
-  let static_report loc what body =
-    call_static_support "Static_report"
-      [Translquote.const err_file;
-       Translquote.const (loc : Location.t);
-       Translquote.const what;
-       Lambda.thunk (Ident.create_local "*report*") body]
-  in
-  (* The code of each splice is a function, bound around the call that
-     writes the code of the holes, which the hole applies: a splice is
-     evaluated when the term around it is built. *)
-  let pending_splices = ref [] in
-  let splice_thunk ctx spl_exp =
-    Translcore.check_no_objects spl_exp;
-    let roots = Translcore.quoted_variables ~ctx ~scopes spl_exp in
-    let originals, fresh_vars, code =
-      Translquote.transl_close_function Location.none roots
-        (fun closing ->
-           Translcore.transl_exp ~ctx:{ ctx with closing } ~scopes spl_exp)
-    in
-    let code = static_report spl_exp.exp_loc "this splice" code in
-    let h = Ident.create_local "*splice*" in
-    (* Without variables, the function is a thunk, which the hole
-       applies: the splice is evaluated there all the same. *)
-    let params, sp_code =
-      match fresh_vars with
-      | [] ->
-          [ (Ident.create_local "*unit*", Pgenval) ],
-          Lapply { ap_func = Lvar h; ap_args = [ lambda_unit ];
-                   ap_loc = Loc_unknown; ap_tailcall = Default_tailcall;
-                   ap_inlined = Default_inline;
-                   ap_specialised = Default_specialise }
-      | _ -> List.map (fun v -> (v, Pgenval)) fresh_vars, Lvar h
-    in
-    let fn =
-      lfunction ~kind:Curried ~params ~return:Pgenval ~body:code
-        ~attr:default_function_attribute ~loc:Loc_unknown
-    in
-    pending_splices := (h, fn) :: !pending_splices;
-    { sp_code; sp_args = originals }
-  in
-  let run_time =
-    transl_implementation ~ctx:{ ctx with splice_source = Some splice_thunk }
-      module_name (str, cc)
-  in
-  (* The globals that the object requires are those of the term with
-     its holes empty: the globals of a splice's code belong to the
-     static program. *)
-  let rt_required_globals =
-    let rec blank lam =
-      match lam with
-      | Lsplice _ -> lsplice lambda_unit
-      | _ -> Lambda.shallow_map blank lam
-    in
-    required_globals ~flambda:false (blank run_time.code)
-  in
-  let emit =
-    List.fold_right
-      (fun (h, code) body -> Llet (Strict, Pgenval, h, code, body))
-      (List.rev !pending_splices)
-      (call_static_support "Static_holes"
-         [Translquote.const (prefix ^ "$static.holes");
-          Translquote.quote_module_holes run_time.code])
-  in
-  let static_id = Ident.create_persistent (module_name ^ "$static") in
-  let code =
-    Lsequence
-      (emit,
-       Lprim (Psetglobal static_id,
-              [Lprim (Pmakeblock (0, Immutable, None),
-                      [Lconst const_unit], Loc_unknown)],
-              Loc_unknown))
-  in
-  (* A failure outside any splice is attributed to the unit. *)
-  let code =
-    static_report (Location.in_file source_file)
-      "the compile-time part of this unit" code
-  in
-  { module_ident = static_id;
-    main_module_block_size = 1;
-    required_globals = required_globals ~flambda:false code;
-    code },
-  { run_time with required_globals = rt_required_globals }
-
 (* Build the list of value identifiers defined by a toplevel structure
    (excluding primitive declarations). *)
 
@@ -1090,6 +980,19 @@ let field_of_str loc str =
     | _ -> apply_coercion loc Strict cc (Lvar ids.(pos))
 
 
+(* Within a recursive group, a module of the group is a variable in
+   the store form too, as a direct reference to it is: quoted code
+   closes over it, and the order of evaluation of the group sees the
+   dependency. *)
+let group_modules_as_variables ctx ids =
+  match ctx.native_slot_layout with
+  | None -> ctx
+  | Some nsl ->
+      let nsl_pos id =
+        if List.exists (Ident.same id) ids then None else nsl.nsl_pos id
+      in
+      { ctx with native_slot_layout = Some { nsl with nsl_pos } }
+
 let transl_store_structure ~ctx ~scopes glob map prims aliases str =
   let no_env_update _ _ env = env in
   let rec transl_store ~scopes rootpath subst cont = function
@@ -1229,6 +1132,7 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
             transl_store ~scopes rootpath subst cont rem
         | Tstr_recmodule bindings ->
             let ids = List.filter_map (fun mb -> mb.mb_id) bindings in
+            let ctx = group_modules_as_variables ctx ids in
             compile_recmodule ~scopes
               (fun id modl ->
                  Lambda.subst no_env_update subst
@@ -1469,6 +1373,18 @@ let build_ident_map restr idlist more_ids =
   in
   natural_map pos map prims aliases more_ids
 
+(* The field of each identifier of a unit in the store form; [None] for
+   one stored under a coercion. *)
+let store_ident_positions ({ str_items = str; _ }, restr) =
+  let (map, _prims, _aliases, _size) =
+    build_ident_map restr (defined_idents str) (more_idents str)
+  in
+  fun id ->
+    match Ident.find_same id map with
+    | (pos, Tcoerce_none) -> Some pos
+    | _ -> None
+    | exception Not_found -> None
+
 (* Compile an implementation using transl_store_structure
    (for the native-code compiler). *)
 
@@ -1512,6 +1428,130 @@ let transl_store_implementation ~ctx module_name (str, restr) =
        the type with the flambda version *)
     module_ident;
     required_globals = required_globals ~flambda:true code }
+
+(* A function of the compiler that the static program calls.  The
+   function is the only component of the unit [m], which the program
+   that runs the static program is linked with. *)
+let call_static_support m args =
+  let unit = Lprim (Pgetglobal (Ident.create_persistent m), [], Loc_unknown) in
+  Lapply { ap_func = Lprim (Pfield (0, Pointer, Immutable), [unit],
+                            Loc_unknown);
+           ap_args = args;
+           ap_loc = Loc_unknown;
+           ap_tailcall = Default_tailcall;
+           ap_inlined = Default_inline;
+           ap_specialised = Default_specialise }
+
+(* The static program of a unit with top-level splices, and the run-time
+   term of the unit, with a hole for each top-level splice.
+
+   The static program evaluates the code of each splice and writes the
+   terms that fill the holes; the compiler fills the holes of its own
+   term with them, and compiles it.  The term is not simplified before
+   because a hole hides the binders that its contents mention. *)
+let transl_static_program ?(native = false) module_name (str, cc)
+    ~source_file ~prefix =
+  let module_id = Ident.create_persistent module_name in
+  let scopes = enter_module_definition ~scopes:empty_scopes module_id in
+  (* A failure of an evaluation is written to [err_file], where the
+     driver finds it. *)
+  let err_file = prefix ^ "$static.err" in
+  let static_report loc what body =
+    call_static_support "Static_report"
+      [Translquote.const err_file;
+       Translquote.const (loc : Location.t);
+       Translquote.const what;
+       Lambda.thunk (Ident.create_local "*report*") body]
+  in
+  let slot_layout =
+    if native && not Config.flambda then
+      Some { Translcore.nsl_module = module_id;
+             nsl_pos = store_ident_positions (str, cc) }
+    else None
+  in
+  let ctx = { (initial_context ()) with native_slot_layout = slot_layout } in
+  (* The code of each splice is a function, bound around the call that
+     writes the code of the holes, which the hole applies: a splice is
+     evaluated when the term around it is built. *)
+  let pending_splices = ref [] in
+  let splice_thunk ctx spl_exp =
+    (* The static program is bytecode, whichever compiler builds it. *)
+    protect_refs [R (Clflags.native_code, false)] @@ fun () ->
+    Translcore.check_no_objects spl_exp;
+    (* A variable that is a field of the block of the unit is quoted as
+       that field, and is not closed over. *)
+    let roots = Translcore.quoted_variables ~ctx ~scopes spl_exp in
+    let originals, fresh_vars, code =
+      Translquote.transl_close_function Location.none roots
+        (fun closing ->
+           Translcore.transl_exp ~ctx:{ ctx with closing } ~scopes spl_exp)
+    in
+    let code = static_report spl_exp.exp_loc "this splice" code in
+    let h = Ident.create_local "*splice*" in
+    (* Without variables, the function is a thunk, which the hole
+       applies: the splice is evaluated there all the same. *)
+    let params, sp_code =
+      match fresh_vars with
+      | [] ->
+          [ (Ident.create_local "*unit*", Pgenval) ],
+          Lapply { ap_func = Lvar h; ap_args = [ lambda_unit ];
+                   ap_loc = Loc_unknown; ap_tailcall = Default_tailcall;
+                   ap_inlined = Default_inline;
+                   ap_specialised = Default_specialise }
+      | _ -> List.map (fun v -> (v, Pgenval)) fresh_vars, Lvar h
+    in
+    let fn =
+      lfunction ~kind:Curried ~params ~return:Pgenval ~body:code
+        ~attr:default_function_attribute ~loc:Loc_unknown
+    in
+    pending_splices := (h, fn) :: !pending_splices;
+    { sp_code; sp_args = originals }
+  in
+  let run_time =
+    let ctx = { ctx with splice_source = Some splice_thunk } in
+    if not native then transl_implementation ~ctx module_name (str, cc)
+    else if Config.flambda then
+      transl_implementation_flambda ~ctx module_name (str, cc)
+    else transl_store_implementation ~ctx module_name (str, cc)
+  in
+  (* The globals that the object requires are those of the term with
+     its holes empty: the globals of a splice's code belong to the
+     static program. *)
+  let rt_required_globals =
+    let rec blank lam =
+      match lam with
+      | Lsplice _ -> lsplice lambda_unit
+      | _ -> Lambda.shallow_map blank lam
+    in
+    required_globals ~flambda:false (blank run_time.code)
+  in
+  let emit =
+    List.fold_right
+      (fun (h, code) body -> Llet (Strict, Pgenval, h, code, body))
+      (List.rev !pending_splices)
+      (call_static_support "Static_holes"
+         [Translquote.const (prefix ^ "$static.holes");
+          Translquote.quote_module_holes run_time.code])
+  in
+  let static_id = Ident.create_persistent (module_name ^ "$static") in
+  let code =
+    Lsequence
+      (emit,
+       Lprim (Psetglobal static_id,
+              [Lprim (Pmakeblock (0, Immutable, None),
+                      [Lconst const_unit], Loc_unknown)],
+              Loc_unknown))
+  in
+  (* A failure outside any splice is attributed to the unit. *)
+  let code =
+    static_report (Location.in_file source_file)
+      "the compile-time part of this unit" code
+  in
+  { module_ident = static_id;
+    main_module_block_size = 1;
+    required_globals = required_globals ~flambda:false code;
+    code },
+  { run_time with required_globals = rt_required_globals }
 
 (* Compile a toplevel phrase *)
 

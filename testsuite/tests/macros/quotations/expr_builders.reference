@@ -1,0 +1,8 @@
+1 0 5 0
+red green blue
+zero, other, two, other, other, other
+zero, one, Invalid_argument Expr.switch, Invalid_argument Expr.switch
+letter letter digit other
+low, high, Invalid_argument Expr.switch_intervals, Invalid_argument Expr.switch_intervals
+1 2 0
+120 0 1 1 6 11

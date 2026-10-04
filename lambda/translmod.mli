@@ -27,6 +27,7 @@ val transl_implementation:
    [prefix ^ "$static.holes"], the block of the terms that fill the
    holes ([Translquote.fill_holes]). *)
 val transl_static_program:
+      ?native:bool ->
       string -> structure * module_coercion ->
       source_file:string -> prefix:string ->
       Lambda.program * Lambda.program

@@ -59,7 +59,7 @@ let emit_bytecode i (bytecode, required_globals) =
 
 let implementation ~start_from ~source_file ~output_prefix =
   let backend info typed =
-    Static_link.implementation info typed
+    Static_link.implementation ~native:false info typed
       ~fallback:(fun () -> emit_bytecode info (to_bytecode info typed))
       ~finish:(fun program ->
         emit_bytecode info

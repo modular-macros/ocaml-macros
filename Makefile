@@ -1001,7 +1001,10 @@ partialclean::
 
 # The native-code compiler
 
-ocamlopt_LIBRARIES = $(addprefix compilerlibs/,ocamlcommon ocamloptcomp)
+# ocamlbytecomp is linked in because the static program of a unit with
+# top-level splices is bytecode.
+ocamlopt_LIBRARIES = \
+  $(addprefix compilerlibs/,ocamlcommon ocamlbytecomp ocamloptcomp)
 
 ocamlopt_SOURCES = driver/optmain.mli driver/optmain.ml
 
@@ -2616,9 +2619,11 @@ endif
 
 # The native toplevel
 
+# ocamlbytecomp precedes ocamloptcomp since Optcompile depends on
+# Static_link (as ocamlopt's own link line already does).
 ocamlnat_LIBRARIES = \
-  compilerlibs/ocamlcommon compilerlibs/ocamloptcomp \
-  compilerlibs/ocamlbytecomp otherlibs/dynlink/dynlink \
+  compilerlibs/ocamlcommon compilerlibs/ocamlbytecomp \
+  compilerlibs/ocamloptcomp otherlibs/dynlink/dynlink \
   compilerlibs/ocamltoplevel
 
 ocamlnat_SOURCES = $(ocaml_SOURCES)

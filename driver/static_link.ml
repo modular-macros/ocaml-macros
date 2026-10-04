@@ -119,10 +119,16 @@ let run_static_program ~loc base ~objs_file ~holes_file =
   | None, n ->
       raise (Error (loc, Static_program_failed { base; status = n }))
 
+(* The static program is bytecode whichever compiler builds it, and is
+   simplified as bytecode. *)
+let simplify_compile_time lam =
+  Misc.protect_refs [ Misc.R (Clflags.native_code, false) ]
+    (fun () -> Simplif.simplify_lambda lam)
+
 (* The run-time term of the unit, its holes filled by its static
    program.  The static program is printed under -dstatic, and the term
    is left to the caller, which compiles it as that of any unit. *)
-let build_static_program i Typedtree.{structure; coercion; _} =
+let build_static_program ~native i Typedtree.{structure; coercion; _} =
   let source_file = Unit_info.source_file i.target in
   let loc = Location.in_file source_file in
   let prefix = Unit_info.prefix i.target in
@@ -130,14 +136,14 @@ let build_static_program i Typedtree.{structure; coercion; _} =
   let prog, run_time =
     Profile.(record transl)
       (fun () ->
-         Translmod.transl_static_program
+         Translmod.transl_static_program ~native
            (Unit_info.modname i.target) (structure, coercion)
            ~source_file ~prefix)
       ()
   in
   let lambda =
     prog.Lambda.code
-    |> Simplif.simplify_lambda
+    |> simplify_compile_time
     |> print_if i.ppf_dump Clflags.dump_static Printlambda.lambda
   in
   let holes_file = static_prefix ^ ".holes" in
@@ -171,9 +177,9 @@ let build_static_program i Typedtree.{structure; coercion; _} =
   { run_time with
     Lambda.code = Translquote.fill_holes run_time.Lambda.code holes }
 
-let implementation i typed ~fallback ~finish =
+let implementation ~native i typed ~fallback ~finish =
   if Env.get_unit_has_top_level_splice ()
-  then finish (build_static_program i typed)
+  then finish (build_static_program ~native i typed)
   else fallback ()
 
 (* Error report *)

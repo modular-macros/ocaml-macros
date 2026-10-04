@@ -1,0 +1,6 @@
+(setglobal Splices_dlambda!
+  (let
+    (x =[int] 2
+     f = (function y[int] : int (+ y 40))
+     *match* = (apply (field_imm 43 (global Stdlib!)) (apply f x)))
+    (makeblock 0 x f)))

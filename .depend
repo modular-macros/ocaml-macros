@@ -4858,6 +4858,7 @@ lambda/translmod.cmo : \
     typing/env.cmi \
     lambda/debuginfo.cmi \
     typing/ctype.cmi \
+    utils/config.cmi \
     utils/clflags.cmi \
     parsing/asttypes.cmi \
     lambda/translmod.cmi
@@ -4883,6 +4884,7 @@ lambda/translmod.cmx : \
     typing/env.cmx \
     lambda/debuginfo.cmx \
     typing/ctype.cmx \
+    utils/config.cmx \
     utils/clflags.cmx \
     parsing/asttypes.cmx \
     lambda/translmod.cmi
@@ -7281,6 +7283,7 @@ driver/optcompile.cmo : \
     parsing/unit_info.cmi \
     typing/typedtree.cmi \
     lambda/translmod.cmi \
+    driver/static_link.cmi \
     lambda/simplif.cmi \
     utils/profile.cmi \
     lambda/printlambda.cmi \
@@ -7298,6 +7301,7 @@ driver/optcompile.cmx : \
     parsing/unit_info.cmx \
     typing/typedtree.cmx \
     lambda/translmod.cmx \
+    driver/static_link.cmx \
     lambda/simplif.cmx \
     utils/profile.cmx \
     lambda/printlambda.cmx \

@@ -1,5 +1,9 @@
 (* TEST
- bytecode;
+ {
+   bytecode;
+ }{
+   native;
+ }
 *)
 
 (* Each function of Expr builds, in a splice, code for a value that

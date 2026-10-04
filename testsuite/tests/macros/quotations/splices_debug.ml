@@ -1,6 +1,10 @@
 (* TEST
  flags = "-g";
- bytecode;
+ {
+   bytecode;
+ }{
+   native;
+ }
 *)
 
 (* The term of a unit compiled with -g carries debug events, which the

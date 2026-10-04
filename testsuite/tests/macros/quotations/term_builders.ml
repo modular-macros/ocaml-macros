@@ -1,5 +1,9 @@
 (* TEST
- bytecode;
+ {
+   bytecode;
+ }{
+   native;
+ }
 *)
 
 (* The builders of CamlinternalLam make terms whose size is not known

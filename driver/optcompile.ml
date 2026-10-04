@@ -32,52 +32,51 @@ let (|>>) (x, y) f = (x, f y)
 
 (** Native compilation backend for .ml files. *)
 
-let flambda i backend Typedtree.{structure; coercion; _} =
+let flambda_settings () =
   if !Clflags.classic_inlining then begin
     Clflags.default_simplify_rounds := 1;
     Clflags.use_inlining_arguments_set Clflags.classic_arguments;
     Clflags.unbox_free_vars_of_closures := false;
     Clflags.unbox_specialised_args := false
-  end;
+  end
 
+let flambda_backend i backend
+    {Lambda.module_ident; main_module_block_size; required_globals; code } =
+  let () =
+    let (module_ident, main_module_block_size), code =
+      ((module_ident, main_module_block_size), code)
+      |>> print_if i.ppf_dump Clflags.dump_rawlambda Printlambda.lambda
+      |>> Simplif.simplify_lambda
+      |>> print_if i.ppf_dump Clflags.dump_lambda Printlambda.lambda
+    in
+
+    if Clflags.(should_stop_after Compiler_pass.Lambda) then () else (
+      let program : Lambda.program =
+        { Lambda.
+          module_ident;
+          main_module_block_size;
+          required_globals;
+          code;
+        }
+      in
+      Asmgen.compile_implementation
+        ~backend
+        ~prefixname:(Unit_info.prefix i.target)
+        ~middle_end:Flambda_middle_end.lambda_to_clambda
+        ~ppf_dump:i.ppf_dump
+        program)
+  in
+  Compilenv.save_unit_info Unit_info.(Artifact.filename @@ cmx i.target)
+
+let flambda i backend Typedtree.{structure; coercion; _} =
+  flambda_settings ();
   (structure, coercion)
   |> Profile.(record transl)
       (Translmod.transl_implementation_flambda (Unit_info.modname i.target))
-  |> Profile.(record generate)
-    (fun {Lambda.module_ident; main_module_block_size;
-          required_globals; code } ->
-      let () =
-        let (module_ident, main_module_block_size), code =
-          ((module_ident, main_module_block_size), code)
-          |>> print_if i.ppf_dump Clflags.dump_rawlambda Printlambda.lambda
-          |>> Simplif.simplify_lambda
-          |>> print_if i.ppf_dump Clflags.dump_lambda Printlambda.lambda
-        in
+  |> Profile.(record generate) (flambda_backend i backend)
 
-        if Clflags.(should_stop_after Compiler_pass.Lambda) then () else (
-          let program : Lambda.program =
-            { Lambda.
-              module_ident;
-              main_module_block_size;
-              required_globals;
-              code;
-            }
-          in
-          Asmgen.compile_implementation
-            ~backend
-            ~prefixname:(Unit_info.prefix i.target)
-            ~middle_end:Flambda_middle_end.lambda_to_clambda
-            ~ppf_dump:i.ppf_dump
-            program)
-      in
-      Compilenv.save_unit_info Unit_info.(Artifact.filename @@ cmx i.target))
-
-
-let clambda i backend Typedtree.{structure; coercion; _} =
-  Clflags.use_inlining_arguments_set Clflags.classic_arguments;
-  (structure, coercion)
-  |> Profile.(record transl)
-    (Translmod.transl_store_implementation (Unit_info.modname i.target))
+let clambda_backend i backend program =
+  program
   |> print_if i.ppf_dump Clflags.dump_rawlambda Printlambda.program
   |> Profile.(record generate)
     (fun program ->
@@ -95,6 +94,13 @@ let clambda i backend Typedtree.{structure; coercion; _} =
            Compilenv.save_unit_info
              Unit_info.(Artifact.filename @@ cmx i.target)))
 
+let clambda i backend Typedtree.{structure; coercion; _} =
+  Clflags.use_inlining_arguments_set Clflags.classic_arguments;
+  (structure, coercion)
+  |> Profile.(record transl)
+    (Translmod.transl_store_implementation (Unit_info.modname i.target))
+  |> clambda_backend i backend
+
 
 (* Emit assembly directly from Linear IR *)
 let emit i =
@@ -105,9 +111,19 @@ let implementation ~backend ~start_from ~source_file ~output_prefix =
   let backend info typed =
     Compilenv.reset ?packname:!Clflags.for_package
       (Unit_info.modname info.target);
-    if Config.flambda
-    then flambda info backend typed
-    else clambda info backend typed
+    Static_link.implementation ~native:true info typed
+      ~fallback:(fun () ->
+        if Config.flambda
+        then flambda info backend typed
+        else clambda info backend typed)
+      ~finish:(fun program ->
+        if Config.flambda then begin
+          flambda_settings ();
+          Profile.(record generate) (flambda_backend info backend) program
+        end else begin
+          Clflags.use_inlining_arguments_set Clflags.classic_arguments;
+          clambda_backend info backend program
+        end)
   in
   let unit_info = Unit_info.make ~source_file Impl output_prefix in
   with_info ~dump_ext:"cmx" unit_info @@ fun info ->

@@ -19,16 +19,19 @@
     and has [staticrun] load it in another process.  The static program
     evaluates the splices and writes the terms that fill the holes of
     the unit's run-time term, which the driver compiles as that of any
-    unit. *)
+    unit, in bytecode or in native code.  The static program is bytecode
+    in both cases. *)
 
 val build_static_program :
-  Compile_common.info -> Typedtree.implementation -> Lambda.program
+  native:bool -> Compile_common.info -> Typedtree.implementation ->
+  Lambda.program
 (** Build the static program of the unit and run it, and give the
     unit's run-time term with its holes filled by the program.  If the
     run succeeds, or reports its own failure, the static program is
     removed; otherwise it is kept for inspection. *)
 
 val implementation :
+  native:bool ->
   Compile_common.info ->
   Typedtree.implementation ->
   fallback:(unit -> unit) ->
