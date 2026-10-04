@@ -84,6 +84,7 @@ let fmt_rec_flag f x =
 
 let fmt_mac_flag f x =
   match x with
+  | Macro -> fprintf f "Macro"
   | Value -> fprintf f "Value"
   | Static -> fprintf f "Static"
 

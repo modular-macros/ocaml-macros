@@ -171,7 +171,7 @@ and method_privacy =
 let val_serving_level vd =
   match vd.val_macro with
   | Static -> vd.val_staging_level - 1
-  | Value -> vd.val_staging_level
+  | Value | Macro -> vd.val_staging_level
 
 (* Variance *)
 (* Variance forms a product lattice of the following partial orders:

@@ -1364,7 +1364,7 @@ and signature_item ctxt f x : unit =
       let intro =
         if vd.pval_prim <> [] then "external"
         else match vd.pval_macro with
-          | Value -> "val" | Static -> "$val"
+          | Macro -> "$val[..]" | Value -> "val" | Static -> "$val"
       in
       pp f "@[<2>%s@ %a@ :@ %a@]%a" intro
         ident_of_name vd.pval_name.txt
@@ -1578,6 +1578,8 @@ and structure_item ctxt f x =
   | Pstr_value (rf, Value, l) ->
       (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
       pp f "@[<2>%a@]" (bindings "let" ctxt) (rf,l)
+  | Pstr_value (rf, Macro, l) ->
+      pp f "@[<2>%a@]" (bindings "$let[..]" ctxt) (rf,l)
   | Pstr_value (rf, Static, l) ->
       pp f "@[<2>%a@]" (bindings "$let" ctxt) (rf,l)
   | Pstr_typext te -> type_extension ctxt f te

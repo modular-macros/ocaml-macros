@@ -535,10 +535,10 @@ and value_description =
      pval_loc: Location.t;
     }
 (** Values of type {!value_description} represents:
-    - [val x: T] or [$val x: T],
+    - [val x: T], [$val x: T] or [$val[..] x: T],
             when {{!value_description.pval_prim}[pval_prim]} is [[]]
              and {{!value_description.pval_macro}[pval_macro]} is
-             [Value] or [Static]
+             [Value], [Static] or [Macro]
     - [external x: T = "s1" ... "sn"]
             when {{!value_description.pval_prim}[pval_prim]} is [["s1";..."sn"]]
 *)
@@ -926,6 +926,7 @@ and signature_item_desc =
   | Psig_value of value_description
       (** - [val x: T]
             - [$val x: T]
+            - [$val[..] x: T]
             - [external x: T = "s1" ... "sn"]
          *)
   | Psig_type of rec_flag * type_declaration list
@@ -1076,7 +1077,8 @@ and structure_item_desc =
                 when [rec] is {{!Asttypes.rec_flag.Recursive}[Recursive]}.
 
           [let] is written [$let] when [mac] is
-          {{!Asttypes.macro_flag.Static}[Static]}.
+          {{!Asttypes.macro_flag.Static}[Static]}, and [$let[..]] when
+          it is {{!Asttypes.macro_flag.Macro}[Macro]}.
         *)
   | Pstr_primitive of value_description
       (** - [val x: T]

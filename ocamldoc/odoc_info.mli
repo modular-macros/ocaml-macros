@@ -326,7 +326,7 @@ module Value :
           val_type : Types.type_expr ; (** Type of the value. *)
           val_recursive : bool ; (** [true] if the value is recursive. *)
           val_macro : Asttypes.macro_flag ;
-            (** [Static] for a static binding. *)
+            (** [Static] for a static binding, [Macro] for a generator. *)
           mutable val_parameters : Odoc_parameter.parameter list ; (** The parameters, if any. *)
           mutable val_code : string option ; (** The code of the value, if we had the only the implementation file. *)
           mutable val_loc : location ;
@@ -352,7 +352,7 @@ module Value :
     val is_function : t_value -> bool
 
     (** The keyword that declares the value: [val], or [$val] for a
-        static binding. *)
+        static binding, [$val[..]] for a generator. *)
     val keyword : t_value -> string
 
     (** Access to the description associated to the given parameter name.*)

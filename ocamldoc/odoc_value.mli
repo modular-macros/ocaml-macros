@@ -66,4 +66,4 @@ val is_function : t_value -> bool
 
 val keyword : t_value -> string
 (** The keyword that declares the value: [val], or [$val] for a static
-    binding. *)
+    binding, [$val[..]] for a generator. *)

@@ -26,6 +26,7 @@ let short_closed_tuple_pat loc =
   err loc "Closed tuple patterns must have at least two components."
 let no_args loc = err loc "Function application with no argument."
 let empty_let loc = err loc "Let with no bindings."
+let empty_macro loc = err loc "$let[..] with no bindings."
 let empty_static loc = err loc "Static let with no bindings."
 let empty_type loc = err loc "Type declarations cannot be empty."
 let empty_poly_binder loc =
@@ -175,6 +176,7 @@ let iterator =
     match st.pstr_desc with
     | Pstr_type (_, []) -> empty_type loc
     | Pstr_value (_, Value, []) -> empty_let loc
+    | Pstr_value (_, Macro, []) -> empty_macro loc
     | Pstr_value (_, Static, []) -> empty_static loc
     | _ -> ()
   in

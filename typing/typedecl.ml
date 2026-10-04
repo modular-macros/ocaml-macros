@@ -1664,6 +1664,8 @@ let transl_value_decl env loc valdecl =
   let v =
   match valdecl.pval_prim with
     [] when Env.is_in_signature env ->
+      if valdecl.pval_macro = Asttypes.Macro
+      then Misc.fatal_error "generators: not implemented";
       { val_type = ty; val_kind = Val_reg; Types.val_loc = loc;
         val_staging_level = 0;
         val_macro = valdecl.pval_macro;

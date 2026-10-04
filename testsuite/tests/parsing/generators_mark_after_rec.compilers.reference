@@ -1,0 +1,4 @@
+File "generators_mark_after_rec.ml", line 11, characters 9-13:
+11 | $let rec [..] a x = << $x >>
+              ^^^^
+Error: Syntax error

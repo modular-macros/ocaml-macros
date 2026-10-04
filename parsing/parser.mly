@@ -816,6 +816,7 @@ let mk_directive ~loc name arg =
 %token LBRACELESS             "{<"
 %token LBRACKET               "["
 %token LBRACKETBAR            "[|"
+%token LBRACKETDOTDOTRBRACKET "[..]"
 %token LBRACKETLESS           "[<"
 %token LBRACKETGREATER        "[>"
 %token LBRACKETPERCENT        "[%"
@@ -1552,6 +1553,8 @@ structure:
 structure_item:
     let_bindings(ext)
       { val_of_bindings ~loc:$sloc $1 Value }
+  | macro_bindings
+      { val_of_bindings ~loc:$sloc $1 Macro }
   | static_bindings
       { val_of_bindings ~loc:$sloc $1 Static }
   | wrap_mkstr_ext(
@@ -1809,6 +1812,8 @@ signature_item:
     | floating_attribute
         { psig_attribute $1 }
     | value_description
+        { psig_value $1 }
+    | macro_description
         { psig_value $1 }
     | static_val_description
         { psig_value $1 }
@@ -2831,6 +2836,11 @@ letop_bindings:
         let_pat, let_exp, and_ :: rev_ands }
 ;
 
+macro_bindings:
+     macro_binding                           { $1 }
+   | macro_bindings and_let_binding            { addlb $1 $2 }
+;
+
 (* A static binding, [$let x = e] *)
 static_bindings:
      static_binding                          { $1 }
@@ -2839,6 +2849,19 @@ static_bindings:
 
 %inline static_binding:
    DOLLARLET
+   ext = ext
+   attrs1 = attributes
+   rec_flag = rec_flag
+   body = let_binding_body
+   attrs2 = post_item_attributes
+     {
+       let attrs = attrs1 @ attrs2 in
+       mklbs ext rec_flag (mklb ~loc:$sloc true body attrs)
+     }
+;
+(* A generator, [$let[..] f x = e] *)
+%inline macro_binding:
+   DOLLARLET LBRACKETDOTDOTRBRACKET
    ext = ext
    attrs1 = attributes
    rec_flag = rec_flag
@@ -3307,6 +3330,21 @@ static_val_description:
       let loc = make_loc $sloc in
       let docs = symbol_docs $sloc in
       Val.mk ~macro:Static id ty ~attrs ~loc ~docs,
+      ext }
+;
+
+macro_description:
+  DOLLARVAL LBRACKETDOTDOTRBRACKET
+  ext = ext
+  attrs1 = attributes
+  id = mkrhs(val_ident)
+  COLON
+  ty = possibly_poly(core_type)
+  attrs2 = post_item_attributes
+    { let attrs = attrs1 @ attrs2 in
+      let loc = make_loc $sloc in
+      let docs = symbol_docs $sloc in
+      Val.mk ~macro:Macro id ty ~attrs ~loc ~docs,
       ext }
 ;
 

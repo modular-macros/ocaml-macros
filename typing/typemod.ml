@@ -2853,6 +2853,8 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         items,
         shape_map,
         newenv
+    | Pstr_value (_, Macro, _) ->
+        Misc.fatal_error "generators: not implemented"
     | Pstr_value (rec_flag, Static, sdefs) ->
         (* The right-hand sides are compile-time code, typed one level
            down.  The values bound are static bindings, which record the

@@ -602,7 +602,7 @@ let item_binds_at_compile_time ?expand_aliases (item : Typedtree.structure_item)
   =
   let binds me = binds_at_compile_time ?expand_aliases me in
   match item.str_desc with
-  | Tstr_value (_, Static, _) -> true
+  | Tstr_value (_, (Macro | Static), _) -> true
   | Tstr_module mb -> binds mb.mb_expr
   | Tstr_recmodule mbs -> List.exists (fun mb -> binds mb.mb_expr) mbs
   | Tstr_include incl -> binds_at_compile_time incl.incl_mod
@@ -849,6 +849,8 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
   | Tstr_eval (expr, _) ->
       let body = next fields in
       Lsequence(transl_exp ~ctx ~scopes expr, body)
+  | Tstr_value(_, Macro, _) ->
+      Misc.fatal_error "generators: not implemented"
   | Tstr_value(rec_flag, Static, pat_expr_list)
     when in_compile_world ctx ->
       List.iter
@@ -1332,6 +1334,8 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
             Lsequence(Lambda.subst no_env_update subst
                         (transl_exp ~ctx ~scopes expr),
                       transl_store ~scopes rootpath subst cont rem)
+        | Tstr_value(_, Macro, _) ->
+            Misc.fatal_error "generators: not implemented"
         | Tstr_value(_, Static, pat_expr_list) ->
             let ids = let_bound_idents pat_expr_list in
             let lam =
@@ -1966,6 +1970,8 @@ let transl_toplevel_item ~ctx ~scopes item =
          Otherwise, the normal compilation would result
          in a Lsequence returning unit. *)
       transl_exp ~ctx ~scopes expr
+  | Tstr_value(_, Macro, _) ->
+      Misc.fatal_error "generators: not implemented"
   | Tstr_value(_, Static, _) ->
       Misc.fatal_error "static bindings in the toplevel: not implemented"
   | Tstr_value(rec_flag, Value, pat_expr_list) ->

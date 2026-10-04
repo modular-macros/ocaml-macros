@@ -716,6 +716,7 @@ rule token = parse
   | "="  { EQUAL }
   | "["  { LBRACKET }
   | "[|" { LBRACKETBAR }
+  | "[..]" { LBRACKETDOTDOTRBRACKET }
   | "[<" { LBRACKETLESS }
   | "[>" { LBRACKETGREATER }
   | "]"  { RBRACKET }

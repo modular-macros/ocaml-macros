@@ -426,7 +426,7 @@ and rewrite_str_item iflag item =
     Pstr_eval (exp, _attrs) -> rewrite_exp iflag exp
   | Pstr_value(_, Asttypes.Value, exps)
      -> List.iter (fun x -> rewrite_exp iflag x.pvb_expr) exps
-  | Pstr_value(_, Asttypes.Static, _) ->
+  | Pstr_value(_, (Asttypes.Static | Asttypes.Macro), _) ->
       (* Compile-time code *)
       ()
   | Pstr_module x -> rewrite_mod iflag x.pmb_expr

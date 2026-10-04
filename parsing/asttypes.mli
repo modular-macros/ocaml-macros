@@ -46,9 +46,11 @@ type override_flag = Override | Fresh
 
 type closed_flag = Closed | Open
 
-(* A value binding is an ordinary value ([let], [val]) or a static
-   binding ([$let], [$val]), a value of compile-time code. *)
-type macro_flag = Value | Static
+(* A value binding is an ordinary value ([let], [val]); a static
+   binding ([$let], [$val]), a value of compile-time code; or a
+   generator ([$let[..]], [$val[..]]), a static binding of a function,
+   closed over the run-time names that the code it builds mentions. *)
+type macro_flag = Macro | Value | Static
 
 type label = string
 

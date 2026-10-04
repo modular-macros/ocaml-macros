@@ -905,6 +905,9 @@ and structure_item i ppf x =
   | Tstr_value (rf, Value, l) ->
       line i ppf "Tstr_value %a\n" fmt_rec_flag rf;
       list i (value_binding rf) ppf l;
+  | Tstr_value (rf, Macro, l) ->
+      line i ppf "Tstr_value (macro) %a\n" fmt_rec_flag rf;
+      list i (value_binding rf) ppf l;
   | Tstr_value (rf, Static, l) ->
       line i ppf "Tstr_value (static) %a\n" fmt_rec_flag rf;
       list i (value_binding rf) ppf l;

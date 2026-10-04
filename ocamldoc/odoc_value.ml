@@ -129,3 +129,4 @@ let keyword v =
   match v.val_macro with
   | Asttypes.Value -> "val"
   | Asttypes.Static -> "$val"
+  | Asttypes.Macro -> "$val[..]"

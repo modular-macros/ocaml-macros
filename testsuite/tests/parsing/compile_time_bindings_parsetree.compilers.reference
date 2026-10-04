@@ -1,0 +1,123 @@
+[
+  structure_item (compile_time_bindings_parsetree.ml[11,222+0]..[11,222+10])
+    Pstr_value Nonrec Static
+    [
+      <def>
+        pattern (compile_time_bindings_parsetree.ml[11,222+5]..[11,222+6])
+          Ppat_var "a" (compile_time_bindings_parsetree.ml[11,222+5]..[11,222+6])
+        expression (compile_time_bindings_parsetree.ml[11,222+9]..[11,222+10])
+          Pexp_constant
+          constant (compile_time_bindings_parsetree.ml[11,222+9]..[11,222+10])
+            PConst_int (1,None)
+    ]
+  structure_item (compile_time_bindings_parsetree.ml[12,233+0]..[12,233+16])
+    Pstr_value Nonrec Macro
+    [
+      <def>
+        pattern (compile_time_bindings_parsetree.ml[12,233+9]..[12,233+10])
+          Ppat_var "b" (compile_time_bindings_parsetree.ml[12,233+9]..[12,233+10])
+        expression (compile_time_bindings_parsetree.ml[12,233+11]..[12,233+16]) ghost
+          Pexp_function
+          [
+            Pparam_val (compile_time_bindings_parsetree.ml[12,233+11]..[12,233+12])
+              Nolabel
+              None
+              pattern (compile_time_bindings_parsetree.ml[12,233+11]..[12,233+12])
+                Ppat_var "x" (compile_time_bindings_parsetree.ml[12,233+11]..[12,233+12])
+          ]
+          None
+          Pfunction_body
+            expression (compile_time_bindings_parsetree.ml[12,233+15]..[12,233+16])
+              Pexp_ident "x" (compile_time_bindings_parsetree.ml[12,233+15]..[12,233+16])
+    ]
+  structure_item (compile_time_bindings_parsetree.ml[13,250+0]..[13,250+14]) ghost
+    Pstr_extension "ext"
+    [
+      structure_item (compile_time_bindings_parsetree.ml[13,250+0]..[13,250+14])
+        Pstr_value Nonrec Static
+        [
+          <def>
+            pattern (compile_time_bindings_parsetree.ml[13,250+9]..[13,250+10])
+              Ppat_var "c" (compile_time_bindings_parsetree.ml[13,250+9]..[13,250+10])
+            expression (compile_time_bindings_parsetree.ml[13,250+13]..[13,250+14])
+              Pexp_constant
+              constant (compile_time_bindings_parsetree.ml[13,250+13]..[13,250+14])
+                PConst_int (2,None)
+        ]
+    ]
+  structure_item (compile_time_bindings_parsetree.ml[14,265+0]..[14,265+20]) ghost
+    Pstr_extension "ext"
+    [
+      structure_item (compile_time_bindings_parsetree.ml[14,265+0]..[14,265+20])
+        Pstr_value Nonrec Macro
+        [
+          <def>
+            pattern (compile_time_bindings_parsetree.ml[14,265+13]..[14,265+14])
+              Ppat_var "d" (compile_time_bindings_parsetree.ml[14,265+13]..[14,265+14])
+            expression (compile_time_bindings_parsetree.ml[14,265+15]..[14,265+20]) ghost
+              Pexp_function
+              [
+                Pparam_val (compile_time_bindings_parsetree.ml[14,265+15]..[14,265+16])
+                  Nolabel
+                  None
+                  pattern (compile_time_bindings_parsetree.ml[14,265+15]..[14,265+16])
+                    Ppat_var "x" (compile_time_bindings_parsetree.ml[14,265+15]..[14,265+16])
+              ]
+              None
+              Pfunction_body
+                expression (compile_time_bindings_parsetree.ml[14,265+19]..[14,265+20])
+                  Pexp_ident "x" (compile_time_bindings_parsetree.ml[14,265+19]..[14,265+20])
+        ]
+    ]
+  structure_item (compile_time_bindings_parsetree.ml[16,287+0]..[21,393+3])
+    Pstr_modtype "S" (compile_time_bindings_parsetree.ml[16,287+12]..[16,287+13])
+      module_type (compile_time_bindings_parsetree.ml[16,287+16]..[21,393+3])
+        Pmty_signature
+        [
+          signature_item (compile_time_bindings_parsetree.ml[17,307+2]..[17,307+14])
+            Psig_value
+            value_description "a" (compile_time_bindings_parsetree.ml[17,307+7]..[17,307+8]) Static (compile_time_bindings_parsetree.ml[17,307+2]..[17,307+14])
+              core_type (compile_time_bindings_parsetree.ml[17,307+11]..[17,307+14])
+                Ptyp_constr "int" (compile_time_bindings_parsetree.ml[17,307+11]..[17,307+14])
+                []
+              []
+          signature_item (compile_time_bindings_parsetree.ml[18,322+2]..[18,322+23])
+            Psig_value
+            value_description "b" (compile_time_bindings_parsetree.ml[18,322+11]..[18,322+12]) Macro (compile_time_bindings_parsetree.ml[18,322+2]..[18,322+23])
+              core_type (compile_time_bindings_parsetree.ml[18,322+15]..[18,322+23])
+                Ptyp_arrow
+                Nolabel
+                core_type (compile_time_bindings_parsetree.ml[18,322+15]..[18,322+17])
+                  Ptyp_var a
+                core_type (compile_time_bindings_parsetree.ml[18,322+21]..[18,322+23])
+                  Ptyp_var a
+              []
+          signature_item (compile_time_bindings_parsetree.ml[19,346+2]..[19,346+18])
+            Psig_extension "ext"
+            [
+              signature_item (compile_time_bindings_parsetree.ml[19,346+2]..[19,346+18]) ghost
+                Psig_value
+                value_description "c" (compile_time_bindings_parsetree.ml[19,346+11]..[19,346+12]) Static (compile_time_bindings_parsetree.ml[19,346+2]..[19,346+18])
+                  core_type (compile_time_bindings_parsetree.ml[19,346+15]..[19,346+18])
+                    Ptyp_constr "int" (compile_time_bindings_parsetree.ml[19,346+15]..[19,346+18])
+                    []
+                  []
+            ]
+          signature_item (compile_time_bindings_parsetree.ml[20,365+2]..[20,365+27])
+            Psig_extension "ext"
+            [
+              signature_item (compile_time_bindings_parsetree.ml[20,365+2]..[20,365+27]) ghost
+                Psig_value
+                value_description "d" (compile_time_bindings_parsetree.ml[20,365+15]..[20,365+16]) Macro (compile_time_bindings_parsetree.ml[20,365+2]..[20,365+27])
+                  core_type (compile_time_bindings_parsetree.ml[20,365+19]..[20,365+27])
+                    Ptyp_arrow
+                    Nolabel
+                    core_type (compile_time_bindings_parsetree.ml[20,365+19]..[20,365+21])
+                      Ptyp_var a
+                    core_type (compile_time_bindings_parsetree.ml[20,365+25]..[20,365+27])
+                      Ptyp_var a
+                  []
+            ]
+        ]
+]
+

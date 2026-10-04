@@ -1,0 +1,4 @@
+File "generators_split_mark.ml", line 11, characters 7-9:
+11 | $let [ .. ] a x = << $x >>
+            ^^
+Error: Syntax error

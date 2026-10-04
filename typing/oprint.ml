@@ -695,6 +695,7 @@ and print_out_sig_item ppf =
   | Osig_value vd ->
       let kwd =
         match vd.oval_macro with
+        | Asttypes.Macro -> "$val[..]"
         | Asttypes.Static -> "$val"
         | Asttypes.Value -> if vd.oval_prims = [] then "val" else "external"
       in
