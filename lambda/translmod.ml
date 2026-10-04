@@ -579,7 +579,9 @@ let merge_functors ~scopes mexp coercion root_path =
   let rec merge ~scopes mexp coercion path acc inline_attribute =
     let finished = acc, mexp, path, coercion, inline_attribute in
     match mexp.mod_desc with
-    | Tmod_functor (param, body) ->
+    | Tmod_functor (Template, _, _) ->
+        Misc.fatal_error "templates: not implemented"
+    | Tmod_functor (Plain, param, body) ->
       let inline_attribute' =
         Translattribute.get_inline_attribute mexp.mod_attributes
       in
@@ -922,10 +924,13 @@ and transl_module ~ctx ~scopes cc rootpath mexp =
   | Tmod_functor _ ->
       oo_wrap mexp.mod_env true (fun () ->
         compile_functor ~ctx ~scopes mexp cc rootpath loc) ()
-  | Tmod_apply(funct, arg, ccarg) ->
+  | Tmod_apply (Template_application _, _, _, _)
+  | Tmod_apply_unit (Template_application _, _) ->
+      Misc.fatal_error "templates: not implemented"
+  | Tmod_apply(Plain_application, funct, arg, ccarg) ->
       let translated_arg = transl_module ~ctx ~scopes ccarg None arg in
       transl_apply ~ctx ~scopes ~loc ~cc mexp.mod_env funct translated_arg
-  | Tmod_apply_unit funct ->
+  | Tmod_apply_unit (Plain_application, funct) ->
       transl_apply ~ctx ~scopes ~loc ~cc mexp.mod_env funct lambda_unit
   | Tmod_constraint(arg, _, _, ccarg) ->
       transl_module ~ctx ~scopes (compose_coercions cc ccarg) rootpath arg
@@ -1030,7 +1035,7 @@ and transl_module_hoisted ~ctx ~scopes cc rootpath me k =
   match me.mod_desc with
   | Tmod_structure str ->
       transl_struct ~cont:k ~ctx ~scopes Loc_unknown [] cc rootpath str
-  | Tmod_functor (_, fbody)
+  | Tmod_functor (_, _, fbody)
     when in_compile_world ctx && binds_at_compile_time me ->
       (* The compile-time block of the body, with [k] inside the scope
          of its bindings. *)
@@ -1039,11 +1044,11 @@ and transl_module_hoisted ~ctx ~scopes cc rootpath me k =
   | Tmod_constraint (me', _, _, ccarg) ->
       transl_module_hoisted ~ctx ~scopes (compose_coercions cc ccarg) rootpath
         me' k
-  | Tmod_apply (funct, arg, _) when in_compile_world ctx ->
+  | Tmod_apply (Plain_application, funct, arg, _) when in_compile_world ctx ->
       compile_time_operand ~ctx ~scopes funct (fun funct_value ->
         compile_time_operand ~ctx ~scopes arg (fun _ ->
           k (compile_time_application ~ctx cc me funct funct_value)))
-  | Tmod_apply_unit funct when in_compile_world ctx ->
+  | Tmod_apply_unit (Plain_application, funct) when in_compile_world ctx ->
       compile_time_operand ~ctx ~scopes funct (fun funct_value ->
         k (compile_time_application ~ctx cc me funct funct_value))
   | _ -> k (transl_module ~ctx ~scopes cc rootpath me)

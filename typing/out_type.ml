@@ -412,7 +412,7 @@ let rec tree_of_path ?(disambiguation=true) namespace p =
   | Papply(p1, p2) ->
       let t1 = tree_of_path (Some Module) p1 in
       let t2 = tree_of_path (Some Module) p2 in
-      Oide_apply (t1, t2)
+      Oide_apply (Env.functor_kind p1 !printing_env, t1, t2)
   | Pextra_ty (p, extra) -> begin
       (* inline record types are syntactically prevented from escaping their
          binding scope, and are never shown to users. *)
@@ -575,7 +575,7 @@ let rec lid_of_path = function
       Longident.Ldot (Location.mknoloc (lid_of_path p1), Location.mknoloc s)
   | Path.Papply (p1, p2) ->
       Longident.Lapply
-        (Plain,
+        (Env.functor_kind p1 !printing_env,
          Location.mknoloc (lid_of_path p1), Location.mknoloc (lid_of_path p2))
   | Path.Pextra_ty (p, Pext_ty) -> lid_of_path p
 
@@ -1637,11 +1637,11 @@ let prepared_tree_of_extension_constructor id ext es =
   in
   let ext =
     { oext_name = name;
+      oext_static = ext.ext_static;
       oext_type_name = ty_name;
       oext_type_params = ty_params;
       oext_args = args;
       oext_ret_type = ret;
-      oext_static = ext.ext_static;
       oext_private = ext.ext_private }
   in
   let es =
@@ -1898,12 +1898,12 @@ let rec tree_of_modtype ?(ellipsis=false) = function
   | Mty_signature sg ->
       Omty_signature (if ellipsis then [Osig_ellipsis]
                       else tree_of_signature sg)
-  | Mty_functor(param, ty_res) ->
+  | Mty_functor(k, param, ty_res) ->
       let param, env =
         tree_of_functor_parameter param
       in
       let res = wrap_env env (tree_of_modtype ~ellipsis) ty_res in
-      Omty_functor (param, res)
+      Omty_functor (k, param, res)
   | Mty_alias p ->
       Omty_alias (tree_of_path (Some Module) p)
 

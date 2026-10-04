@@ -1,0 +1,11 @@
+File "variance.ml", line 15, characters 31-37:
+15 | module Bad : $(X : S) -> BIG = Narrow
+                                    ^^^^^^
+Error: Signature mismatch:
+       Modules do not match:
+         $(X : S) -> sig val v : int end
+       is not included in
+         $(X : S) -> BIG
+       Modules do not match: sig val v : int end is not included in BIG
+       The value w is required but not provided
+       File "variance.ml", line 12, characters 34-45: Expected declaration

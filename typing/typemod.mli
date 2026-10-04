@@ -104,6 +104,8 @@ type hiding_error =
       user_loc: Location.t;
     }
 
+(* Where a structure-level definition was found, for
+   [Definition_in_staged_code]. *)
 type staged_context =
   | In_quotation
   | In_compile_time_code
@@ -146,6 +148,7 @@ type error =
   | Macro_is_not_function
   | Macro_binds_not_one_name
   | Macro_in_functor_argument
+  | Functor_kind_mismatch of Asttypes.functor_kind
   | Macro_in_package
   | Macro_in_abstract_modtype
   | Macro_in_local_module
@@ -154,6 +157,7 @@ type error =
   | Pack_in_compile_time_code
   | Functor_in_compile_time_package of Ident.t
   | Runtime_module_in_compile_time_code of Path.t option
+  | Template_application_in_local_module
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

@@ -1,0 +1,4 @@
+File "kind_mismatch_path.ml", line 14, characters 11-12:
+14 | type bad = T(M).t
+                ^
+Error: T is a template. Its application is written F$(M).

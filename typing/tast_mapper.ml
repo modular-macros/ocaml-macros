@@ -163,9 +163,9 @@ let structure_item sub {str_loc; str_desc; str_env} =
     match str_desc with
     | Tstr_eval (exp, attrs) ->
         Tstr_eval (sub.expr sub exp, sub.attributes sub attrs)
-    | Tstr_value (rec_flag, mac_flag, list) ->
+    | Tstr_value (rec_flag, st_lev, list) ->
         let (rec_flag, list) = sub.value_bindings sub (rec_flag, list) in
-        Tstr_value (rec_flag, mac_flag, list)
+        Tstr_value (rec_flag, st_lev, list)
     | Tstr_primitive v -> Tstr_primitive (sub.value_description sub v)
     | Tstr_type (rec_flag, list) ->
         let (rec_flag, list) = sub.type_declarations sub (rec_flag, list) in
@@ -581,8 +581,8 @@ let module_type sub x =
     | Tmty_ident (path, lid) -> Tmty_ident (path, map_loc_lid sub lid)
     | Tmty_alias (path, lid) -> Tmty_alias (path, map_loc_lid sub lid)
     | Tmty_signature sg -> Tmty_signature (sub.signature sub sg)
-    | Tmty_functor (arg, mtype2) ->
-        Tmty_functor (functor_parameter sub arg, sub.module_type sub mtype2)
+    | Tmty_functor (k, arg, mtype2) ->
+        Tmty_functor (k, functor_parameter sub arg, sub.module_type sub mtype2)
     | Tmty_with (mtype, list) ->
         Tmty_with (
           sub.module_type sub mtype,
@@ -617,6 +617,11 @@ let open_declaration sub od =
 let module_coercion sub = function
   | Tcoerce_none -> Tcoerce_none
   | Tcoerce_functor (face,c1,c2) ->
+      let face =
+        match face with
+        | Fcf_plain | Fcf_mixed -> face
+        | Fcf_template c -> Fcf_template (sub.module_coercion sub c)
+      in
       Tcoerce_functor
         (face, sub.module_coercion sub c1, sub.module_coercion sub c2)
   | Tcoerce_alias (env, p, c1) ->
@@ -638,16 +643,17 @@ let module_expr sub x =
     match x.mod_desc with
     | Tmod_ident (path, lid) -> Tmod_ident (path, map_loc_lid sub lid)
     | Tmod_structure st -> Tmod_structure (sub.structure sub st)
-    | Tmod_functor (arg, mexpr) ->
-        Tmod_functor (functor_parameter sub arg, sub.module_expr sub mexpr)
-    | Tmod_apply (mexp1, mexp2, c) ->
+    | Tmod_functor (k, arg, mexpr) ->
+        Tmod_functor (k, functor_parameter sub arg, sub.module_expr sub mexpr)
+    | Tmod_apply (k, mexp1, mexp2, c) ->
         Tmod_apply (
+          k,
           sub.module_expr sub mexp1,
           sub.module_expr sub mexp2,
           sub.module_coercion sub c
         )
-    | Tmod_apply_unit mexp1 ->
-        Tmod_apply_unit (sub.module_expr sub mexp1)
+    | Tmod_apply_unit (k, mexp1) ->
+        Tmod_apply_unit (k, sub.module_expr sub mexp1)
     | Tmod_constraint (mexpr, mt, Tmodtype_implicit, c) ->
         Tmod_constraint (sub.module_expr sub mexpr, mt, Tmodtype_implicit,
                          sub.module_coercion sub c)

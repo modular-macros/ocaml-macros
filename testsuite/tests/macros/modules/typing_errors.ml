@@ -69,8 +69,11 @@ Line 1, characters 21-22:
 1 | $let p = (module M : T)
                          ^
 Error: This module type cannot be used as a first-class module:
-       it has compile-time components (generators,
+       it has compile-time components (generators, templates,
        static bindings, or compile-time constructors).
+       A package type is read relative to the
+       package's own level, so all its members are at that level;
+       a component marked for another world has no place in it.
 |}]
 
 let p = (module M : S)

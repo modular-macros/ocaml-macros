@@ -1,0 +1,4 @@
+File "kind_mismatch.ml", line 13, characters 13-14:
+13 | module Bad = T(struct type t = int end)
+                  ^
+Error: This is a template. It must be applied as F$(M).

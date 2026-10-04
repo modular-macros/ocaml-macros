@@ -60,7 +60,6 @@ val diff: t -> t -> Ident.t list
 
 (* approximation to the preimage equivalence class of [find_type] *)
 val same_type_declarations: t -> t -> bool
-
 (* The equations in scope that are not usable at the level: each the
    path of the type it refines, and the declaration that gives it its
    manifest. *)
@@ -80,6 +79,10 @@ val attach_evidence: Ident.t -> outer:t -> t -> t option
 (* The name of the variables that hold evidence, which no program can
    write *)
 val evidence_name: string
+
+(* The kind of the functor at a path; [Plain] when the path is not
+   found. *)
+val functor_kind: Path.t -> t -> Asttypes.functor_kind
 
 (* The staging level and mode of the code being typed *)
 val get_env_level : t -> staging_level
@@ -268,6 +271,7 @@ type lookup_error =
   | Functor_used_as_structure of Longident.t
   | Abstract_used_as_structure of Longident.t
   | Generative_used_as_applicative of Longident.t
+  | Functor_kind_in_path of Asttypes.functor_kind * Longident.t
   | Illegal_reference_to_recursive_module of
       { container : string option; unbound : string }
   | Illegal_reference_to_recursive_class_type of

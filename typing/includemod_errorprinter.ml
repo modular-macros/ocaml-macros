@@ -168,9 +168,9 @@ module Runtime_coercion = struct
             find env (Context.Module id :: ctx) q md.md_type
         | _ -> raise Not_found
         end
-    | Mty_functor(Named (_,mt) as arg,_), InArg :: q ->
+    | Mty_functor(_, (Named (_,mt) as arg),_), InArg :: q ->
         find env (Context.Arg arg :: ctx) q mt
-    | Mty_functor(arg, mt), InBody :: q ->
+    | Mty_functor(_, arg, mt), InBody :: q ->
         find env (Context.Body arg :: ctx) q mt
     | _ -> raise Not_found
 
@@ -772,21 +772,21 @@ let eq_module_types {Err.got=mty1; expected=mty2} =
     !Oprint.out_module_type (Out_type.tree_of_modtype mty1)
     !Oprint.out_module_type (Out_type.tree_of_modtype mty2)
 
-let macro_components id =
-  Location.msg
-    "The module type given for %a has compile-time@ \
-     (generator or static binding)@ \
-     components, so it cannot match its abstract declaration.@ \
-     An abstract module type may only be instantiated with a module type@ \
-     whose components all exist at run time."
-    Style.inline_code (Ident.name id)
-
 let module_type_declarations id {Err.got=d1 ; expected=d2} =
   Fmt.dprintf
     "@[<hv 2>Module type declarations do not match:@ \
      %a@;<1 -2>does not match@ %a@]"
     !Oprint.out_sig_item (Out_type.tree_of_modtype_declaration id d1)
     !Oprint.out_sig_item (Out_type.tree_of_modtype_declaration id d2)
+
+let macro_components id =
+  Location.msg
+    "The module type given for %a has compile-time@ \
+     (generator, template, or static binding)@ \
+     components, so it cannot match its abstract declaration.@ \
+     An abstract module type may only be instantiated with a module type@ \
+     whose components all exist at run time."
+    Style.inline_code (Ident.name id)
 
 let interface_mismatch ppf (diff: _ Err.diff) =
   Fmt.fprintf ppf
@@ -846,6 +846,8 @@ let rec module_type ~expansion_token ~eqmode ~env ~before ~ctx diff =
         diff.symptom
   | Functor Params d -> (* We jump directly to the functor param error *)
       functor_params ~expansion_token ~env ~before ~ctx d
+  | Functor (Kind_mismatch _ as f) ->
+      functor_symptom ~expansion_token ~env ~before ~ctx f
   | _ ->
       let inner = if eqmode then eq_module_types else module_types in
       let next =
@@ -906,6 +908,13 @@ and functor_symptom ~expansion_token ~env ~before ~ctx = function
   | Result res ->
       module_type ~expansion_token ~eqmode:false ~env ~before ~ctx res
   | Params d -> functor_params ~expansion_token ~env ~before ~ctx d
+  | Kind_mismatch (kind1, kind2) ->
+      let describe = function
+        | Asttypes.Plain -> "a functor"
+        | Asttypes.Template -> "a template"
+      in
+      Location.msg "%s is not %s"
+        (String.capitalize_ascii (describe kind1)) (describe kind2) :: before
 
 and signature ~expansion_token ~env:_ ~before ~ctx sgs =
   let suggestion_text ppf suggestion =
@@ -959,7 +968,6 @@ and module_type_decl ~expansion_token ~env ~before ~ctx id diff =
   | Incomparable mts ->
       module_type ~expansion_token ~eqmode:true ~env ~before
         ~ctx:(Context.Modtype id :: ctx) mts.less_than
-  | Macro_components -> macro_components id :: before
   | Illegal_permutation c ->
       begin match diff.got.Types.mtd_type with
       | None -> assert false
@@ -969,6 +977,7 @@ and module_type_decl ~expansion_token ~env ~before ~ctx id diff =
             (mty,c)
           :: before
       end
+  | Macro_components -> macro_components id :: before
 
 
 and functor_arg_diff ~expansion_token env (patch: _ Diffing.change) =
@@ -1012,13 +1021,13 @@ let module_type_subst ~env id diff =
   | Incomparable mts ->
       module_type ~expansion_token:true ~eqmode:true ~env ~before:[]
         ~ctx:[Modtype id] mts.less_than
-  | Macro_components -> [macro_components id]
   | Illegal_permutation c ->
       let mty = diff.got in
       [with_context [Modtype id]
          (Runtime_coercion.illegal_permutation Context.alt_pp env.i_env)
          (mty,c)
       ]
+  | Macro_components -> [macro_components id]
 
 let all env = function
   | In_Compilation_unit diff ->

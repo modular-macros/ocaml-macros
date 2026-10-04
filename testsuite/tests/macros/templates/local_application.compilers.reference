@@ -1,0 +1,8 @@
+File "local_application.ml", line 14, characters 41-46:
+14 | let z = let module I = struct module A = G$(V) end in I.A.g
+                                              ^^^^^
+Error: A template cannot be applied in a locally bound module:
+       the application is evaluated at compile time, and a module bound
+       inside an expression is made at run time.
+       Apply it at the top level of a structure (module M = F$(V))
+       and refer to that module here.

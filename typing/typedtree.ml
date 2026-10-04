@@ -288,12 +288,17 @@ and functor_parameter =
 and module_expr_desc =
     Tmod_ident of Path.t * Longident.t loc
   | Tmod_structure of structure
-  | Tmod_functor of functor_parameter * module_expr
-  | Tmod_apply of module_expr * module_expr * module_coercion
-  | Tmod_apply_unit of module_expr
+  | Tmod_functor of functor_kind * functor_parameter * module_expr
+  | Tmod_apply of
+      application_kind * module_expr * module_expr * module_coercion
+  | Tmod_apply_unit of application_kind * module_expr
   | Tmod_constraint of
       module_expr * Types.module_type * module_type_constraint * module_coercion
   | Tmod_unpack of expression * Types.module_type
+
+and application_kind =
+  | Plain_application
+  | Template_application of Ident.t
 
 and structure = {
   str_items : structure_item list;
@@ -346,6 +351,7 @@ and value_binding =
 and functor_coercion_face =
     Fcf_plain
   | Fcf_mixed
+  | Fcf_template of module_coercion
 
 and module_coercion =
     Tcoerce_none
@@ -367,7 +373,7 @@ and module_type =
 and module_type_desc =
     Tmty_ident of Path.t * Longident.t loc
   | Tmty_signature of signature
-  | Tmty_functor of functor_parameter * module_type
+  | Tmty_functor of functor_kind * functor_parameter * module_type
   | Tmty_with of module_type * (Path.t * Longident.t loc * with_constraint) list
   | Tmty_typeof of module_expr
   | Tmty_alias of Path.t * Longident.t loc
@@ -929,7 +935,10 @@ exception Not_a_path
 let rec path_of_module mexp =
   match mexp.mod_desc with
   | Tmod_ident (p,_) -> p
-  | Tmod_apply(funct, arg, _coercion) when !Clflags.applicative_functors ->
+  (* A template application has no path: [Path.Papply] denotes an
+     applicative application, and templates are generative. *)
+  | Tmod_apply(Plain_application, funct, arg, _coercion)
+    when !Clflags.applicative_functors ->
       Path.Papply(path_of_module funct, path_of_module arg)
   | Tmod_constraint (mexp, _, _, _) ->
       path_of_module mexp
@@ -944,3 +953,7 @@ let remove_module_constraint me =
   match me.mod_desc with
   | Tmod_constraint (me, _, _, _) -> me
   | _ -> me
+
+let application_functor_kind = function
+  | Plain_application -> Asttypes.Plain
+  | Template_application _ -> Asttypes.Template

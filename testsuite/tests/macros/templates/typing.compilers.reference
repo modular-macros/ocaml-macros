@@ -1,0 +1,49 @@
+module type S = sig type t end
+module type V = sig val v : int end
+module type G = sig $val[..] m : int expr -> int expr end
+module type SV = sig $val v : int end
+module F1 : $(X : S) -> sig type t = X.t end
+module F2 : $(X : S) -> sig type t = X.t end
+module F3 : $() -> sig type t = int end
+module F4 : $S -> sig type t = int end
+module F5 :
+  $(X : S) -> (Y : S) -> $(Z : S) -> $() -> sig type t = X.t * Y.t * Z.t end
+module F6 : (X : V) -> $(Y : V) -> sig val w : int end
+module Uses :
+  $(X : G) ->
+    sig val a : int $val[..] n : int expr -> int expr val b : int end
+module Static : $(X : SV) -> sig $val s : int val a : int end
+module Value : $(X : V) -> sig val w : int end
+module HO :
+  $(T : $(X : V) -> sig val w : int end) ->
+    sig module A : sig val w : int end end
+module Returns : $(X : V) -> (Y : V) -> sig val w : int end
+module Mixed : (X : V) -> sig module T : $(Y : V) -> sig val w : int end end
+module Both : $(X : V) -> sig $val[..] m : unit -> int expr end
+module type BIG = sig val v : int val w : int end
+module type SMALL = sig val v : int end
+module Wide : $(X : S) -> BIG
+module Narrow : $(X : S) -> SMALL
+module TakesSmall : $(X : SMALL) -> S
+module TakesBig : $(X : BIG) -> S
+module Nested : $($(X : BIG) -> S) -> S
+module NestedOk : $($(X : SMALL) -> S) -> S
+module M : sig type t = int end
+module M' = M
+module A : sig type t = M.t end
+module B : sig type t = M'.t end
+module F1' = F1
+module C : sig type t = M.t end
+val shared : A.t -> B.t -> C.t -> F1$(M).t list
+module Generative : sig type t = int end
+module Literal : sig type t = int end
+module F7 : $(X : S) -> (Y : S) -> sig type t = X.t * Y.t end
+module Partial : (Y : S) -> sig type t = M.t * Y.t end
+module Curried : sig type t = M.t * M.t end
+val path : Curried.t -> F7$(M)(M).t
+module type H = sig module T : $(X : V) -> sig val w : int end end
+module MV : sig val v : int end
+module MixedMV : sig module T : $(Y : V) -> sig val w : int end end
+module type H' = sig module T : $(Y : V) -> sig val w : int end end
+module type Of = (X : V) -> $(Y : V) -> sig val w : int end
+module rec R : sig module T : $(X : S) -> S end

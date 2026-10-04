@@ -1027,14 +1027,14 @@ and modexp : Typedtree.module_expr -> term_judg =
       path pth
     | Tmod_structure s ->
       structure s
-    | Tmod_functor (_, e) ->
+    | Tmod_functor (_, _, e) ->
       modexp e <<< Delay
-    | Tmod_apply (f, p, _) ->
+    | Tmod_apply (_, f, p, _) ->
       join [
         modexp f <<< Dereference;
         modexp p <<< Dereference;
       ]
-    | Tmod_apply_unit f ->
+    | Tmod_apply_unit (_, f) ->
       modexp f <<< Dereference
     | Tmod_constraint (mexp, _, _, coe) ->
       let rec coercion coe k = match coe with

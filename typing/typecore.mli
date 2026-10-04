@@ -234,7 +234,6 @@ type error =
   | Unrefuted_pattern of Typedtree.pattern
   | Invalid_extension_constructor_payload
   | Not_an_extension_constructor
-  | Compile_time_module_in_runtime_code of Ident.t
   | Invalid_atomic_loc_payload
   | Label_not_atomic of Longident.t
   | Atomic_in_pattern of Longident.t
@@ -263,6 +262,7 @@ type error =
   | Splice_outside_quotation of int
   | Quotation_in_quotation
   | Splice_in_splice
+  | Compile_time_module_in_runtime_code of Ident.t
   | Generator_in_static_binding of Path.t
 
 exception Error of Location.t * Env.t * error

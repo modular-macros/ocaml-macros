@@ -194,7 +194,8 @@ Line 1, characters 15-49:
 1 | let f () = let module M = struct exception $E end in ()
                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: A locally bound module cannot have compile-time components
-       (generators, static bindings, or compile-time constructors).
+       (generators, templates, static bindings,
+       or compile-time constructors).
        Bind it at the top level of a structure instead.
 |}]
 

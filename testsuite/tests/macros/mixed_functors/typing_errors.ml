@@ -15,7 +15,10 @@ Lines 1-3, characters 9-3:
 2 |   $let[..] h () = X.g ()
 3 | end
 Error: The argument of a functor cannot contain compile-time components
-       (generators, static bindings, or compile-time constructors).
+       (generators, templates, static bindings,
+       or compile-time constructors).
+       Use a template, whose parameter is written "$(X : S)",
+       if the argument needs them.
 |}]
 
 module F (X : sig val v : int end) = struct
@@ -38,7 +41,10 @@ Line 1, characters 9-73:
 1 | module G (F : functor (X : sig end) -> sig $val s : int end) = struct end
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The argument of a functor cannot contain compile-time components
-       (generators, static bindings, or compile-time constructors).
+       (generators, templates, static bindings,
+       or compile-time constructors).
+       Use a template, whose parameter is written "$(X : S)",
+       if the argument needs them.
 |}]
 
 (* A signature tells the compile-time components of the result. *)

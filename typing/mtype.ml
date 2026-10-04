@@ -44,17 +44,17 @@ let rec strengthen_lazy ~aliasable env mty p =
   match scrape_lazy env mty with
     MtyL_signature sg ->
       MtyL_signature(strengthen_lazy_sig ~aliasable env sg p)
-  | MtyL_functor(Named (Some param, arg), res)
+  | MtyL_functor(kind, Named (Some param, arg), res)
     when !Clflags.applicative_functors ->
       let env =
         Env.add_module_lazy ~update_summary:false param Mp_present arg env
       in
-      MtyL_functor(Named (Some param, arg),
+      MtyL_functor(kind, Named (Some param, arg),
         strengthen_lazy ~aliasable:false env res (Papply(p, Pident param)))
-  | MtyL_functor(Named (None, arg), res)
+  | MtyL_functor(kind, Named (None, arg), res)
     when !Clflags.applicative_functors ->
       let param = Ident.create_scoped ~scope:(Path.scope p) "Arg" in
-      MtyL_functor(Named (Some param, arg),
+      MtyL_functor(kind, Named (Some param, arg),
         strengthen_lazy ~aliasable:false env res (Papply(p, Pident param)))
   | mty ->
       mty
@@ -142,9 +142,9 @@ let rec make_aliases_absent pres mty =
   | Mty_alias _ -> Mp_absent, mty
   | Mty_signature sg ->
       pres, Mty_signature(make_aliases_absent_sig sg)
-  | Mty_functor(arg, res) ->
+  | Mty_functor(k, arg, res) ->
       let _, res = make_aliases_absent Mp_present res in
-      pres, Mty_functor(arg, res)
+      pres, Mty_functor(k, arg, res)
   | mty ->
       pres, mty
 
@@ -206,9 +206,9 @@ let rec nondep_mty_with_presence env va ids pres mty =
   | Mty_signature sg ->
       let mty = Mty_signature(nondep_sig env va ids sg) in
       pres, mty
-  | Mty_functor(Unit, res) ->
-      pres, Mty_functor(Unit, nondep_mty env va ids res)
-  | Mty_functor(Named (param, arg), res) ->
+  | Mty_functor(k, Unit, res) ->
+      pres, Mty_functor(k, Unit, nondep_mty env va ids res)
+  | Mty_functor(k, Named (param, arg), res) ->
       let var_inv =
         match va with Co -> Contra | Contra -> Co | Strict -> Strict in
       let res_env =
@@ -217,7 +217,7 @@ let rec nondep_mty_with_presence env va ids pres mty =
         | Some param -> Env.add_module ~noalias:true param Mp_present arg env
       in
       let mty =
-        Mty_functor(Named (param, nondep_mty env var_inv ids arg),
+        Mty_functor(k, Named (param, nondep_mty env var_inv ids arg),
                     nondep_mty res_env va ids res)
       in
       pres, mty
@@ -366,7 +366,11 @@ let rec macro_components ~expand_aliases env mty =
   let macro_components = macro_components ~expand_aliases in
   match scrape env mty with
   | Mty_signature sg -> macro_components_sig ~expand_aliases env sg
-  | Mty_functor (param, body) ->
+  | Mty_functor (Template, _, _) ->
+      (* A template is expanded at each application, whether or not
+         its parameter has compile-time components. *)
+      true
+  | Mty_functor (Plain, param, body) ->
       (match param with
        | Unit -> false
        | Named (_, arg) -> macro_components env arg)
@@ -427,7 +431,7 @@ let rec contains_type env = function
       end
   | Mty_signature sg ->
       contains_type_sig env sg
-  | Mty_functor (_, body) ->
+  | Mty_functor (_, _, body) ->
       contains_type env body
   | Mty_alias _ ->
       ()

@@ -558,7 +558,7 @@ module Lazy_types = struct
   and modtype =
     | MtyL_ident of Path.t
     | MtyL_signature of signature
-    | MtyL_functor of functor_parameter * modtype
+    | MtyL_functor of Asttypes.functor_kind * functor_parameter * modtype
     | MtyL_alias of Path.t
 
   and modtype_declaration =
@@ -670,9 +670,9 @@ and lazy_modtype = function
   | Mty_ident p -> MtyL_ident p
   | Mty_signature sg ->
      MtyL_signature (Lazy_backtrack.create_forced (S_eager sg))
-  | Mty_functor (Unit, mty) -> MtyL_functor (Unit, lazy_modtype mty)
-  | Mty_functor (Named (id, arg), res) ->
-     MtyL_functor (Named (id, lazy_modtype arg), lazy_modtype res)
+  | Mty_functor (k, Unit, mty) -> MtyL_functor (k, Unit, lazy_modtype mty)
+  | Mty_functor (k, Named (id, arg), res) ->
+     MtyL_functor (k, Named (id, lazy_modtype arg), lazy_modtype res)
   | Mty_alias p -> MtyL_alias p
 
 and subst_lazy_modtype scoping s = function
@@ -690,14 +690,14 @@ and subst_lazy_modtype scoping s = function
       end
   | MtyL_signature sg ->
       MtyL_signature(subst_lazy_signature scoping s sg)
-  | MtyL_functor(Unit, res) ->
-      MtyL_functor(Unit, subst_lazy_modtype scoping s res)
-  | MtyL_functor(Named (None, arg), res) ->
-      MtyL_functor(Named (None, (subst_lazy_modtype scoping s) arg),
+  | MtyL_functor(k, Unit, res) ->
+      MtyL_functor(k, Unit, subst_lazy_modtype scoping s res)
+  | MtyL_functor(k, Named (None, arg), res) ->
+      MtyL_functor(k, Named (None, (subst_lazy_modtype scoping s) arg),
                    subst_lazy_modtype scoping s res)
-  | MtyL_functor(Named (Some id, arg), res) ->
+  | MtyL_functor(k, Named (Some id, arg), res) ->
       let id' = Ident.rename id in
-      MtyL_functor(Named (Some id', (subst_lazy_modtype scoping s) arg),
+      MtyL_functor(k, Named (Some id', (subst_lazy_modtype scoping s) arg),
                   subst_lazy_modtype scoping (add_module id (Pident id') s) res)
   | MtyL_alias p ->
       MtyL_alias (module_path s p)
@@ -705,12 +705,12 @@ and subst_lazy_modtype scoping s = function
 and force_modtype = function
   | MtyL_ident p -> Mty_ident p
   | MtyL_signature sg -> Mty_signature (force_signature sg)
-  | MtyL_functor (param, res) ->
+  | MtyL_functor (k, param, res) ->
      let param : Types.functor_parameter =
        match param with
        | Unit -> Unit
        | Named (id, mty) -> Named (id, force_modtype mty) in
-     Mty_functor (param, force_modtype res)
+     Mty_functor (k, param, force_modtype res)
   | MtyL_alias p -> Mty_alias p
 
 and lazy_modtype_decl mtd =

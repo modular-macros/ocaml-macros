@@ -115,8 +115,11 @@ Line 2, characters 26-27:
 2 | $let[..] bad () : (module S) expr = << assert false >>
                               ^
 Error: This module type cannot be used as a first-class module:
-       it has compile-time components (generators,
+       it has compile-time components (generators, templates,
        static bindings, or compile-time constructors).
+       A package type is read relative to the
+       package's own level, so all its members are at that level;
+       a component marked for another world has no place in it.
 |}]
 
 (* A variable of the quotation may not escape through a member. *)

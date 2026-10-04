@@ -1,0 +1,4 @@
+File "levels.ml", line 12, characters 35-38:
+12 | module F $(X : G) = struct let y = X.m << 3 >> end
+                                        ^^^
+Error: X.m is bound in compile-time code, but this use is at run time.

@@ -189,7 +189,6 @@ type error =
   | Unrefuted_pattern of pattern
   | Invalid_extension_constructor_payload
   | Not_an_extension_constructor
-  | Compile_time_module_in_runtime_code of Ident.t
   | Invalid_atomic_loc_payload
   | Label_not_atomic of Longident.t
   | Atomic_in_pattern of Longident.t
@@ -218,6 +217,7 @@ type error =
   | Splice_outside_quotation of int
   | Quotation_in_quotation
   | Splice_in_splice
+  | Compile_time_module_in_runtime_code of Ident.t
   | Generator_in_static_binding of Path.t
 
 
@@ -4089,7 +4089,6 @@ type type_function_result_param =
 { param : function_param;
   has_poly : bool;
 }
-
 (* Staging *)
 
 (* Whether [ty], expanded in [env], mentions a type that one of
@@ -5426,7 +5425,6 @@ and type_expect_
         exp_attributes = sexp.pexp_attributes;
         exp_env = env;
       }
-
   | Pexp_unreachable ->
       re { exp_desc = Texp_unreachable;
            exp_loc = loc; exp_extra = [];
@@ -8365,7 +8363,6 @@ let report_error ~loc env = function
        @ Bind the module outside the generator or splice body, or move the\
        @ reference into a splice."
         Style.inline_code (Ident.name id)
-
 
 let report_error ~loc env err =
   Printtyp.wrap_printing_env ~error:true env

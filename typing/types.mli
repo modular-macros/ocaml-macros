@@ -708,7 +708,7 @@ type visibility =
 type module_type =
     Mty_ident of Path.t
   | Mty_signature of signature
-  | Mty_functor of functor_parameter * module_type
+  | Mty_functor of functor_kind * functor_parameter * module_type
   | Mty_alias of Path.t
 
 and functor_parameter =

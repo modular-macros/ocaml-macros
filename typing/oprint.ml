@@ -32,8 +32,10 @@ let rec print_ident ppf =
     Oide_ident s -> print_lident ppf s.printed_name
   | Oide_dot (id, s) ->
       print_ident ppf id; pp_print_char ppf '.'; print_lident ppf s
-  | Oide_apply (id1, id2) ->
+  | Oide_apply (Plain, id1, id2) ->
       fprintf ppf "%a(%a)" print_ident id1 print_ident id2
+  | Oide_apply (Template, id1, id2) ->
+      fprintf ppf "%a$(%a)" print_ident id1 print_ident id2
 
 let out_ident = ref print_ident
 
@@ -557,8 +559,8 @@ let out_functor_parameters =
    that should be printed in long form. *)
 
 let rec collect_functor_args acc = function
-  | Omty_functor (param, mty_res) ->
-      collect_functor_args (param :: acc) mty_res
+  | Omty_functor (kind, param, mty_res) ->
+      collect_functor_args ((kind, param) :: acc) mty_res
   | non_functor -> (acc, non_functor)
 let collect_functor_args mty =
   let l, rest = collect_functor_args [] mty in
@@ -588,6 +590,18 @@ let split_anon_functor_arguments params =
 let rec print_out_module_type ppf mty =
   print_out_functor ppf mty
 
+(* Whether a dollar may be glued to a path: the head of the path must
+   then be written as it is, not a keyword, which is written with an
+   escape, and beginning with a letter that the lexer reads after a
+   dollar. *)
+and gluable = function
+  | Oide_ident s ->
+      let s = s.printed_name in
+      s <> "" && not (Lexer.is_keyword s)
+      && (match s.[0] with 'a'..'z' | 'A'..'Z' | '_' -> true | _ -> false)
+  | Oide_dot (id, _) -> gluable id
+  | Oide_apply _ -> false
+
 and print_out_functor_parameters ppf l =
   let print_nonanon_arg ppf = function
     | None ->
@@ -597,17 +611,43 @@ and print_out_functor_parameters ppf l =
           (Option.value param ~default:"_")
           print_out_module_type mty
   in
-  let rec print_args ppf = function
+  let print_template_arg ppf = function
+    | None ->
+        fprintf ppf "$()"
+    | Some (None, Omty_ident id) when gluable id ->
+        (* The short form for a name: "$A -> B". *)
+        fprintf ppf "$%a" print_ident id
+    | Some (None, mty) ->
+        (* The short form: "$(A) -> B" rather than "$(_ : A) -> B". *)
+        fprintf ppf "$(%a)" print_out_module_type mty
+    | Some (Some param, mty) ->
+        fprintf ppf "$(%s : %a)" param print_out_module_type mty
+  in
+  (* The short form "S -> ..." for anonymous parameters is arrow-based, so it
+     applies to runs of plain parameters only. *)
+  let rec print_plain_args ppf = function
     | [] -> ()
     | Some (None, mty_arg) :: l ->
         fprintf ppf "%a ->@ %a"
           print_simple_out_module_type mty_arg
-          print_args l
+          print_plain_args l
     | _ :: _ as non_anonymous_functor ->
         let args, anons = split_anon_functor_arguments non_anonymous_functor in
         fprintf ppf "@[%a@]@ ->@ %a"
           (pp_print_list ~pp_sep:pp_print_space print_nonanon_arg) args
-          print_args anons
+          print_plain_args anons
+  in
+  let rec span_plain acc = function
+    | (Asttypes.Plain, param) :: l -> span_plain (param :: acc) l
+    | rest -> List.rev acc, rest
+  in
+  let rec print_args ppf = function
+    | [] -> ()
+    | (Asttypes.Template, param) :: l ->
+        fprintf ppf "%a ->@ %a" print_template_arg param print_args l
+    | (Asttypes.Plain, _) :: _ as l ->
+        let plain, rest = span_plain [] l in
+        fprintf ppf "%a%a" print_plain_args plain print_args rest
   in
   print_args ppf l
 

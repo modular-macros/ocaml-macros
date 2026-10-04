@@ -37,7 +37,8 @@ Line 1, characters 14-53:
 1 | let bad = let open struct $let[..] g () = << 1 >> end in 1
                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: A locally bound module cannot have compile-time components
-       (generators, static bindings, or compile-time constructors).
+       (generators, templates, static bindings,
+       or compile-time constructors).
        Bind it at the top level of a structure instead.
 |}]
 
@@ -49,7 +50,8 @@ Line 1, characters 14-33:
 1 | let bad = let open F (struct end) in v
                   ^^^^^^^^^^^^^^^^^^^
 Error: A locally bound module cannot have compile-time components
-       (generators, static bindings, or compile-time constructors).
+       (generators, templates, static bindings,
+       or compile-time constructors).
        Bind it at the top level of a structure instead.
 |}]
 
@@ -62,7 +64,8 @@ Line 2, characters 6-69:
 2 |   let open (Lib : sig val v : int  $val[..] g : unit -> int expr end) in v
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: A locally bound module cannot have compile-time components
-       (generators, static bindings, or compile-time constructors).
+       (generators, templates, static bindings,
+       or compile-time constructors).
        Bind it at the top level of a structure instead.
 |}]
 

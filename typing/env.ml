@@ -626,6 +626,7 @@ and structure_components = {
 }
 
 and functor_components = {
+  fcomp_kind: functor_kind;             (* Plain or template *)
   fcomp_arg: functor_parameter;
   (* Formal parameter and argument signature *)
   fcomp_res: module_type;               (* Result signature *)
@@ -739,6 +740,7 @@ type lookup_error =
   | Functor_used_as_structure of Longident.t
   | Abstract_used_as_structure of Longident.t
   | Generative_used_as_applicative of Longident.t
+  | Functor_kind_in_path of functor_kind * Longident.t
   | Illegal_reference_to_recursive_module of
       { container: string option; unbound : string }
   | Illegal_reference_to_recursive_class_type of
@@ -1219,6 +1221,11 @@ and find_functor_components path env =
   match get_components (find_module_components path env) with
   | Functor_comps f -> f
   | Structure_comps _ -> raise Not_found
+
+let functor_kind path env =
+  match find_functor_components path env with
+  | { fcomp_kind; _ } -> fcomp_kind
+  | exception Not_found -> Plain
 
 let find_module ~alias path env =
   match path with
@@ -2157,11 +2164,12 @@ let rec components_of_module_maker
               NameMap.add (Ident.name id) cltda c.comp_cltypes)
         items_and_paths;
         Ok (Structure_comps c)
-  | MtyL_functor(arg, ty_res) ->
+  | MtyL_functor(fcomp_kind, arg, ty_res) ->
       let sub = cm_prefixing_subst in
       let scoping = Subst.Rescope (Path.scope cm_path) in
       let open Subst.Lazy in
         Ok (Functor_comps {
+          fcomp_kind;
           (* fcomp_arg and fcomp_res must be prefixed eagerly, because
              they are interpreted in the outer environment *)
           fcomp_arg =
@@ -3428,12 +3436,15 @@ and lookup_structure_components ~errors ~use l env =
   | Error (No_components_alias p) ->
       may_lookup_error errors loc env (Cannot_scrape_alias(lid, p))
 
-and get_functor_components ~errors ~loc lid env comps =
+and get_functor_components ~errors ~loc ~kind lid env comps =
   match get_components_res comps with
   | Ok (Functor_comps fcomps) -> begin
       match fcomps.fcomp_arg with
       | Unit -> (* PR#7611 *)
           may_lookup_error errors loc env (Generative_used_as_applicative lid)
+      | Named _ when fcomps.fcomp_kind <> kind ->
+          may_lookup_error errors loc env
+            (Functor_kind_in_path (fcomps.fcomp_kind, lid))
       | Named (_, arg) -> fcomps, arg
     end
   | Ok (Structure_comps _) ->
@@ -3447,25 +3458,24 @@ and lookup_all_args ~errors ~use lid0 env =
   let rec loop_lid_arg args = function
     | Lident _ | Ldot _ as f_lid ->
         (f_lid, args)
-    | Lapply (Template, _, _) ->
-        Misc.fatal_error "templates: not implemented"
-    | Lapply (Plain, f_lid, arg_lid) ->
+    | Lapply (kind, f_lid, arg_lid) ->
         let { txt = arg_lid; loc } = arg_lid in
         let arg_path, arg_md = lookup_module ~errors ~use ~loc arg_lid env in
-        loop_lid_arg ((f_lid,arg_path,arg_md.md_type)::args) f_lid.txt
+        loop_lid_arg ((kind,f_lid,arg_path,arg_md.md_type)::args) f_lid.txt
   in
   loop_lid_arg [] lid0
 
 and lookup_apply ~errors ~use ~loc lid0 env =
   let f0_lid, args0 = lookup_all_args ~errors ~use lid0 env in
-  let args_for_errors = List.map (fun (_,p,mty) -> (p,mty)) args0 in
+  let args_for_errors = List.map (fun (_,_,p,mty) -> (p,mty)) args0 in
   let f0_path, f0_comp =
     lookup_module_components ~errors ~use ~loc f0_lid env
   in
-  let check_one_apply ~errors ~loc ~f_lid ~f_comp ~arg_path ~arg_mty env =
+  let check_one_apply ~errors ~loc ~kind ~f_lid ~f_comp ~arg_path ~arg_mty
+        env =
     let f_comp, param_mty =
       let { txt = f_lid; loc } = f_lid in
-      get_functor_components ~errors ~loc f_lid env f_comp
+      get_functor_components ~errors ~loc ~kind f_lid env f_comp
     in
     check_functor_appl
       ~errors ~loc ~lid_whole_app:lid0
@@ -3476,15 +3486,15 @@ and lookup_apply ~errors ~use ~loc lid0 env =
   in
   let rec check_apply ~path:f_path ~comp:f_comp = function
     | [] -> invalid_arg "Env.lookup_apply: empty argument list"
-    | [ f_lid, arg_path, arg_mty ] ->
+    | [ kind, f_lid, arg_path, arg_mty ] ->
         let arg_path, comps =
-          check_one_apply ~errors ~loc ~f_lid ~f_comp
+          check_one_apply ~errors ~loc ~kind ~f_lid ~f_comp
             ~arg_path ~arg_mty env
         in
         f_path, comps, arg_path
-    | (f_lid, arg_path, arg_mty) :: args ->
+    | (kind, f_lid, arg_path, arg_mty) :: args ->
         let arg_path, f_comp =
-          check_one_apply ~errors ~loc ~f_lid ~f_comp
+          check_one_apply ~errors ~loc ~kind ~f_lid ~f_comp
             ~arg_path ~arg_mty env
         in
         let comp =
@@ -4343,6 +4353,14 @@ let report_lookup_error_doc loc env = function
        "The functor %a is generative,@ it@ cannot@ be@ \
         applied@ in@ type@ expressions"
         quoted_longident lid
+  | Functor_kind_in_path (kind, lid) ->
+      let (found, expected) = match kind with
+        | Plain -> ("a functor", "F(M)")
+        | Template -> ("a template", "F$(M)")
+      in
+      Location.errorf ~loc
+        "%a is %s.@ Its application is written %a."
+        quoted_longident lid found Style.inline_code expected
   | Cannot_scrape_alias(lid, p) ->
       let cause =
         if Current_unit.Name.is_path p then "is the current compilation unit"

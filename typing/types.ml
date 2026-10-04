@@ -117,7 +117,6 @@ module VarSet = Misc.Stdlib.String.Set
 module Meths = Misc.Stdlib.String.Map
 module Vars = Misc.Stdlib.String.Map
 
-
 (* Staging *)
 
 (* The number of quotations less the number of splices around a binding
@@ -407,7 +406,7 @@ type visibility =
 type module_type =
     Mty_ident of Path.t
   | Mty_signature of signature
-  | Mty_functor of functor_parameter * module_type
+  | Mty_functor of functor_kind * functor_parameter * module_type
   | Mty_alias of Path.t
 
 and functor_parameter =

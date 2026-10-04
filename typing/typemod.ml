@@ -90,6 +90,7 @@ type error =
   | Macro_is_not_function
   | Macro_binds_not_one_name
   | Macro_in_functor_argument
+  | Functor_kind_mismatch of functor_kind
   | Macro_in_package
   | Macro_in_abstract_modtype
   | Macro_in_local_module
@@ -98,6 +99,7 @@ type error =
   | Pack_in_compile_time_code
   | Functor_in_compile_time_package of Ident.t
   | Runtime_module_in_compile_time_code of Path.t option
+  | Template_application_in_local_module
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -245,7 +247,14 @@ let has_compile_time_bindings (me : Typedtree.module_expr) =
     end;
     Tast_iterator.default_iterator.structure_item iter item
   in
-  let iter = { Tast_iterator.default_iterator with structure_item } in
+  let module_expr iter (me : Typedtree.module_expr) =
+    match me.mod_desc with
+    | Tmod_functor (Template, _, _) -> raise Found
+    | _ -> Tast_iterator.default_iterator.module_expr iter me
+  in
+  let iter =
+    { Tast_iterator.default_iterator with structure_item; module_expr }
+  in
   match iter.module_expr iter me with
   | () -> false
   | exception Found -> true
@@ -256,10 +265,13 @@ let check_functor_argument_range loc env mty =
   if Mtype.has_macro_components env mty then
     raise (Error (loc, env, Macro_in_functor_argument))
 
-let check_plain_functor_range loc env ~arg =
-  match arg with
-  | Types.Unit -> ()
-  | Types.Named (_, mty) -> check_functor_argument_range loc env mty
+(* The argument of a functor has no compile-time components: the
+   functor is compiled once, and its compile-time part does not depend
+   on the argument.  The argument of a template may have any. *)
+let check_plain_functor_range loc env kind ~arg =
+  match kind, arg with
+  | Template, _ | Plain, Types.Unit -> ()
+  | Plain, Types.Named (_, mty) -> check_functor_argument_range loc env mty
 
 (* A structure that is typed in compile-time code has its values
    typed at the level of that code, and its signature records them at
@@ -291,9 +303,6 @@ let check_definition_stage loc env =
     in
     raise (Error (loc, env, Definition_in_staged_code ctx))
 
-(* Additional validity checks on type definitions arising from
-   recursive modules *)
-
 (* A generator binds one name to a literal function. *)
 let check_macros_are_arrows env valbinds =
   List.iter
@@ -309,6 +318,9 @@ let check_macros_are_arrows env valbinds =
       | _ -> raise(Error(vb_expr.exp_loc, env, Macro_is_not_function))
     )
     valbinds
+
+(* Additional validity checks on type definitions arising from
+   recursive modules *)
 
 let check_recmod_typedecls ~abs_env env decls =
   let recmod_ids = List.map fst decls in
@@ -393,7 +405,7 @@ let iterator_with_env super env =
       env := env_before
     );
     Btype.it_module_type = (fun self -> function
-    | Mty_functor (param, mty_body) ->
+    | Mty_functor (_, param, mty_body) ->
       let env_before = !env in
       begin match param with
       | Unit -> ()
@@ -417,7 +429,7 @@ let retype_applicative_functor_type ~loc env funct arg =
   let mty_arg = (Env.find_module arg env).md_type in
   let mty_param =
     match Env.scrape_alias env mty_functor with
-    | Mty_functor (Named (_, mty_param), _) -> mty_param
+    | Mty_functor (_, Named (_, mty_param), _) -> mty_param
     | _ -> assert false (* could trigger due to MPR#7611 *)
   in
   Includemod.check_modtype_inclusion ~loc env mty_arg arg mty_param
@@ -1112,9 +1124,7 @@ let rec approx_modtype env smty =
       Mty_alias(path)
   | Pmty_signature ssg ->
       Mty_signature(approx_sig env ssg)
-  | Pmty_functor(Template, _, _) ->
-      Misc.fatal_error "templates: not implemented"
-  | Pmty_functor(Plain, param, sres) ->
+  | Pmty_functor(kind, param, sres) ->
       let (param, newenv) =
         match param with
         | Unit -> Types.Unit, env
@@ -1131,7 +1141,7 @@ let rec approx_modtype env smty =
             Types.Named (Some id, arg), newenv
       in
       let res = approx_modtype newenv sres in
-      Mty_functor(param, res)
+      Mty_functor(kind, param, res)
   | Pmty_with(sbody, constraints) ->
       (* the module type body is approximated and resolved to a signature.*)
       let approx_body = approx_modtype env sbody in
@@ -1648,9 +1658,7 @@ and transl_modtype_aux env smty =
       let sg = transl_signature env ssg in
       mkmty (Tmty_signature sg) (Mty_signature sg.sig_type) env loc
         smty.pmty_attributes
-  | Pmty_functor(Template, _, _) ->
-      Misc.fatal_error "templates: not implemented"
-  | Pmty_functor(Plain, sarg_opt, sres) ->
+  | Pmty_functor(kind, sarg_opt, sres) ->
       let t_arg, ty_arg, newenv =
         match sarg_opt with
         | Unit -> Unit, Types.Unit, env
@@ -1677,9 +1685,9 @@ and transl_modtype_aux env smty =
           Named (id, param, arg), Types.Named (id, arg.mty_type), newenv
       in
       let res = transl_modtype newenv sres in
-      check_plain_functor_range smty.pmty_loc env ~arg:ty_arg;
-      mkmty (Tmty_functor (t_arg, res))
-        (Mty_functor(ty_arg, res.mty_type)) env loc
+      check_plain_functor_range smty.pmty_loc env kind ~arg:ty_arg;
+      mkmty (Tmty_functor (kind, t_arg, res))
+        (Mty_functor(kind, ty_arg, res.mty_type)) env loc
         smty.pmty_attributes
   | Pmty_with(sbody, constraints) ->
       let body = transl_modtype env sbody in
@@ -2187,7 +2195,7 @@ let rec nongen_modtype env = function
   | Mty_signature sg ->
       let env = Env.add_signature sg env in
       List.find_map (nongen_signature_item env) sg
-  | Mty_functor(arg_opt, body) ->
+  | Mty_functor(_, arg_opt, body) ->
       let env =
         match arg_opt with
         | Unit
@@ -2492,6 +2500,7 @@ type application_summary = {
   loc: Location.t;
   attributes: attributes;
   f_loc: Location.t; (* loc for F *)
+  kind: functor_kind; (* Plain for [F(X)], Template for [F$(X)] *)
   arg: argument_summary option (* None for () *)
 }
 
@@ -2637,6 +2646,12 @@ let check_no_functor_members env loc mty =
   in
   walk mty
 
+(* A template application is given an identifier, by which the passes of
+   its translation correlate it. *)
+let application_kind : functor_kind -> application_kind = function
+  | Plain -> Plain_application
+  | Template -> Template_application (Ident.create_local "*application*")
+
 let rec type_module ?(alias=false) ~strengthen ~funct_body anchor env smod =
   Builtin_attributes.warning_scope smod.pmod_attributes
     (fun () -> type_module_aux ~alias ~strengthen ~funct_body anchor env smod)
@@ -2700,9 +2715,7 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
       if List.length sg' = List.length sg then md, shape else
       wrap_constraint_with_shape env false md
         (Mty_signature sg') shape Tmodtype_implicit
-  | Pmod_functor(Template, _, _) ->
-      Misc.fatal_error "templates: not implemented"
-  | Pmod_functor(Plain, arg_opt, sbody) ->
+  | Pmod_functor(kind, arg_opt, sbody) ->
       let t_arg, ty_arg, newenv, funct_shape_param, funct_body =
         match arg_opt with
         | Unit ->
@@ -2732,12 +2745,12 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
           Named (id, param, mty), Types.Named (id, mty.mty_type), newenv,
           var, true
       in
-      check_plain_functor_range smod.pmod_loc env ~arg:ty_arg;
       let body, body_shape =
         type_module ~strengthen:true ~funct_body None newenv sbody
       in
-      { mod_desc = Tmod_functor(t_arg, body);
-        mod_type = Mty_functor(ty_arg, body.mod_type);
+      check_plain_functor_range smod.pmod_loc env kind ~arg:ty_arg;
+      { mod_desc = Tmod_functor(kind, t_arg, body);
+        mod_type = Mty_functor(kind, ty_arg, body.mod_type);
         mod_env = env;
         mod_attributes = smod.pmod_attributes;
         mod_loc = smod.pmod_loc },
@@ -2794,9 +2807,7 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
 and type_application loc ~strengthen ~funct_body env smod =
   let rec extract_application ~funct_body env sargs smod =
     match smod.pmod_desc with
-    | Pmod_apply (Template, _, _) | Pmod_apply_unit (Template, _) ->
-        Misc.fatal_error "templates: not implemented"
-    | Pmod_apply (Plain, f, sarg) ->
+    | Pmod_apply (kind, f, sarg) ->
         let arg, shape =
           type_module ~strengthen:true ~funct_body None env sarg
         in
@@ -2804,6 +2815,7 @@ and type_application loc ~strengthen ~funct_body env smod =
           loc = smod.pmod_loc;
           attributes = smod.pmod_attributes;
           f_loc = f.pmod_loc;
+          kind;
           arg = Some {
             is_syntactic_unit = sarg.pmod_desc = Pmod_structure [];
             arg;
@@ -2812,11 +2824,12 @@ and type_application loc ~strengthen ~funct_body env smod =
           }
         } in
         extract_application ~funct_body env (summary::sargs) f
-    | Pmod_apply_unit (Plain, f) ->
+    | Pmod_apply_unit (kind, f) ->
         let summary = {
           loc = smod.pmod_loc;
           attributes = smod.pmod_attributes;
           f_loc = f.pmod_loc;
+          kind;
           arg = None
         } in
         extract_application ~funct_body env (summary::sargs) f
@@ -2838,7 +2851,7 @@ and type_application loc ~strengthen ~funct_body env smod =
 and type_one_application ~ctx:(apply_loc,sfunct,md_f,args)
     funct_body env (funct, funct_shape) app_view =
   match Env.scrape_alias env funct.mod_type with
-  | Mty_functor (Unit, mty_res) ->
+  | Mty_functor (fkind, Unit, mty_res) when fkind = app_view.kind ->
       begin match app_view.arg with
         | None -> ()
         | Some arg ->
@@ -2855,13 +2868,14 @@ and type_one_application ~ctx:(apply_loc,sfunct,md_f,args)
       end;
       if funct_body && Mtype.contains_type env funct.mod_type then
         raise (Error (apply_loc, env, Not_allowed_in_functor_body));
-      { mod_desc = Tmod_apply_unit funct;
+      { mod_desc = Tmod_apply_unit (application_kind app_view.kind, funct);
         mod_type = mty_res;
         mod_env = env;
         mod_attributes = app_view.attributes;
         mod_loc = funct.mod_loc },
       Shape.app funct_shape ~arg:Shape.dummy_mod
-  | Mty_functor (Named (param, mty_param), mty_res) as mty_functor ->
+  | Mty_functor (fkind, Named (param, mty_param), mty_res) as mty_functor
+    when fkind = app_view.kind ->
       let apply_error () =
         let args = List.map simplify_app_summary args in
         let mty_f = md_f.mod_type in
@@ -2923,13 +2937,19 @@ and type_one_application ~ctx:(apply_loc,sfunct,md_f,args)
       in
       check_well_formed_module env apply_loc
         "the signature of this functor application" mty_appl;
-      { mod_desc = Tmod_apply(funct, arg, coercion);
+      { mod_desc =
+          Tmod_apply(application_kind app_view.kind, funct, arg, coercion);
         mod_type = mty_appl;
         mod_env = env;
         mod_attributes = app_attributes;
         mod_loc = app_loc },
       Shape.app ~arg:arg_shape funct_shape
     end
+  | Mty_functor (fkind, _, _) ->
+      (* [F$(M)] where F is a functor, or [F(M)] where F is a template.
+          The two kinds are unrelated, so neither is a coercion
+         failure. *)
+      raise (Error (app_view.f_loc, env, Functor_kind_mismatch fkind))
   | Mty_alias path ->
       raise(Error(app_view.f_loc, env, Cannot_scrape_alias path))
   | Mty_ident _ | Mty_signature _  ->
@@ -2974,6 +2994,9 @@ and type_open_decl_aux ?used_slot ?toplevel ~funct_body names env od =
       type_module ~strengthen:true ~funct_body None env od.popen_expr
     in
     let scope = Ctype.create_scope () in
+    (* The signature of the module records levels relative to it; the
+       names the open binds are of the enclosing context, at its
+       level. *)
     let sg, newenv =
       Env.enter_signature ~scope ~mod_shape
         (relative_signature (- Env.get_env_level env)
@@ -3060,10 +3083,10 @@ and type_str_item ?(local = false) ~names ~toplevel ~funct_body anchor env
         shape_map,
         newenv
     | Pstr_value (rec_flag, Macro, sdefs) ->
-        check_definition_stage loc env;
         (* The right-hand sides are compile-time code, typed one level
            down.  The values bound are generators at that level, within
            a recursive group as well as after it. *)
+        check_definition_stage loc env;
         let original_level = Env.get_env_level env in
         let static_level_env = Env.with_level_down env in
         let record defs newenv =
@@ -3079,10 +3102,10 @@ and type_str_item ?(local = false) ~names ~toplevel ~funct_body anchor env
         shape_map,
         Env.with_level original_level newenv
     | Pstr_value (rec_flag, Static, sdefs) ->
-        check_definition_stage loc env;
         (* The right-hand sides are compile-time code, typed one level
            down.  The values bound are static bindings, which record the
            level of the binding. *)
+        check_definition_stage loc env;
         let original_level = Env.get_env_level env in
         let static_level_env =
           Env.with_static_init true (Env.with_level_down env) in
@@ -3435,7 +3458,7 @@ let rec normalize_modtype = function
     Mty_ident _
   | Mty_alias _ -> ()
   | Mty_signature sg -> normalize_signature sg
-  | Mty_functor(_param, body) -> normalize_modtype body
+  | Mty_functor(_, _param, body) -> normalize_modtype body
 
 and normalize_signature sg = List.iter normalize_signature_item sg
 
@@ -3610,7 +3633,6 @@ let type_package ?annotation env m pack =
         in
         wrap_constraint_package env true modl mty Tmodtype_implicit
   in
-
   modl, {pack with pack_constraints = fl'}
 
 (* Fill in the forward declarations *)
@@ -3646,19 +3668,45 @@ let type_str_item env pstri =
     if has_compile_time_bindings me then
       raise (Error (loc, env, Macro_in_local_module))
   in
+  (* A template application is evaluated at compile time, and a module
+     bound in an expression is made at run time. *)
+  let check_no_template_application (me : Typedtree.module_expr) =
+    let module_expr (iter : Tast_iterator.iterator)
+          (m : Typedtree.module_expr) =
+      (match m.mod_desc with
+       | Tmod_apply (Template_application _, _, _, _)
+       | Tmod_apply_unit (Template_application _, _) ->
+           raise (Error (m.mod_loc, env,
+                         Template_application_in_local_module))
+       | _ -> ());
+      Tast_iterator.default_iterator.module_expr iter m
+    in
+    let iter = { Tast_iterator.default_iterator with module_expr } in
+    iter.module_expr iter me
+  in
   let () =
     match si.str_desc with
-    | Tstr_module mb -> check_module si.str_loc mb.mb_expr
+    | Tstr_module mb ->
+        check_module si.str_loc mb.mb_expr;
+        check_no_template_application mb.mb_expr
     | Tstr_recmodule mbs ->
-        List.iter (fun mb -> check_module si.str_loc mb.mb_expr) mbs
+        List.iter
+          (fun mb ->
+             check_module si.str_loc mb.mb_expr;
+             check_no_template_application mb.mb_expr)
+          mbs
     | Tstr_modtype mtd ->
         Option.iter (fun mty -> check si.str_loc mty.mty_type) mtd.mtd_type
     | Tstr_open { open_expr = { mod_desc = Tmod_ident _; _ }; _ } ->
         (* An open of a path binds no module: it brings into scope
            names that the path reaches already. *)
         ()
-    | Tstr_open od -> check_module si.str_loc od.open_expr
-    | Tstr_include incl -> check_module si.str_loc incl.incl_mod
+    | Tstr_open od ->
+        check_module si.str_loc od.open_expr;
+        check_no_template_application od.open_expr
+    | Tstr_include incl ->
+        check_module si.str_loc incl.incl_mod;
+        check_no_template_application incl.incl_mod
     | Tstr_exception { tyexn_constructor = ext; _ }
       when ext.ext_type.ext_static ->
         raise (Error (si.str_loc, env, Local_compile_time_constructor))
@@ -3707,7 +3755,8 @@ let type_implementation target initial_env ast =
       if !Clflags.print_types then (* #7656 *)
         ignore @@ Warnings.parse_options false "-32-34-37-38-60";
       let (str, sg, names, shape, finalenv) =
-        type_structure initial_env ast in
+        type_structure initial_env ast
+      in
       let shape =
         let id = Ident.create_persistent @@ Unit_info.modname target in
         Shape.set_uid_if_none shape (Uid.of_compilation_unit_id id)
@@ -3951,7 +4000,7 @@ let report_error ~loc _env = function
          %a@]"
         Style.inline_code "with"
         (Style.as_inline_code longident) lid
-        Style.inline_code (Path.name path)
+        (Style.as_inline_code Printtyp.Doc.path) path
         Includemod_errorprinter.err_msgs explanation
   | With_changes_module_alias(lid, id, path) ->
       Location.errorf ~loc
@@ -4164,13 +4213,27 @@ let report_error ~loc _env = function
   | Macro_in_functor_argument ->
       Location.errorf ~loc
         "The argument of a functor cannot contain compile-time components\
-       @ (generators, static bindings,\
-       @ or compile-time constructors)."
+       @ (generators, templates, static bindings,\
+       @ or compile-time constructors).\
+       @ Use a template, whose parameter is written %a,\
+       @ if the argument needs them."
+        Style.inline_code "$(X : S)"
+  | Functor_kind_mismatch fkind ->
+      let (found, expected) = match fkind with
+        | Plain -> ("a functor", "F(M)")
+        | Template -> ("a template", "F$(M)")
+      in
+      Location.errorf ~loc
+        "This is %s.@ It must be applied as %a."
+        found Style.inline_code expected
   | Macro_in_package ->
       Location.errorf ~loc
         "This module type cannot be used as a first-class module:@ \
-         it has compile-time components (generators,@ \
-         static bindings, or compile-time constructors)."
+         it has compile-time components (generators, templates,@ \
+         static bindings, or compile-time constructors).@ \
+         A package type is read relative to the@ \
+         package's own level, so all its members are at that level;@ \
+         a component marked for another world has no place in it."
   | Macro_in_packed_unit file ->
       Location.errorf ~loc
         "%a has compile-time components,@ and %a packs only run-time \
@@ -4180,7 +4243,7 @@ let report_error ~loc _env = function
   | Macro_in_abstract_modtype ->
       Location.errorf ~loc
         "An abstract module type cannot be instantiated with this module@ \
-         type: it has compile-time components (generators,@ \
+         type: it has compile-time components (generators, templates,@ \
          static bindings, or compile-time constructors)."
   | Functor_in_compile_time_package id ->
       Location.errorf ~loc
@@ -4226,9 +4289,18 @@ let report_error ~loc _env = function
   | Macro_in_local_module ->
       Location.errorf ~loc
         "A locally bound module cannot have compile-time components@ \
-         (generators, static bindings,@ \
+         (generators, templates, static bindings,@ \
          or compile-time constructors).@ \
          Bind it at the top level of a structure instead."
+  | Template_application_in_local_module ->
+      Location.errorf ~loc
+        "A template cannot be applied in a locally bound module:\
+       @ the application is evaluated at compile time, and a module bound\
+       @ inside an expression is made at run time.\
+       @ Apply it at the top level of a structure (%a)\
+       @ and refer to that module here."
+        Style.inline_code "module M = F$(V)"
+
 
 let report_error env ~loc err =
   Printtyp.wrap_printing_env ~error:true env

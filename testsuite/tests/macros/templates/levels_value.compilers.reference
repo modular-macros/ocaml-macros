@@ -1,0 +1,4 @@
+File "levels_value.ml", line 12, characters 46-49:
+12 | module F $(X : V) = struct let y = $(Expr.int X.v) end
+                                                   ^^^
+Error: X.v is bound at run time, but this use is in compile-time code.

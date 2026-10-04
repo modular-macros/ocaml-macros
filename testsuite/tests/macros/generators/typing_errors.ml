@@ -211,7 +211,10 @@ Line 1, characters 9-69:
 1 | module F (X : sig $val[..] g : int expr -> int expr end) = struct end
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The argument of a functor cannot contain compile-time components
-       (generators, static bindings, or compile-time constructors).
+       (generators, templates, static bindings,
+       or compile-time constructors).
+       Use a template, whose parameter is written "$(X : S)",
+       if the argument needs them.
 |}]
 
 module type S = sig $val[..] g : int expr -> int expr end
@@ -223,8 +226,11 @@ Line 2, characters 19-20:
 2 | let f (m : (module S)) = m
                        ^
 Error: This module type cannot be used as a first-class module:
-       it has compile-time components (generators,
+       it has compile-time components (generators, templates,
        static bindings, or compile-time constructors).
+       A package type is read relative to the
+       package's own level, so all its members are at that level;
+       a component marked for another world has no place in it.
 |}]
 
 let f () =
@@ -236,6 +242,7 @@ Line 2, characters 6-44:
 2 |   let module M = struct $let[..] g x = x end in
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: A locally bound module cannot have compile-time components
-       (generators, static bindings, or compile-time constructors).
+       (generators, templates, static bindings,
+       or compile-time constructors).
        Bind it at the top level of a structure instead.
 |}]

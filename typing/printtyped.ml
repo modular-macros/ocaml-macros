@@ -73,6 +73,11 @@ let fmt_constant f x =
   | Const_int64 (i) -> fprintf f "Const_int64 %Ld" i
   | Const_nativeint (i) -> fprintf f "Const_nativeint %nd" i
 
+let fmt_functor_kind f x =
+  match (x : Asttypes.functor_kind) with
+  | Template -> fprintf f "Template"
+  | Plain -> fprintf f "Plain"
+
 let fmt_mutable_flag f x =
   match x with
   | Immutable -> fprintf f "Immutable"
@@ -759,11 +764,11 @@ and module_type i ppf x =
   | Tmty_signature (s) ->
       line i ppf "Tmty_signature\n";
       signature i ppf s;
-  | Tmty_functor (Unit, mt2) ->
-      line i ppf "Tmty_functor ()\n";
+  | Tmty_functor (k, Unit, mt2) ->
+      line i ppf "Tmty_functor %a ()\n" fmt_functor_kind k;
       module_type i ppf mt2;
-  | Tmty_functor (Named (s, _, mt1), mt2) ->
-      line i ppf "Tmty_functor \"%a\"\n" fmt_modname s;
+  | Tmty_functor (k, Named (s, _, mt1), mt2) ->
+      line i ppf "Tmty_functor %a \"%a\"\n" fmt_functor_kind k fmt_modname s;
       module_type i ppf mt1;
       module_type i ppf mt2;
   | Tmty_with (mt, l) ->
@@ -871,19 +876,21 @@ and module_expr i ppf x =
   | Tmod_structure (s) ->
       line i ppf "Tmod_structure\n";
       structure i ppf s;
-  | Tmod_functor (Unit, me) ->
-      line i ppf "Tmod_functor ()\n";
+  | Tmod_functor (k, Unit, me) ->
+      line i ppf "Tmod_functor %a ()\n" fmt_functor_kind k;
       module_expr i ppf me;
-  | Tmod_functor (Named (s, _, mt), me) ->
-      line i ppf "Tmod_functor \"%a\"\n" fmt_modname s;
+  | Tmod_functor (k, Named (s, _, mt), me) ->
+      line i ppf "Tmod_functor %a \"%a\"\n" fmt_functor_kind k fmt_modname s;
       module_type i ppf mt;
       module_expr i ppf me;
-  | Tmod_apply (me1, me2, _) ->
-      line i ppf "Tmod_apply\n";
+  | Tmod_apply (k, me1, me2, _) ->
+      line i ppf "Tmod_apply %a\n" fmt_functor_kind
+        (application_functor_kind k);
       module_expr i ppf me1;
       module_expr i ppf me2;
-  | Tmod_apply_unit me1 ->
-      line i ppf "Tmod_apply_unit\n";
+  | Tmod_apply_unit (k, me1) ->
+      line i ppf "Tmod_apply_unit %a\n" fmt_functor_kind
+        (application_functor_kind k);
       module_expr i ppf me1;
   | Tmod_constraint (me, _, Tmodtype_explicit mt, _) ->
       line i ppf "Tmod_constraint\n";

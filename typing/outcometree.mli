@@ -27,7 +27,7 @@
 type out_name = { mutable printed_name: string }
 
 type out_ident =
-  | Oide_apply of out_ident * out_ident
+  | Oide_apply of Asttypes.functor_kind * out_ident * out_ident
   | Oide_dot of out_ident * string
   | Oide_ident of out_name
 
@@ -123,7 +123,9 @@ and out_class_sig_item =
 
 type out_module_type =
   | Omty_abstract
-  | Omty_functor of (string option * out_module_type) option * out_module_type
+  | Omty_functor of
+      Asttypes.functor_kind
+      * (string option * out_module_type) option * out_module_type
   | Omty_ident of out_ident
   | Omty_signature of out_sig_item list
   | Omty_alias of out_ident

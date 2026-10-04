@@ -472,15 +472,22 @@ and functor_parameter =
 and module_expr_desc =
     Tmod_ident of Path.t * Longident.t loc
   | Tmod_structure of structure
-  | Tmod_functor of functor_parameter * module_expr
-  | Tmod_apply of module_expr * module_expr * module_coercion
-  | Tmod_apply_unit of module_expr
+  | Tmod_functor of functor_kind * functor_parameter * module_expr
+  | Tmod_apply of
+      application_kind * module_expr * module_expr * module_coercion
+  | Tmod_apply_unit of application_kind * module_expr
   | Tmod_constraint of
       module_expr * Types.module_type * module_type_constraint * module_coercion
     (** ME          (constraint = Tmodtype_implicit)
         (ME : MT)   (constraint = Tmodtype_explicit MT)
      *)
   | Tmod_unpack of expression * Types.module_type
+
+and application_kind =
+  | Plain_application
+  | Template_application of Ident.t
+(** A template application has an identifier, which the type checker
+    creates and by which the passes of its translation correlate it. *)
 
 and structure = {
   str_items : structure_item list;
@@ -533,10 +540,15 @@ and value_binding =
 (* What the compile-time value of a functor is, for the translation of
    a coercion: nothing for an ordinary functor; for a mixed functor,
    one whose result has compile-time components, the block of those of
-   its body. *)
+   its body; for a template, its component function.  The component
+   function returns a record of the compile-time components of the
+   result, and a template's face holds the coercion of that record: in
+   the record, a member with no compile-time content may be a
+   placeholder, and its coercion is [Tcoerce_none]. *)
 and functor_coercion_face =
     Fcf_plain
   | Fcf_mixed
+  | Fcf_template of module_coercion
 
 and module_coercion =
     Tcoerce_none
@@ -570,7 +582,7 @@ and module_type =
 and module_type_desc =
     Tmty_ident of Path.t * Longident.t loc
   | Tmty_signature of signature
-  | Tmty_functor of functor_parameter * module_type
+  | Tmty_functor of functor_kind * functor_parameter * module_type
   | Tmty_with of module_type * (Path.t * Longident.t loc * with_constraint) list
   | Tmty_typeof of module_expr
   | Tmty_alias of Path.t * Longident.t loc
@@ -973,3 +985,5 @@ val map_apply_arg:
 val path_of_module : module_expr -> Path.t option
 
 val remove_module_constraint : module_expr -> module_expr
+
+val application_functor_kind: application_kind -> Asttypes.functor_kind
