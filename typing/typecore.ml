@@ -214,6 +214,7 @@ type error =
   | Optional_poly_param of string
   | Cannot_unify_tfunctor_to_tarrow of Errortrace.unification_error
   | Cannot_omit_tfunctor_argument of Ident.Unscoped.t * type_expr
+  | Splice_outside_quotation of int
   | Quotation_in_quotation
   | Splice_in_splice
 
@@ -494,6 +495,7 @@ let type_continuation_pat env expected_ty sp =
       let desc =
         { val_type = expected_ty; val_kind = Val_reg;
           val_staging_level = Env.get_env_level env;
+          val_macro = Asttypes.Value;
           Types.val_loc = loc; val_attributes = [];
           val_uid = Uid.mk ~current_unit:(Env.get_current_unit ()); }
       in
@@ -2320,6 +2322,7 @@ let add_pattern_variables ?check ?check_as env pv =
        Env.add_value ?check pv_id
          {val_type = pv_type; val_kind = Val_reg; Types.val_loc = pv_loc;
           val_staging_level = Env.get_env_level env;
+          val_macro = Asttypes.Value;
           val_attributes = pv_attributes;
           val_uid = pv_uid;
          } env
@@ -2423,6 +2426,7 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
             { val_type = pv_type
             ; val_kind = Val_reg
             ; val_staging_level = Env.get_env_level val_env
+            ; val_macro = Asttypes.Value
             ; val_attributes = pv_attributes
             ; val_loc = pv_loc
             ; val_uid
@@ -2434,6 +2438,7 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
             { val_type = pv_type
             ; val_kind = Val_ivar (Immutable, cl_num)
             ; val_staging_level = Env.get_env_level met_env
+            ; val_macro = Asttypes.Value
             ; val_attributes = pv_attributes
             ; val_loc = pv_loc
             ; val_uid
@@ -3416,7 +3421,7 @@ and is_nonexpansive_struct_item item =
   match item.str_desc with
   | Tstr_eval _ | Tstr_primitive _ | Tstr_type _
   | Tstr_modtype _ | Tstr_class_type _  -> true
-  | Tstr_value (_, pat_exp_list) ->
+  | Tstr_value (_, _, pat_exp_list) ->
       List.for_all (fun vb -> is_nonexpansive vb.vb_expr) pat_exp_list
   | Tstr_module {mb_expr=m;_}
   | Tstr_open {open_expr=m;_}
@@ -4145,7 +4150,7 @@ let check_value_staging_level loc lid _path (value : Types.value_description)
       (* A primitive is materialised at each use: it has no level. *)
       ()
   | _ ->
-      let bound = value.val_staging_level in
+      let bound = Types.val_serving_level value in
       let used = Env.get_env_level env in
       if bound <> used then
         Env.lookup_error loc env
@@ -4938,6 +4943,7 @@ and type_expect_
             Env.enter_value txt
               {val_type = instance Predef.type_int;
                val_staging_level = Env.get_env_level env;
+               val_macro = Asttypes.Value;
                val_attributes = [];
                val_kind = Val_reg;
                val_loc = loc;
@@ -5376,6 +5382,9 @@ and type_expect_
       check_env_mode loc [Types.M_C ; Types.M_Q] Splice_in_splice env;
       (* A splice outside a quotation is a top-level splice. *)
       let top_level = Env.get_env_mode env = Types.M_C in
+      if top_level && Env.get_env_level env <> 0 then
+        raise (Error (loc, env,
+                      Splice_outside_quotation (Env.get_env_level env)));
       if top_level then Env.set_unit_has_top_level_splice true;
       let lowered = Env.with_mode M_S (Env.with_level_down env) in
       let body =
@@ -6446,6 +6455,7 @@ and type_argument ?explanation ?recarg env sarg ty_expected' ty_expected =
         let desc =
           { val_type = ty; val_kind = Val_reg;
             val_staging_level = Env.get_env_level env;
+            val_macro = Asttypes.Value;
             val_attributes = [];
             val_loc = Location.none;
             val_uid = Uid.mk ~current_unit:(Env.get_current_unit ());
@@ -8317,6 +8327,12 @@ let report_error ~loc env = function
             The module argument %a cannot be omitted in this application.@]"
             (Style.as_inline_code Printtyp.type_expr) func_ty
             Style.inline_code (Ident.Unscoped.name id_us)
+  | Splice_outside_quotation level ->
+      Location.errorf ~loc
+        "A splice outside a quotation is evaluated at compile time,\
+       @ which is meaningful only at the top level of a module.\
+       @ This one is %s."
+        (Env.describe_level level)
   | Quotation_in_quotation ->
       Location.errorf ~loc
         "A quotation cannot appear directly inside another quotation.\

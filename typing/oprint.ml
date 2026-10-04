@@ -693,7 +693,11 @@ and print_out_sig_item ppf =
            | Orec_next  -> "and")
           ppf td
   | Osig_value vd ->
-      let kwd = if vd.oval_prims = [] then "val" else "external" in
+      let kwd =
+        match vd.oval_macro with
+        | Asttypes.Static -> "$val"
+        | Asttypes.Value -> if vd.oval_prims = [] then "val" else "external"
+      in
       let pr_prims ppf =
         function
           [] -> ()

@@ -1668,6 +1668,7 @@ let tree_of_value_description id decl =
   let ty = tree_of_typexp Type_scheme decl.val_type in
   let vd =
     { oval_name = id;
+      oval_macro = decl.val_macro;
       oval_type = ty;
       oval_prims = [];
       oval_attributes = [] }

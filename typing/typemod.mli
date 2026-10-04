@@ -34,6 +34,10 @@ val type_structure:
   Env.t -> Parsetree.structure ->
   Typedtree.structure * Types.signature * Signature_names.t * Shape.t *
   Env.t
+(* Whether a module expression binds anything at compile time, at any
+   depth, whatever its type says *)
+val has_compile_time_bindings: Typedtree.module_expr -> bool
+
 val type_toplevel_phrase:
   Env.t -> Parsetree.structure ->
   Typedtree.structure * Types.signature * Signature_names.t * Shape.t *
@@ -134,6 +138,10 @@ type error =
   | Non_packable_local_modtype_subst of Path.t
   | With_cannot_remove_packed_modtype of Path.t * module_type
   | Cannot_alias of Path.t
+  | Macro_in_functor_argument
+  | Macro_in_package
+  | Macro_in_abstract_modtype
+  | Macro_in_local_module
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

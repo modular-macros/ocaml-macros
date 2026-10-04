@@ -772,6 +772,14 @@ let eq_module_types {Err.got=mty1; expected=mty2} =
     !Oprint.out_module_type (Out_type.tree_of_modtype mty1)
     !Oprint.out_module_type (Out_type.tree_of_modtype mty2)
 
+let macro_components id =
+  Location.msg
+    "The module type given for %a has compile-time (static binding)@ \
+     components, so it cannot match its abstract declaration.@ \
+     An abstract module type may only be instantiated with a module type@ \
+     whose components all exist at run time."
+    Style.inline_code (Ident.name id)
+
 let module_type_declarations id {Err.got=d1 ; expected=d2} =
   Fmt.dprintf
     "@[<hv 2>Module type declarations do not match:@ \
@@ -950,6 +958,7 @@ and module_type_decl ~expansion_token ~env ~before ~ctx id diff =
   | Incomparable mts ->
       module_type ~expansion_token ~eqmode:true ~env ~before
         ~ctx:(Context.Modtype id :: ctx) mts.less_than
+  | Macro_components -> macro_components id :: before
   | Illegal_permutation c ->
       begin match diff.got.Types.mtd_type with
       | None -> assert false
@@ -1002,6 +1011,7 @@ let module_type_subst ~env id diff =
   | Incomparable mts ->
       module_type ~expansion_token:true ~eqmode:true ~env ~before:[]
         ~ctx:[Modtype id] mts.less_than
+  | Macro_components -> [macro_components id]
   | Illegal_permutation c ->
       let mty = diff.got in
       [with_context [Modtype id]

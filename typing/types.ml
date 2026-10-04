@@ -136,6 +136,9 @@ type value_description =
   { val_type: type_expr;                (* Type of the value *)
     val_kind: value_kind;
     val_staging_level: staging_level;
+    val_macro: macro_flag;
+    (* A static binding ([Static]) records the level of its definition
+       and serves one level lower. *)
     val_loc: Location.t;
     val_attributes: Parsetree.attributes;
     val_uid: Uid.t;
@@ -164,6 +167,11 @@ and class_signature =
 and method_privacy =
   | Mpublic
   | Mprivate of field_kind
+
+let val_serving_level vd =
+  match vd.val_macro with
+  | Static -> vd.val_staging_level - 1
+  | Value -> vd.val_staging_level
 
 (* Variance *)
 (* Variance forms a product lattice of the following partial orders:

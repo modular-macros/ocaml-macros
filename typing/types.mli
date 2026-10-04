@@ -471,6 +471,9 @@ type value_description =
   { val_type: type_expr;                (* Type of the value *)
     val_kind: value_kind;
     val_staging_level: staging_level;
+    val_macro: macro_flag;
+    (* A static binding ([Static]) records the level of its definition
+       and serves one level lower. *)
     val_loc: Location.t;
     val_attributes: Parsetree.attributes;
     val_uid: Uid.t;
@@ -499,6 +502,10 @@ and method_privacy =
   | Mpublic
   | Mprivate of field_kind
     (* The [field_kind] is always [Fabsent] in a complete class type. *)
+
+(* The level at which a value serves: that of its definition, and one
+   lower for a static binding. *)
+val val_serving_level: value_description -> staging_level
 
 (* Variance *)
 

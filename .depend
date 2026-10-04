@@ -2091,6 +2091,7 @@ typing/typemod.cmo : \
     typing/typedecl.cmi \
     typing/typecore.cmi \
     typing/typeclass.cmi \
+    typing/tast_iterator.cmi \
     typing/subst.cmi \
     typing/signature_group.cmi \
     typing/shape_reduce.cmi \
@@ -2130,6 +2131,7 @@ typing/typemod.cmx : \
     typing/typedecl.cmx \
     typing/typecore.cmx \
     typing/typeclass.cmx \
+    typing/tast_iterator.cmx \
     typing/subst.cmx \
     typing/signature_group.cmx \
     typing/shape_reduce.cmx \
@@ -2307,6 +2309,7 @@ typing/typetexp.cmi : \
     typing/env.cmi \
     parsing/asttypes.cmi
 typing/untypeast.cmo : \
+    typing/types.cmi \
     typing/typedtree.cmi \
     typing/path.cmi \
     parsing/parsetree.cmi \
@@ -2317,6 +2320,7 @@ typing/untypeast.cmo : \
     parsing/ast_helper.cmi \
     typing/untypeast.cmi
 typing/untypeast.cmx : \
+    typing/types.cmx \
     typing/typedtree.cmx \
     typing/path.cmx \
     parsing/parsetree.cmi \

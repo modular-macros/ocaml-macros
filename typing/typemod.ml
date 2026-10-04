@@ -80,6 +80,10 @@ type error =
   | Non_packable_local_modtype_subst of Path.t
   | With_cannot_remove_packed_modtype of Path.t * module_type
   | Cannot_alias of Path.t
+  | Macro_in_functor_argument
+  | Macro_in_package
+  | Macro_in_abstract_modtype
+  | Macro_in_local_module
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -201,6 +205,34 @@ let type_module_type_of_fwd :
     (Env.t -> Parsetree.module_expr ->
       Typedtree.module_expr * Types.module_type) ref
   = ref (fun _env _m -> assert false)
+
+(* Whether a module expression binds anything at compile time, at any
+   depth: a signature may hide it from the type of the module, and the
+   splices of the module use it all the same. *)
+let has_compile_time_bindings (me : Typedtree.module_expr) =
+  let exception Found in
+  let structure_item iter (item : Typedtree.structure_item) =
+    begin match item.str_desc with
+    | Tstr_value (_, Static, _) -> raise Found
+    | _ -> ()
+    end;
+    Tast_iterator.default_iterator.structure_item iter item
+  in
+  let iter = { Tast_iterator.default_iterator with structure_item } in
+  match iter.module_expr iter me with
+  | () -> false
+  | exception Found -> true
+
+(* A functor is compiled once, with its argument unknown, so its
+   argument may not have compile-time components. *)
+let check_functor_argument_range loc env mty =
+  if Mtype.has_macro_components env mty then
+    raise (Error (loc, env, Macro_in_functor_argument))
+
+let check_plain_functor_range loc env ~arg =
+  match arg with
+  | Types.Unit -> ()
+  | Types.Named (_, mty) -> check_functor_argument_range loc env mty
 
 (* Additional validity checks on type definitions arising from
    recursive modules *)
@@ -858,7 +890,12 @@ module Merge = struct
             | Some previous_mty, false ->
                 let sig_env = Env.add_signature sg_for_env sig_env in
                 Includemod.check_modtype_equiv ~loc sig_env id previous_mty mty
-            | _, _ -> ()
+            | None, _ ->
+                (* An abstract module type is taken to have no
+                   compile-time component. *)
+                if Mtype.has_macro_components env mty then
+                  raise (Error (loc, env, Macro_in_abstract_modtype))
+            | Some _, true -> ()
           in
           (* Create replacement item *)
           let new_item =
@@ -924,6 +961,14 @@ module Merge = struct
   let () =
     Typetexp.forward_decl.check_package_with_type_constraints <-
       check_package_with_type_constraints
+
+  (* A first-class module is a run-time value: its module type may not
+     have compile-time components. *)
+  let check_package_level loc env mty =
+    if Mtype.has_macro_components env mty then
+      raise (Error (loc, env, Macro_in_package))
+
+  let () = Typetexp.forward_decl.check_package_level <- check_package_level
 
   (* Helper for handling constraints on signatures: destructive constraints,
      written with ":=", actually remove the field from the signature, whereas
@@ -1532,6 +1577,7 @@ and transl_modtype_aux env smty =
           Named (id, param, arg), Types.Named (id, arg.mty_type), newenv
       in
       let res = transl_modtype newenv sres in
+      check_plain_functor_range smty.pmty_loc env ~arg:ty_arg;
       mkmty (Tmty_functor (t_arg, res))
         (Mty_functor(ty_arg, res.mty_type)) env loc
         smty.pmty_attributes
@@ -2366,6 +2412,35 @@ let check_package_closed ~loc ~env ~typ fl =
 
 let not_principal msg = Warnings.Not_principal (Format_doc.Doc.msg msg)
 
+(* The typing of the bindings of a structure item.  [def_env] is the
+   environment of the right-hand sides, [rec_env] that in which
+   recursive bindings are annotated.  [record] is applied to the
+   environment of the bindings before the identifiers that they bind
+   are read from it. *)
+let type_value_bindings ~names ~shape_map ~def_env ~rec_env ~record
+      rec_flag sdefs =
+  let (defs, newenv) = Typecore.type_binding def_env rec_flag sdefs in
+  let defs =
+    match rec_flag with
+    | Recursive -> Typecore.annotate_recursive_bindings rec_env defs
+    | Nonrecursive -> defs
+  in
+  let newenv = record defs newenv in
+  (* Note: Env.find_value does not trigger the value_used event. Values
+     will be marked as being used during the signature inclusion test. *)
+  let items, shape_map =
+    List.fold_left
+      (fun (acc, shape_map) (id, { Asttypes.loc; _ }, _typ, _uid)->
+        Signature_names.check_value names loc id;
+        let vd =  Env.find_value (Pident id) newenv in
+        Sig_value(id, vd, Exported) :: acc,
+        Shape.Map.add_value shape_map id vd.val_uid
+      )
+      ([], shape_map)
+      (let_bound_idents_full defs)
+  in
+  defs, List.rev items, shape_map, newenv
+
 let rec type_module ?(alias=false) ~strengthen ~funct_body anchor env smod =
   Builtin_attributes.warning_scope smod.pmod_attributes
     (fun () -> type_module_aux ~alias ~strengthen ~funct_body anchor env smod)
@@ -2455,6 +2530,7 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
           Named (id, param, mty), Types.Named (id, mty.mty_type), newenv,
           var, true
       in
+      check_plain_functor_range smod.pmod_loc env ~arg:ty_arg;
       let body, body_shape =
         type_module ~strengthen:true ~funct_body None newenv sbody
       in
@@ -2767,32 +2843,40 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
             (fun () -> Typecore.type_expression env sexpr)
         in
         Tstr_eval (expr, attrs), [], shape_map, env
-    | Pstr_value(_, Static, _) ->
-        Misc.fatal_error "static bindings: not implemented"
     | Pstr_value(rec_flag, Value, sdefs) ->
-        let (defs, newenv) =
-          Typecore.type_binding env rec_flag sdefs in
-        let defs = match rec_flag with
-          | Recursive -> Typecore.annotate_recursive_bindings env defs
-          | Nonrecursive -> defs
+        let defs, items, shape_map, newenv =
+          type_value_bindings ~names ~shape_map ~def_env:env ~rec_env:env
+            ~record:(fun _defs newenv -> newenv) rec_flag sdefs
         in
-        (* Note: Env.find_value does not trigger the value_used event. Values
-           will be marked as being used during the signature inclusion test. *)
-        let items, shape_map =
-          List.fold_left
-            (fun (acc, shape_map) (id, { Asttypes.loc; _ }, _typ, _uid)->
-              Signature_names.check_value names loc id;
-              let vd =  Env.find_value (Pident id) newenv in
-              Sig_value(id, vd, Exported) :: acc,
-              Shape.Map.add_value shape_map id vd.val_uid
-            )
-            ([], shape_map)
-            (let_bound_idents_full defs)
-        in
-        Tstr_value(rec_flag, defs),
-        List.rev items,
+        Tstr_value(rec_flag, Value, defs),
+        items,
         shape_map,
         newenv
+    | Pstr_value (rec_flag, Static, sdefs) ->
+        (* The right-hand sides are compile-time code, typed one level
+           down.  The values bound are static bindings, which record the
+           level of the binding. *)
+        let original_level = Env.get_env_level env in
+        let static_level_env = Env.with_level_down env in
+        let record defs newenv =
+          List.fold_left
+            (fun env (id, _, _, _) ->
+               let vd = Env.find_value (Pident id) env in
+               let vd =
+                 { vd with val_staging_level = original_level;
+                           val_macro = Static }
+               in
+               Env.add_value id vd env)
+            newenv (let_bound_idents_full defs)
+        in
+        let defs, items, shape_map, newenv =
+          type_value_bindings ~names ~shape_map ~def_env:static_level_env
+            ~rec_env:env ~record rec_flag sdefs
+        in
+        Tstr_value(rec_flag, Static, defs),
+        items,
+        shape_map,
+        Env.with_level original_level newenv
     | Pstr_primitive sdesc ->
         let (desc, newenv) = Typedecl.transl_value_decl env loc sdesc in
         Signature_names.check_value names desc.val_loc desc.val_id;
@@ -3190,6 +3274,8 @@ let type_package env m pack =
       end
     end
   in
+  if has_compile_time_bindings modl then
+    raise (Error (modl.mod_loc, env, Macro_in_local_module));
   let fl', env =
     match pack.pack_constraints with
     | [] -> [], env
@@ -3253,11 +3339,40 @@ let type_open_decl ?used_slot env od =
 let type_open_descr ?used_slot env od =
   type_open_descr ?used_slot ?toplevel:None env od
 
+(* Structure items bound locally in an expression, as in
+   [let module X = ME in e] or [let open ME in e].  Such a binding is
+   evaluated as part of the surrounding expression, so it may not
+   introduce compile-time components. *)
 let type_str_item env pstri =
   let si, _, _, new_env =
     type_str_item
       ~toplevel:false ~funct_body:false ~names:(Signature_names.create ())
       None env Shape.Map.empty pstri
+  in
+  let check loc mty =
+    if Mtype.has_macro_components env mty then
+      raise (Error (loc, env, Macro_in_local_module))
+  in
+  (* A signature may hide the compile-time components of a module. *)
+  let check_module loc (me : Typedtree.module_expr) =
+    check loc me.mod_type;
+    if has_compile_time_bindings me then
+      raise (Error (loc, env, Macro_in_local_module))
+  in
+  let () =
+    match si.str_desc with
+    | Tstr_module mb -> check_module si.str_loc mb.mb_expr
+    | Tstr_recmodule mbs ->
+        List.iter (fun mb -> check_module si.str_loc mb.mb_expr) mbs
+    | Tstr_modtype mtd ->
+        Option.iter (fun mty -> check si.str_loc mty.mty_type) mtd.mtd_type
+    | Tstr_open { open_expr = { mod_desc = Tmod_ident _; _ }; _ } ->
+        (* An open of a path binds no module: it brings into scope
+           names that the path reaches already. *)
+        ()
+    | Tstr_open od -> check_module si.str_loc od.open_expr
+    | Tstr_include incl -> check_module si.str_loc incl.incl_mod
+    | _ -> ()
   in
   si, new_env
 
@@ -3724,6 +3839,23 @@ let report_error ~loc _env = function
          for an anonymous module type.@ %a"
         Style.inline_code (Path.name p)
         Misc.print_see_manual manual_ref
+  | Macro_in_functor_argument ->
+      Location.errorf ~loc
+        "The argument of a functor cannot contain compile-time components\
+       @ (static bindings)."
+  | Macro_in_package ->
+      Location.errorf ~loc
+        "This module type cannot be used as a first-class module:@ \
+         it has compile-time components (static bindings)."
+  | Macro_in_abstract_modtype ->
+      Location.errorf ~loc
+        "An abstract module type cannot be instantiated with this module@ \
+         type: it has compile-time components (static bindings)."
+  | Macro_in_local_module ->
+      Location.errorf ~loc
+        "A locally bound module cannot have compile-time components@ \
+         (static bindings).@ \
+         Bind it at the top level of a structure instead."
 
 let report_error env ~loc err =
   Printtyp.wrap_printing_env ~error:true env

@@ -1,0 +1,4 @@
+File "forged_static_mark.ml", line 12, characters 23-24:
+12 | let y = $(Expr.string (s ^ " world"))
+                            ^
+Error: s is bound at run time, but this use is in compile-time code.

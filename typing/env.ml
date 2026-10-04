@@ -3143,7 +3143,7 @@ let value_entry_level = function
   | Val_bound vda ->
       (match vda.vda_description.val_kind with
        | Val_prim _ -> None
-       | _ -> Some vda.vda_description.val_staging_level)
+       | _ -> Some (val_serving_level vda.vda_description))
   | Val_unbound _ -> None
 
 let lookup_ident_value ~errors ~use ~loc name env =
@@ -3172,7 +3172,7 @@ let lookup_ident_value ~errors ~use ~loc name env =
           let shift =
             match component_module path with
             | Some p ->
-                component_shift env p vda.vda_description.val_staging_level
+                component_shift env p (val_serving_level vda.vda_description)
             | None -> 0
           in
           let vda = shift_vda shift vda in
@@ -3364,7 +3364,7 @@ let lookup_dot_value ~errors ~use ~loc l s env =
   match NameMap.find s.txt comps.comp_values with
   | vda ->
       let shift =
-        component_shift env path vda.vda_description.val_staging_level
+        component_shift env path (val_serving_level vda.vda_description)
       in
       let vda = shift_vda shift vda in
       let path = Pdot(path, s.txt) in

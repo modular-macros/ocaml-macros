@@ -53,3 +53,9 @@ val enrich_typedecl: Env.t -> Path.t -> Ident.t -> type_declaration ->
 val type_paths: Env.t -> Path.t -> module_type -> Path.t list
 val contains_type: Env.t -> module_type -> bool
 val lower_nongen: int -> module_type -> unit
+
+(* Whether a module type has a compile-time component, however deeply
+   nested.  With [expand_aliases:false] (default [true]) a module alias
+   contributes nothing, and its target is not read. *)
+val has_macro_components:
+  ?expand_aliases:bool -> Env.t -> module_type -> bool

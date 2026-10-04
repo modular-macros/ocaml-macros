@@ -1,0 +1,4 @@
+File "forged_mark_ppx.ml", line 19, characters 22-23:
+19 | let y = $(Expr.string s)
+                           ^
+Error: s is bound at run time, but this use is in compile-time code.

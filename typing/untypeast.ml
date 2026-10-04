@@ -159,8 +159,8 @@ let structure_item sub item =
   let desc =
     match item.str_desc with
       Tstr_eval (exp, attrs) -> Pstr_eval (sub.expr sub exp, attrs)
-    | Tstr_value (rec_flag, list) ->
-        Pstr_value (rec_flag, Value, List.map (sub.value_binding sub) list)
+    | Tstr_value (rec_flag, mac_flag, list) ->
+        Pstr_value (rec_flag, mac_flag, List.map (sub.value_binding sub) list)
     | Tstr_primitive vd ->
         Pstr_primitive (sub.value_description sub vd)
     | Tstr_type (rec_flag, list) ->
@@ -199,6 +199,7 @@ let value_description sub v =
   let attrs = sub.attributes sub v.val_attributes in
   Val.mk ~loc ~attrs
     ~prim:v.val_prim
+    ~macro:v.val_val.val_macro
     (map_loc sub v.val_name)
     (sub.typ sub v.val_desc)
 

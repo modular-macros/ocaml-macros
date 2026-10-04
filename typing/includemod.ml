@@ -125,6 +125,9 @@ module Error = struct
     | Not_less_than of module_type_diff
     | Incomparable of
         {less_than:module_type_diff; greater_than: module_type_diff}
+    | Macro_components
+      (** an abstract module type declaration matched by a module type
+          with compile-time components *)
 
 
   type all =
@@ -981,7 +984,12 @@ and modtype_infos ~core ~loc env ~direction subst id info1 info2 =
   let r =
     match (info1.mtd_type, info2.mtd_type) with
       (None, None) -> Ok Tcoerce_none
-    | (Some _, None) -> Ok Tcoerce_none
+    | (Some mty1, None) ->
+        (* An abstract module type is taken to have no compile-time
+           component. *)
+        if Mtype.has_macro_components env mty1 then
+          Error Error.Macro_components
+        else Ok Tcoerce_none
     | (Some mty1, Some mty2) ->
         check_modtype_equiv ~core ~direction ~loc env mty1 mty2
     | (None, Some mty2) ->

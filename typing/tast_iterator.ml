@@ -147,7 +147,8 @@ let structure_item sub {str_loc; str_desc; str_env; _} =
   sub.env sub str_env;
   match str_desc with
   | Tstr_eval   (exp, attrs) -> sub.expr sub exp; sub.attributes sub attrs
-  | Tstr_value  (rec_flag, list) -> sub.value_bindings sub (rec_flag, list)
+  | Tstr_value (rec_flag, _, list) ->
+      sub.value_bindings sub (rec_flag, list)
   | Tstr_primitive v -> sub.value_description sub v
   | Tstr_type (rec_flag, list) -> sub.type_declarations sub (rec_flag, list)
   | Tstr_typext te -> sub.type_extension sub te

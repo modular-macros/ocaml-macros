@@ -902,8 +902,11 @@ and structure_item i ppf x =
       line i ppf "Tstr_eval\n";
       attributes i ppf attrs;
       expression i ppf e;
-  | Tstr_value (rf, l) ->
+  | Tstr_value (rf, Value, l) ->
       line i ppf "Tstr_value %a\n" fmt_rec_flag rf;
+      list i (value_binding rf) ppf l;
+  | Tstr_value (rf, Static, l) ->
+      line i ppf "Tstr_value (static) %a\n" fmt_rec_flag rf;
       list i (value_binding rf) ppf l;
   | Tstr_primitive vd ->
       line i ppf "Tstr_primitive\n";

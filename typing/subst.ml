@@ -495,6 +495,7 @@ let value_description' copy_scope s descr =
   { val_type = typexp copy_scope s descr.val_type;
     val_kind = descr.val_kind;
     val_staging_level = descr.val_staging_level;
+    val_macro = descr.val_macro;
     val_loc = loc s descr.val_loc;
     val_attributes = attrs s descr.val_attributes;
     val_uid = descr.val_uid;

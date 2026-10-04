@@ -1,0 +1,16 @@
+$val n : int
+$val fact : int -> int
+$val a : int
+$val b : int
+$val table : int list
+$val one : int expr
+$val plus : int expr -> int expr
+val z : int
+val o : int
+module M : sig $val v : int val w : int end
+val y : int
+module type S = sig $val v : int val w : int end
+module N : S
+module O : sig val w : int end
+val x : int
+val u : int

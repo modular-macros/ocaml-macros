@@ -361,6 +361,61 @@ and no_code_needed_sig env sg =
 
 let no_code_needed env mty = no_code_needed_mod env Mp_present mty
 
+(* Whether a module type has a compile-time component, at any depth. *)
+let rec macro_components ~expand_aliases env mty =
+  let macro_components = macro_components ~expand_aliases in
+  match scrape env mty with
+  | Mty_signature sg -> macro_components_sig ~expand_aliases env sg
+  | Mty_functor (param, body) ->
+      (match param with
+       | Unit -> false
+       | Named (_, arg) -> macro_components env arg)
+      || macro_components (env_with_functor_param env param) body
+  | Mty_ident _ ->
+      (* An abstract module type is not instantiated with a module type
+         that has compile-time components. *)
+      false
+  | Mty_alias p ->
+      (* Without [expand_aliases] an alias contributes nothing: nothing
+         is addressed through an alias, and its target is not read. *)
+      expand_aliases
+      && begin match Env.find_module p env with
+         | md -> macro_components env md.md_type
+         | exception Not_found -> false
+         end
+
+(* The body of a functor may name module types of its parameter. *)
+and env_with_functor_param env = function
+  | Unit | Named (None, _) -> env
+  | Named (Some id, arg) -> Env.add_module ~noalias:true id Mp_present arg env
+
+and macro_components_sig ~expand_aliases env sg =
+  (* The items of a signature may refer to its earlier modules and
+     module types.  Nothing else is added to the environment: entering
+     a type can mint identifiers. *)
+  let env =
+    List.fold_left
+      (fun env item ->
+         match item with
+         | Sig_module (id, pres, md, _, _) ->
+             Env.add_module_declaration ~check:false id pres md env
+         | Sig_modtype (id, decl, _) -> Env.add_modtype id decl env
+         | Sig_value _ | Sig_type _ | Sig_typext _
+         | Sig_class _ | Sig_class_type _ -> env)
+      env sg
+  in
+  List.exists
+    (function
+      | Sig_value (_, vd, _) -> val_serving_level vd < 0
+      | Sig_module (_, _, md, _, _) ->
+          macro_components ~expand_aliases env md.md_type
+      | Sig_type _ | Sig_typext _ | Sig_modtype _
+      | Sig_class _ | Sig_class_type _ -> false)
+    sg
+
+let has_macro_components ?(expand_aliases = true) env mty =
+  macro_components ~expand_aliases env mty
+
 (* Check whether a module type may return types *)
 
 let rec contains_type env = function

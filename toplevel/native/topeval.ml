@@ -124,6 +124,7 @@ let name_expression ~loc ~attrs exp =
     { val_type = exp.exp_type;
       val_kind = Val_reg;
       val_staging_level = 0;
+      val_macro = Value;
       val_loc = loc;
       val_attributes = attrs;
       val_uid = Uid.internal_not_actually_unique; }
@@ -145,7 +146,7 @@ let name_expression ~loc ~attrs exp =
        vb_loc = loc; }
    in
    let item =
-     { str_desc = Tstr_value(Nonrecursive, [vb]);
+     { str_desc = Tstr_value(Nonrecursive, Value, [vb]);
        str_loc = loc;
        str_env = exp.exp_env; }
    in

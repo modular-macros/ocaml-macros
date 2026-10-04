@@ -104,6 +104,9 @@ module Error: sig
     | Not_less_than of module_type_diff
     | Incomparable of
         {less_than:module_type_diff; greater_than: module_type_diff}
+    | Macro_components
+      (** an abstract module type declaration matched by a module type
+          with compile-time components *)
 
 
   type all =

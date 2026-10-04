@@ -465,6 +465,7 @@ let enter_ancestor_met ~loc name ~sign ~meths ~cl_num ~ty ~attrs met_env =
   let desc =
     { val_type = ty; val_kind = kind;
       val_staging_level = Env.get_env_level met_env;
+      val_macro = Value;
       val_attributes = attrs;
       Types.val_loc = loc;
       val_uid = Uid.mk ~current_unit:(Env.get_current_unit ()) }
@@ -481,6 +482,7 @@ let add_self_met loc id sign self_var_kind vars cl_num
   let desc =
     { val_type = ty; val_kind = kind;
       val_staging_level = Env.get_env_level met_env;
+      val_macro = Value;
       val_attributes = attrs;
       Types.val_loc = loc;
       val_uid = Uid.mk ~current_unit:(Env.get_current_unit ()) }
@@ -497,6 +499,7 @@ let add_instance_var_met loc label id sign cl_num attrs met_env =
   let desc =
     { val_type = ty; val_kind = kind;
       val_staging_level = Env.get_env_level met_env;
+      val_macro = Value;
       val_attributes = attrs;
       Types.val_loc = loc;
       val_uid = Uid.mk ~current_unit:(Env.get_current_unit ()) }
@@ -1340,6 +1343,7 @@ and class_expr_aux cl_num val_env met_env virt self_scope scl =
                {val_type = expr.exp_type;
                 val_kind = Val_ivar (Immutable, cl_num);
                 val_staging_level = Env.get_env_level val_env;
+                val_macro = Value;
                 val_attributes = [];
                 Types.val_loc = vd.Types.val_loc;
                 val_uid = vd.val_uid;

@@ -255,6 +255,7 @@ type error =
   | Optional_poly_param of string
   | Cannot_unify_tfunctor_to_tarrow of Errortrace.unification_error
   | Cannot_omit_tfunctor_argument of Ident.Unscoped.t * type_expr
+  | Splice_outside_quotation of int
   | Quotation_in_quotation
   | Splice_in_splice
 
