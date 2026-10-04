@@ -562,6 +562,46 @@ let merge_functors ~scopes mexp coercion root_path =
   in
   merge ~scopes mexp coercion root_path [] Default_inline
 
+(* The environment of a generator holds the identifiers of its unit
+   that the code it builds mentions: the run-time values that it
+   quotes, and the environments of the generators of the unit that it
+   calls.  A value of another unit is reached by a global path. *)
+let rec address_root = function
+  | Env.Aident id -> id
+  | Env.Adot (a, _) -> address_root a
+
+let expr_macro_call_env_roots e0 =
+  let roots = ref Ident.Set.empty in
+  let expr iter (e : Typedtree.expression) =
+    (match e.exp_desc with
+     | Texp_ident (path, _, desc) when desc.val_macro = Macro ->
+         (match Env.find_value_env_address path e.exp_env with
+          | addr ->
+              let root = address_root addr in
+              if not (Ident.global root) then
+                roots := Ident.Set.add root !roots
+          | exception Not_found -> ())
+     | _ -> ());
+    Tast_iterator.default_iterator.expr iter e
+  in
+  let iter = { Tast_iterator.default_iterator with expr } in
+  iter.expr iter e0;
+  !roots
+
+let macro_call_env_roots vb = expr_macro_call_env_roots vb.vb_expr
+
+(* The two parts of the unit find the same roots: the body is
+   translated for them as in the compile-time object. *)
+let macro_captured_root_set ~ctx ~scopes vb =
+  let ctx = { ctx with world = Compile_world; native_slot_layout = None } in
+  Ident.Set.union
+    (Translcore.quoted_variables ~ctx ~scopes vb.vb_expr)
+    (macro_call_env_roots vb)
+  |> Ident.Set.filter (fun h -> not (Ident.global h))
+
+let macro_captured_roots ~ctx ~scopes vb =
+  Ident.Set.elements (macro_captured_root_set ~ctx ~scopes vb)
+
 (* The quotations of a static binding are not closed over anything, so
    they may only mention the run-time values of other units.  The unit's
    own are variables here, whatever the form of the unit. *)
@@ -572,6 +612,108 @@ let check_static_quotes ~ctx ~scopes vb =
   with
   | None -> ()
   | Some id -> raise (Error (vb.vb_loc, Static_quotes_local id))
+
+let macro_bound_id vb =
+  match let_bound_idents [vb] with
+  | [id] -> id
+  | _ -> Misc.fatal_error "Translmod: a macro binds other than one name"
+
+(* The generators of a recursive group share one environment, so that
+   one may call another with the environment it received. *)
+let macro_group_captured_roots ~ctx ~scopes pat_expr_list =
+  let members =
+    List.fold_left (fun s vb -> Ident.Set.add (macro_bound_id vb) s)
+      Ident.Set.empty pat_expr_list
+  in
+  List.fold_left
+    (fun s vb -> Ident.Set.union s (macro_captured_root_set ~ctx ~scopes vb))
+    Ident.Set.empty pat_expr_list
+  |> (fun s -> Ident.Set.diff s members)
+  |> Ident.Set.elements
+
+(* The environment is the first parameter of the compile-time function,
+   which is curried: compile-time code is bytecode. *)
+let add_macro_env_param env_param = function
+  | Lfunction lf ->
+      begin match lf.kind with
+      | Curried -> ()
+      | Tupled ->
+          Misc.fatal_error
+            "Translmod: a macro's compile-time function is tupled"
+      end;
+      lfunction ~kind:lf.kind ~params:((env_param, Pgenval) :: lf.params)
+        ~return:lf.return ~body:lf.body ~attr:lf.attr ~loc:lf.loc
+  | _ -> Misc.fatal_error "Translmod: a macro is not a function"
+
+(* Bind the run-time slot of each generator to its environment. *)
+let macro_env_of_roots = function
+  | [] -> Lconst const_unit
+  | roots ->
+      Lprim (Pmakeblock (0, Immutable, None),
+             List.map (fun h -> Lvar h) roots, Loc_unknown)
+
+let macro_env_slots ~ctx ~scopes rec_flag pat_expr_list body =
+  let env_of_roots = macro_env_of_roots in
+  match rec_flag with
+  | Nonrecursive ->
+      List.fold_right
+        (fun vb body ->
+           Llet (Strict, Pgenval, macro_bound_id vb,
+                 env_of_roots (macro_captured_roots ~ctx ~scopes vb), body))
+        pat_expr_list body
+  | Recursive ->
+      match macro_group_captured_roots ~ctx ~scopes pat_expr_list with
+      | [] ->
+          List.fold_right
+            (fun vb body ->
+               Llet (Strict, Pgenval, macro_bound_id vb,
+                     Lconst const_unit, body))
+            pat_expr_list body
+      | roots ->
+          match pat_expr_list with
+          | [] -> assert false   (* a binding group is nonempty *)
+          | first_vb :: rest ->
+              let first = macro_bound_id first_vb in
+              Llet (Strict, Pgenval, first, env_of_roots roots,
+                    List.fold_right
+                      (fun vb body ->
+                         Llet (Alias, Pgenval, macro_bound_id vb,
+                               Lvar first, body))
+                      rest body)
+
+(* The compile-time functions of a group of generators *)
+let transl_macro_group_functions ~ctx ~scopes rec_flag pat_expr_list =
+  let group =
+    List.fold_left (fun s vb -> Ident.Set.add (macro_bound_id vb) s)
+      Ident.Set.empty pat_expr_list
+  in
+  let group_index =
+    match rec_flag with
+    | Recursive ->
+        Some (List.mapi (fun i h -> (h, [i]))
+                (macro_group_captured_roots ~ctx ~scopes pat_expr_list))
+    | Nonrecursive -> None
+  in
+  List.iter (fun vb -> Translcore.check_no_objects vb.vb_expr)
+    pat_expr_list;
+  List.map (fun vb ->
+    let id = macro_bound_id vb in
+    let me_index =
+      match group_index with
+      | Some index -> index
+      | None ->
+          List.mapi (fun i h -> (h, [i])) (macro_captured_roots ~ctx ~scopes vb)
+    in
+    let me_param = Ident.create_local "macro_env" in
+    let fn =
+      let macro_env =
+        Some { Translcore.me_param; me_index; me_group = group }
+      in
+      transl_exp ~ctx:{ ctx with macro_env } ~scopes vb.vb_expr
+    in
+    (* A debug event cannot be quoted. *)
+    (id, add_macro_env_param me_param (Translquote.remove_events fn)))
+    pat_expr_list
 
 (* Bind each of [ids] to the field of [block] at its position, and
    continue with [next]. *)
@@ -849,8 +991,31 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
   | Tstr_eval (expr, _) ->
       let body = next fields in
       Lsequence(transl_exp ~ctx ~scopes expr, body)
-  | Tstr_value(_, Macro, _) ->
-      Misc.fatal_error "generators: not implemented"
+  | Tstr_value(rec_flag, Macro, pat_expr_list)
+    when in_run_world ctx ->
+      let ids = List.map macro_bound_id pat_expr_list in
+      let body = next (List.rev_append ids fields) in
+      macro_env_slots ~ctx ~scopes rec_flag pat_expr_list body
+  | Tstr_value(rec_flag, Macro, pat_expr_list) ->
+      let translated =
+        transl_macro_group_functions ~ctx ~scopes rec_flag pat_expr_list
+      in
+      let body =
+        next (List.rev_append (List.map fst translated) fields)
+      in
+      begin match rec_flag with
+      | Nonrecursive ->
+          List.fold_right
+            (fun (id, fn) body -> Llet (Strict, Pgenval, id, fn, body))
+            translated body
+      | Recursive ->
+          let rec_binding (id, fn) =
+            match fn with
+            | Lfunction def -> { id; def }
+            | _ -> Misc.fatal_error "Translmod: a macro is not a function"
+          in
+          Lletrec (List.map rec_binding translated, body)
+      end
   | Tstr_value(rec_flag, Static, pat_expr_list)
     when in_compile_world ctx ->
       List.iter
@@ -1334,8 +1499,15 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
             Lsequence(Lambda.subst no_env_update subst
                         (transl_exp ~ctx ~scopes expr),
                       transl_store ~scopes rootpath subst cont rem)
-        | Tstr_value(_, Macro, _) ->
-            Misc.fatal_error "generators: not implemented"
+        | Tstr_value(rec_flag, Macro, pat_expr_list) ->
+            let ids = List.map macro_bound_id pat_expr_list in
+            let lam =
+              macro_env_slots ~ctx ~scopes rec_flag pat_expr_list
+                (store_idents Loc_unknown ids)
+            in
+            Lsequence(Lambda.subst no_env_update subst lam,
+                      transl_store ~scopes rootpath
+                        (add_idents false ids subst) cont rem)
         | Tstr_value(_, Static, pat_expr_list) ->
             let ids = let_bound_idents pat_expr_list in
             let lam =
@@ -1971,7 +2143,7 @@ let transl_toplevel_item ~ctx ~scopes item =
          in a Lsequence returning unit. *)
       transl_exp ~ctx ~scopes expr
   | Tstr_value(_, Macro, _) ->
-      Misc.fatal_error "generators: not implemented"
+      Misc.fatal_error "generators in the toplevel: not implemented"
   | Tstr_value(_, Static, _) ->
       Misc.fatal_error "static bindings in the toplevel: not implemented"
   | Tstr_value(rec_flag, Value, pat_expr_list) ->
@@ -2260,8 +2432,11 @@ let report_error loc = function
         "The quotations in this static binding capture %a,@ \
          a run-time name of the enclosing module or functor.@ \
          A static value's quotations may only name run-time values@ \
-         of other compilation units (global values)."
+         of other compilation units (global values).@ \
+         To close over local run-time names, use a generator (%a):@ \
+         its environment is delivered wherever the generator is called."
         Style.inline_code (Ident.name id)
+        Style.inline_code "$let[..]"
 
 let () =
   Location.register_error_of_exn

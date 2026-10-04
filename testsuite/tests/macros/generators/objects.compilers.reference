@@ -1,0 +1,5 @@
+File "objects.ml", line 11, characters 24-47:
+11 | $let[..] g () = let o = object method m = 1 end in Expr.int o#m
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+Error: Objects and classes are not yet supported in quotations,
+       or in compile-time code.

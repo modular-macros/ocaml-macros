@@ -154,6 +154,9 @@ val find_hash_type: Path.t -> t -> type_declaration
 (* Find the "#t" type given the path for "t" *)
 
 val find_value_address: Path.t -> t -> address
+val find_value_env_address: Path.t -> t -> address
+(* The address of a value in the run-time block: for a generator, that
+   of its environment *)
 val find_module_address: Path.t -> t -> address
 val find_module_macros_address: Path.t -> t -> address
 (* The address of the compile-time block of a module *)

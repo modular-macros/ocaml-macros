@@ -29,6 +29,14 @@ type world =
   | Run_world      (* the object that the program runs *)
   | Compile_world  (* the compile-time part *)
 
+(* The environment of the generator whose body is being translated: the
+   parameter that receives it, the fields to project for each captured
+   identifier, and the generators of its group, which share it *)
+type macro_env =
+  { me_param : Ident.t;
+    me_index : (Ident.t * int list) list;
+    me_group : Ident.Set.t }
+
 (* The field each ident of the unit occupies in the module block of the
    native closure backend's store form.  While set, an environment access
    baked into returned code names the block field rather than the local,
@@ -43,6 +51,7 @@ type unit_state =
 
 type context =
   { world : world;
+    macro_env : macro_env option;
     native_slot_layout : native_slot_layout option;
     splice_source : (context -> expression -> lambda_splice) option;
     closing : Ident.t Ident.Map.t;

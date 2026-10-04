@@ -769,6 +769,9 @@ let transl_module_macros_path loc env path =
 let transl_value_path loc env path =
   transl_path Env.find_value_address loc env path
 
+let transl_value_env_path loc env path =
+  transl_path Env.find_value_env_address loc env path
+
 let transl_extension_path loc env path =
   transl_path Env.find_constructor_address loc env path
 

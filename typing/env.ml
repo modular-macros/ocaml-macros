@@ -639,6 +639,10 @@ and address_lazy = (address_unforced, address) Lazy_backtrack.t
 and value_data =
   { vda_description : value_description;
     vda_address : address_lazy;
+    (* The address in the run-time block.  It differs from [vda_address]
+       for a generator, whose run-time slot holds its environment, and
+       for a static binding. *)
+    vda_env_address : address_lazy;
     vda_shape : Shape.t }
 
 and value_entry =
@@ -1413,6 +1417,9 @@ let find_module_macros_address path env =
 let find_value_address path env =
   get_address (find_value_full path env).vda_address
 
+let find_value_env_address path env =
+  get_address (find_value_full path env).vda_env_address
+
 let find_class_address path env =
   get_address (find_class_full path env).clda_address
 
@@ -1960,16 +1967,21 @@ let rec components_of_module_maker
         match item with
           SigL_value(id, decl, _) ->
             let decl' = Subst.value_description sub decl in
-            let addr =
+            let addr, env_addr =
               match decl.val_kind with
-              | Val_prim _ -> Lazy_backtrack.create_failed Not_found
+              | Val_prim _ ->
+                  let none = Lazy_backtrack.create_failed Not_found in
+                  none, none
               | _ ->
                   let addr = next_address () in
-                  if decl.val_macro = Static then compile_time addr else addr
+                  if decl.val_staging_level < 0 || decl.val_macro = Static
+                  then compile_time addr, addr
+                  else addr, addr
             in
             let vda_shape = Shape.proj cm_shape (Shape.Item.value id) in
             let vda =
-              { vda_description = decl'; vda_address = addr; vda_shape }
+              { vda_description = decl'; vda_address = addr;
+                vda_env_address = env_addr; vda_shape }
             in
             c.comp_values <- NameMap.add (Ident.name id) vda c.comp_values;
         | SigL_type(id, decl, _, _) ->
@@ -2156,6 +2168,7 @@ and store_value ?check id addr decl shape env =
   let vda =
     { vda_description = decl;
       vda_address = addr;
+      vda_env_address = addr;
       vda_shape = shape }
   in
   { env with

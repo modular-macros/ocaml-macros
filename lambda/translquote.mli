@@ -28,6 +28,11 @@ val const : 'a -> Lambda.lambda
    pair, are evaluated in its place. *)
 val quote_expression : Lambda.lambda -> Lambda.lambda
 
+(* The code of an access to a component of a unit, a variable or a
+   projection from one, with no check for scope extrusion.  It is the
+   environment that a call of a generator passes. *)
+val quote_access : Lambda.lambda -> Lambda.lambda
+
 (* Close the code of a top-level splice over the given variables, the
    run-time variables that it quotes: gives those that are not
    persistent, in a fixed order, the parameters that stand for them,
@@ -42,6 +47,13 @@ val transl_close_function :
    being translated is closed over, by the renaming that
    [transl_close_function] gives. *)
 val close_quoted : Ident.t Ident.Map.t -> Lambda.lambda -> Lambda.lambda
+
+(* Strip the debug events that [-g] inserts, leaving the contents of
+   [Lsplice] nodes alone.  An event carries a typing environment, which
+   [const] cannot serialise, so events must not survive into terms quoted as
+   data; stage -1 macro translation also relies on a translated macro being a
+   bare function. *)
+val remove_events : Lambda.lambda -> Lambda.lambda
 
 (* Code that rebuilds the lambda term of a unit, with the contents of
    each hole in the place of the hole.  A subterm with no hole becomes

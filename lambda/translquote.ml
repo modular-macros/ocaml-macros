@@ -286,6 +286,23 @@ and term t = quote_lambda t
 
 let quote_expression = quote_lambda
 
+(* The code of an access to a component of a unit: a variable, or a
+   projection from one.  Such a variable is not checked for scope
+   extrusion.  An [Lsplice] in the access is code already. *)
+let rec quote_access lam =
+  let tag = Obj.(tag (repr lam)) in
+  match lam with
+  | Lvar id | Lmutvar id ->
+      pair (mkblock ~tag [const id]) (empty ())
+  | Lprim (p, es, loc) ->
+      let cs = list (fun e -> fst (quote_access e)) es in
+      pair (mkblock ~tag [const p; cs; const loc]) (empty ())
+  | Lsplice sp -> splice_contents sp
+  | Lconst _ ->
+      pair (const lam) (empty ())
+  | _ ->
+      Misc.fatal_error "Translquote.quote_access: not a run-time access"
+
 (* Closing the code of a top-level splice over the run-time variables
    that it quotes.  The variables are renamed in each term that the
    splice quotes, but not in the rest of its code: [closing] maps each

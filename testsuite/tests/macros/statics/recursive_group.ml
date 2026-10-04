@@ -17,3 +17,16 @@ and B : sig val q : int end = struct
   let q = 5
 end
 let () = Printf.printf "%d\n" A.p
+
+(* The quotation may be built by a generator of the body, and the
+   reference may be a call. *)
+
+module rec C : sig val f : unit -> int val r : unit -> int end = struct
+  $let[..] twice () = << fun () -> D.g () * 2 >>
+  let f () = $(<< D.g () >>)
+  let r = $(twice ())
+end
+and D : sig val g : unit -> int end = struct
+  let g () = 7
+end
+let () = Printf.printf "%d %d\n" (C.f ()) (C.r ())

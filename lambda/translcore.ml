@@ -59,6 +59,21 @@ type world =
   | Run_world      (* the object that the program runs *)
   | Compile_world  (* the compile-time part *)
 
+(* The code that a generator builds refers to the run-time values of
+   its unit through an environment: a block of those values, held in
+   the run-time slot of the generator, which each call of the generator
+   passes as code.  While the body of a generator is translated,
+   [macro_env] gives the parameter that receives the environment and
+   the position of each captured identifier in it; a quoted reference
+   to such an identifier becomes a projection from the environment. *)
+type macro_env =
+  { me_param : Ident.t;                 (* the environment parameter *)
+    me_index : (Ident.t * int list) list;
+    (* The fields to project, outermost first, for each captured
+       identifier *)
+    me_group : Ident.Set.t }
+    (* The generators of the group, which share the environment *)
+
 (* The closure backend translates a unit in the store form: its
    components are fields of the block of the unit, and the scope of a
    local binding does not span the items that follow.  Quoted code
@@ -77,6 +92,8 @@ type unit_state =
 
 type context =
   { world : world;
+    macro_env : macro_env option;
+    (* The environment of the generator whose body is being translated *)
     native_slot_layout : native_slot_layout option;
     (* The fields of the unit's block, in the compile-time part of a
        native static program *)
@@ -100,6 +117,7 @@ type context =
 
 let initial_context () =
   { world = Run_world;
+    macro_env = None;
     native_slot_layout = None;
     splice_source = None;
     closing = Ident.Map.empty;
@@ -121,6 +139,29 @@ let rec name_slots_through_block nsl lam =
   | Lsplice _ ->
       lam
   | _ -> Lambda.shallow_map (name_slots_through_block nsl) lam
+
+let captured_index me h =
+  List.find_map
+    (fun (h', i) -> if Ident.same h h' then Some i else None)
+    me.me_index
+
+(* Project the captured identifiers of quoted code from the
+   environment.  The code of a splice is compile-time code, and is left
+   alone. *)
+let rec project_captured me lam =
+  match lam with
+  | Lvar h ->
+      begin match captured_index me h with
+      | Some path ->
+          List.fold_right
+            (fun i acc ->
+               Lprim (Pfield (i, Pointer, Immutable), [acc], Loc_unknown))
+            path
+            (lsplice (Lvar me.me_param))
+      | None -> lam
+      end
+  | Lsplice _ -> lam
+  | _ -> Lambda.shallow_map (project_captured me) lam
 
 (* Forward declaration -- to be filled in by Translmod.transl_module *)
 let transl_module =
@@ -280,12 +321,39 @@ let rec iter_exn_names f pat =
       iter_exn_names f p
   | _ -> ()
 
-let transl_ident loc env ty path desc =
+let transl_ident ~ctx loc env ty path desc =
   match desc.val_kind with
   | Val_prim p ->
       Translprim.transl_primitive loc p env ty (Some path)
   | Val_anc _ ->
       raise(Error(to_location loc, Free_super_var))
+  | Val_reg | Val_self _ when desc.val_macro = Macro ->
+      (* A generator is its compile-time function applied to its
+         environment, as code. *)
+      let func = transl_value_path loc env path in
+      let env_arg =
+        match ctx.macro_env, (path : Path.t) with
+        | Some me, Pident id when Ident.Set.mem id me.me_group ->
+            (* The generators of a group share one environment. *)
+            Lvar me.me_param
+        | (Some _ | None), _ ->
+            let access = transl_value_env_path Loc_unknown env path in
+            let access =
+              match ctx.macro_env with
+              | Some me -> project_captured me access
+              | None -> access
+            in
+            let access =
+              match ctx.native_slot_layout with
+              | Some nsl -> name_slots_through_block nsl access
+              | None -> access
+            in
+            Translquote.quote_access access
+      in
+      Lapply { ap_func = func; ap_args = [env_arg]; ap_loc = loc;
+               ap_tailcall = Default_tailcall;
+               ap_inlined = Default_inline;
+               ap_specialised = Default_specialise }
   | Val_reg | Val_self _ ->
       transl_value_path loc env path
   |  _ -> fatal_error "Translcore.transl_exp: bad Texp_ident"
@@ -317,7 +385,7 @@ and transl_exp1 ~ctx ~scopes ~in_new_scope e =
 and transl_exp0 ~in_new_scope ~ctx ~scopes e =
   match e.exp_desc with
   | Texp_ident(path, _, desc) ->
-      transl_ident (of_location ~scopes e.exp_loc)
+      transl_ident ~ctx (of_location ~scopes e.exp_loc)
         e.exp_env e.exp_type path desc
   | Texp_constant cst ->
       Lambda.lambda_of_const cst
@@ -689,6 +757,11 @@ and transl_exp0 ~in_new_scope ~ctx ~scopes e =
   | Texp_quote (e, evidence) ->
     check_no_objects e;
     let body = transl_exp ~ctx ~scopes e in
+    let body =
+      match ctx.macro_env with
+      | Some me -> project_captured me body
+      | None -> body
+    in
     let body =
       match ctx.native_slot_layout with
       | Some nsl -> name_slots_through_block nsl body
@@ -1427,7 +1500,7 @@ and transl_letop ~ctx ~scopes loc env let_ ands param case partial =
         let left_id = Ident.create_local "left" in
         let right_id = Ident.create_local "right" in
         let op =
-          transl_ident (of_location ~scopes and_.bop_op_name.loc) env
+          transl_ident ~ctx (of_location ~scopes and_.bop_op_name.loc) env
             and_.bop_op_type and_.bop_op_path and_.bop_op_val
         in
         let exp = transl_exp ~ctx ~scopes and_.bop_exp in
@@ -1445,7 +1518,7 @@ and transl_letop ~ctx ~scopes loc env let_ ands param case partial =
         bind Strict left_id prev_lam (loop lam rest)
   in
   let op =
-    transl_ident (of_location ~scopes let_.bop_op_name.loc) env
+    transl_ident ~ctx (of_location ~scopes let_.bop_op_name.loc) env
       let_.bop_op_type let_.bop_op_path let_.bop_op_val
   in
   let exp = loop (transl_exp ~ctx ~scopes let_.bop_exp) ands in
@@ -1481,7 +1554,8 @@ and transl_letop ~ctx ~scopes loc env let_ ands param case partial =
 let quoted_variables ~ctx ~scopes e =
   let vars = ref Ident.Set.empty in
   let ctx =
-    { ctx with quoted_variables = Some vars; closing = Ident.Map.empty }
+    { ctx with quoted_variables = Some vars; closing = Ident.Map.empty;
+               macro_env = None }
   in
   ignore (transl_exp ~ctx ~scopes e);
   Ident.Set.filter (fun id -> not (Ident.global id)) !vars
