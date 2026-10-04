@@ -183,6 +183,7 @@ type constructor_mismatch =
 
 type extension_constructor_mismatch =
   | Constructor_privacy
+  | Constructor_world
   | Constructor_mismatch of Ident.t
                             * Types.extension_constructor
                             * Types.extension_constructor
@@ -400,6 +401,10 @@ let report_extension_constructor_mismatch first second decl env ppf err =
   match (err : extension_constructor_mismatch) with
   | Constructor_privacy ->
       pr "Private extension constructor(s) would be revealed."
+  | Constructor_world ->
+      pr "One is a compile-time constructor, declared with %a,@ \
+          and the other an ordinary constructor."
+        Style.inline_code "$"
   | Constructor_mismatch (id, ext1, ext2, err) ->
       let constructor =
         Style.as_inline_code (Printtyp.extension_only_constructor id)
@@ -1116,4 +1121,7 @@ let extension_constructors ~loc env ~mark id ext1 ext2 =
     | None ->
       match ext1.ext_private, ext2.ext_private with
       | Private, Public -> Some Constructor_privacy
-      | _, _ -> None
+      | _, _ ->
+          if ext1.ext_static <> ext2.ext_static
+          then Some Constructor_world
+          else None

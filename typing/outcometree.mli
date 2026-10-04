@@ -150,6 +150,7 @@ and out_type_decl =
     otype_constraints: (out_type * out_type) list }
 and out_extension_constructor =
   { oext_name: string;
+    oext_static: bool;
     oext_type_name: string;
     oext_type_params: out_type_param list;
     oext_args: out_type list;

@@ -315,15 +315,6 @@ let not_implemented_in_staged_code env feature =
   if Env.get_env_level env <> 0 then
     Misc.fatal_error (feature ^ " in staged code: not implemented")
 
-let check_constructor_level env path =
-  let head = Path.head path in
-  let served_at_compile_time =
-    Env.get_env_level env = -1
-    && Ident.persistent head && Env.is_static_stage_unit (Ident.name head)
-  in
-  if not (Ident.is_predef head || served_at_compile_time) then
-    not_implemented_in_staged_code env "extension constructors"
-
 (* Typing of constants *)
 
 let type_constant = function
@@ -2114,8 +2105,10 @@ and type_pat_aux
         raise(Error(loc, !!penv, Constructor_arity_mismatch(lid.txt,
                                      constr.cstr_arity, List.length sargs)));
 
+      (* A pattern mentions the constructor as an expression does. *)
       (match constr.cstr_tag with
-       | Cstr_extension (p, _) -> check_constructor_level !!penv p
+       | Cstr_extension (p, _) ->
+           Env.check_constructor_level ~loc !!penv p
        | _ -> ());
 
       let (ty_args, existential_ctyp) =
@@ -5326,7 +5319,7 @@ and type_expect_
             | Cstr_extension (path, _) -> path
             | _ -> raise (Error (lid.loc, env, Not_an_extension_constructor))
           in
-          check_constructor_level env path;
+          Env.check_constructor_level ~loc:lid.loc env path;
           rue {
             exp_desc = Texp_extension_constructor (lid, path);
             exp_loc = loc; exp_extra = [];
@@ -6671,7 +6664,8 @@ and type_construct env ~sexp lid sarg ty_expected_explained =
       (Constructor.disambiguate Env.Positive lid env expected_type) constrs
   in
   (match constr.cstr_tag with
-   | Cstr_extension (p, _) -> check_constructor_level env p
+   | Cstr_extension (p, _) ->
+       Env.check_constructor_level ~loc:lid.loc env p
    | _ -> ());
   let sargs =
     match sarg with

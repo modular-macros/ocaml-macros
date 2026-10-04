@@ -23,6 +23,8 @@ $let c = let open Counter in name B;;
 (* Run-time code may use the types of the units, and no more. *)
 Counter.next ();;
 << Counter.next () >>;;
+raise (Counter.Limit 1);;
+$let l = try raise (Counter.Limit 1) with Counter.Limit n -> n;;
 module M = Counter;;
 module type T = sig module M = Counter end;;
 let f (x : Counter.t) = x;;

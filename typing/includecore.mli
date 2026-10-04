@@ -75,6 +75,7 @@ type constructor_mismatch =
 
 type extension_constructor_mismatch =
   | Constructor_privacy
+  | Constructor_world
   | Constructor_mismatch of Ident.t
                             * extension_constructor
                             * extension_constructor

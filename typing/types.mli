@@ -653,12 +653,19 @@ type extension_constructor =
     ext_args: constructor_arguments;
     ext_ret_type: type_expr option;
     ext_private: private_flag;
+    ext_static: bool;
+    (* A compile-time constructor, declared [$A], serves one level below
+       that of its declaration. *)
     ext_loc: Location.t;
     ext_attributes: Parsetree.attributes;
     ext_uid: Uid.t;
   }
 
-and type_transparence =
+(* The shift of level of an extension constructor: -1 for a compile-time
+   one. *)
+val ext_level_shift: extension_constructor -> int
+
+type type_transparence =
     Type_public      (* unrestricted expansion *)
   | Type_new         (* "new" type *)
   | Type_private     (* private type *)

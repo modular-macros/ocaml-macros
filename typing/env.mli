@@ -163,6 +163,10 @@ val find_module_macros_address: Path.t -> t -> address
 val find_class_address: Path.t -> t -> address
 val find_constructor_address: Path.t -> t -> address
 
+(* Check that an extension constructor is mentioned at the level it
+   serves. *)
+val check_constructor_level: loc:Location.t -> t -> Path.t -> unit
+
 (** Lookup an item in the environment and returns its Uid. *)
 val find_uid : Shape.Sig_component_kind.t -> Path.t -> t -> Uid.t option
 
@@ -232,6 +236,7 @@ type lookup_error =
   | Unbound_value of Longident.t * unbound_value_hint
   | Level_mismatch of Longident.t * int * int * bool
   | Compile_time_only_unit of Path.t * string * int * bool
+  | Constructor_level_mismatch of Path.t * int * int * bool
   | Unbound_type of Longident.t
   | Unbound_constructor of Longident.t
   | Unbound_label of Longident.t

@@ -6443,6 +6443,7 @@ let nondep_extension_constructor env ids ext =
         ext_args = args;
         ext_ret_type = ret_type;
         ext_private = ext.ext_private;
+        ext_static = ext.ext_static;
         ext_attributes = ext.ext_attributes;
         ext_loc = ext.ext_loc;
         ext_uid = ext.ext_uid;

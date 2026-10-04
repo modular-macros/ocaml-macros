@@ -652,6 +652,11 @@ and value_entry =
 and constructor_data =
   { cda_description : constructor_description;
     cda_address : address_lazy option;
+    (* For an extension constructor, the level it serves: that of the
+       context of its declaration, one lower for a compile-time
+       constructor.  A mention is legal when it is at this level.  The
+       constructors of a variant type have none. *)
+    cda_staging_level : int option;
     cda_shape: Shape.t; }
 
 and label_data = label_description
@@ -708,6 +713,9 @@ type lookup_error =
       (* component, unit that is available to compile-time code only,
          level of the use, whether the component is a compile-time one
          of its unit *)
+  | Constructor_level_mismatch of Path.t * int * int * bool
+      (* constructor, level it serves, level of the use, whether the use
+         is in a quotation *)
   | Unbound_type of Longident.t
   | Unbound_constructor of Longident.t
   | Unbound_label of Longident.t
@@ -1447,6 +1455,22 @@ let find_constructor_address path env =
       get_constrs_address (NameMap.find s c.comp_constrs)
   | Papply _ | Pextra_ty _ -> raise Not_found
 
+let constructor_staging_level path env =
+  let cda =
+    match path with
+    | Pident id -> TycompTbl.find_same id env.constrs
+    | Pdot(p, s) ->
+        let c = find_structure_components p env in
+        begin match NameMap.find s c.comp_constrs with
+        | cda :: _ -> cda
+        | [] -> raise Not_found
+        end
+    | Papply _ | Pextra_ty _ -> raise Not_found
+  in
+  match cda.cda_staging_level with
+  | Some level -> level
+  | None -> raise Not_found
+
 let find_hash_type path env =
   match path with
   | Pident id ->
@@ -2005,6 +2029,7 @@ let rec components_of_module_maker
                       let cda = {
                         cda_description = descr;
                         cda_address = None;
+                        cda_staging_level = None;
                         cda_shape }
                       in
                       c.comp_constrs <-
@@ -2040,11 +2065,15 @@ let rec components_of_module_maker
                 ext'
             in
             let addr = next_address () in
+            let addr = if ext.ext_static then compile_time addr else addr in
             let cda_shape =
               Shape.proj cm_shape (Shape.Item.extension_constructor id)
             in
             let cda =
-              { cda_description = descr; cda_address = Some addr; cda_shape }
+              { cda_description = descr; cda_address = Some addr;
+                cda_staging_level =
+                  Some (get_env_level cm_env + ext_level_shift ext);
+                cda_shape }
             in
             c.comp_constrs <- add_to_tbl (Ident.name id) cda c.comp_constrs
         | SigL_module(id, pres, md, _, _) ->
@@ -2211,7 +2240,8 @@ and store_constructor ~check type_decl type_id cstr_id cstr env =
   { env with
     constrs =
       TycompTbl.add cstr_id
-        { cda_description = cstr; cda_address = None; cda_shape } env.constrs;
+        { cda_description = cstr; cda_address = None;
+          cda_staging_level = None; cda_shape } env.constrs;
   }
 
 and store_label ~check type_decl type_id lbl_id lbl env =
@@ -2311,6 +2341,7 @@ and store_extension ~check ~rebind id addr ext shape env =
   let cda =
     { cda_description = cstr;
       cda_address = Some addr;
+      cda_staging_level = Some (get_env_level env + ext_level_shift ext);
       cda_shape = shape }
   in
   Builtin_attributes.mark_alerts_used ext.ext_attributes;
@@ -3223,6 +3254,31 @@ let check_value_unit ~errors ~loc env path vda =
       check_compile_time_only_unit ~errors ~loc env path
         ~own_level:(val_serving_level vda.vda_description)
 
+(* The level an extension constructor serves where it is mentioned: that
+   of its declaration, shifted as a value reached through the same path
+   would be. *)
+let constructor_serving_level path env =
+  let natural = constructor_staging_level path env in
+  match component_module path with
+  | Some p -> natural + component_shift env p natural
+  | None -> natural
+
+(* An extension constructor is allocated in one world, that of its
+   declaration, and may be mentioned only at the level it serves
+   there.  A constructor of the runtime is the same in every world. *)
+let check_constructor_level ~loc env path =
+  if not (Ident.is_predef (Path.head path)) then
+    match constructor_serving_level path env with
+    | bound ->
+        check_compile_time_only_unit ~loc env path
+          ~own_level:(constructor_staging_level path env);
+        let used = get_env_level env in
+        if bound <> used then
+          lookup_error loc env
+            (Constructor_level_mismatch
+               (path, bound, used, get_env_mode env = M_Q))
+    | exception Not_found -> ()
+
 let value_entry_level = function
   | Val_bound vda ->
       (match vda.vda_description.val_kind with
@@ -4053,6 +4109,21 @@ let extract_instance_variables env =
        | _ -> acc) None env []
 
 let report_lookup_error_doc loc env = function
+  | Constructor_level_mismatch (path, bound, used, in_quotation) ->
+      let hint ppf =
+        if used < bound then
+          Format_doc.fprintf ppf
+            "@ A constructor for compile-time code is declared with %a."
+            Style.inline_code "$"
+        else if in_quotation then
+          Format_doc.fprintf ppf
+            "@ The code a quotation builds runs in another program,@ \
+             which has no such constructor."
+      in
+      Location.errorf ~loc
+        "The constructor %a is declared %s,@ but this use is %s.%t"
+        Style.inline_code (Path.name path)
+        (describe_level bound) (describe_level used) hint
   | Compile_time_only_unit (path, unit, used, compile_time) ->
       let without ppf =
         if compile_time then

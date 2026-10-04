@@ -510,6 +510,7 @@ let extension_constructor' copy_scope s ext =
     ext_args = constructor_arguments copy_scope s ext.ext_args;
     ext_ret_type = Option.map (typexp copy_scope s) ext.ext_ret_type;
     ext_private = ext.ext_private;
+    ext_static = ext.ext_static;
     ext_attributes = attrs s ext.ext_attributes;
     ext_loc = if s.for_saving then Location.none else ext.ext_loc;
     ext_uid = ext.ext_uid;

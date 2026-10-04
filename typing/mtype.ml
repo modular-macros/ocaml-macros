@@ -409,8 +409,8 @@ and macro_components_sig ~expand_aliases env sg =
       | Sig_value (_, vd, _) -> val_serving_level vd < 0
       | Sig_module (_, _, md, _, _) ->
           macro_components ~expand_aliases env md.md_type
-      | Sig_type _ | Sig_typext _ | Sig_modtype _
-      | Sig_class _ | Sig_class_type _ -> false)
+      | Sig_typext (_, ext, _, _) -> ext.ext_static
+      | Sig_type _ | Sig_modtype _ | Sig_class _ | Sig_class_type _ -> false)
     sg
 
 let has_macro_components ?(expand_aliases = true) env mty =

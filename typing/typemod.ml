@@ -86,6 +86,7 @@ type error =
   | Macro_in_package
   | Macro_in_abstract_modtype
   | Macro_in_local_module
+  | Local_compile_time_constructor
   | Macro_in_packed_unit of string
 
 exception Error of Location.t * Env.t * error
@@ -224,6 +225,12 @@ let has_compile_time_bindings (me : Typedtree.module_expr) =
   let structure_item iter (item : Typedtree.structure_item) =
     begin match item.str_desc with
     | Tstr_value (_, (Macro | Static), _) -> raise Found
+    | Tstr_typext { tyext_constructors = exts; _ }
+      when List.exists (fun ext -> ext.ext_type.ext_static) exts ->
+        raise Found
+    | Tstr_exception { tyexn_constructor = ext; _ }
+      when ext.ext_type.ext_static ->
+        raise Found
     | _ -> ()
     end;
     Tast_iterator.default_iterator.structure_item iter item
@@ -3426,6 +3433,13 @@ let type_str_item env pstri =
         ()
     | Tstr_open od -> check_module si.str_loc od.open_expr
     | Tstr_include incl -> check_module si.str_loc incl.incl_mod
+    | Tstr_exception { tyexn_constructor = ext; _ }
+      when ext.ext_type.ext_static ->
+        raise (Error (si.str_loc, env, Local_compile_time_constructor))
+    | Tstr_typext tyext
+      when List.exists (fun ext -> ext.ext_type.ext_static)
+             tyext.tyext_constructors ->
+        raise (Error (si.str_loc, env, Local_compile_time_constructor))
     | _ -> ()
   in
   si, new_env
@@ -3911,12 +3925,13 @@ let report_error ~loc _env = function
   | Macro_in_functor_argument ->
       Location.errorf ~loc
         "The argument of a functor cannot contain compile-time components\
-       @ (generators and static bindings)."
+       @ (generators, static bindings,\
+       @ or compile-time constructors)."
   | Macro_in_package ->
       Location.errorf ~loc
         "This module type cannot be used as a first-class module:@ \
-         it has compile-time components@ (generators and static \
-         bindings)."
+         it has compile-time components (generators,@ \
+         static bindings, or compile-time constructors)."
   | Macro_in_packed_unit file ->
       Location.errorf ~loc
         "%a has compile-time components,@ and %a packs only run-time \
@@ -3926,12 +3941,17 @@ let report_error ~loc _env = function
   | Macro_in_abstract_modtype ->
       Location.errorf ~loc
         "An abstract module type cannot be instantiated with this module@ \
-         type: it has compile-time components@ (generators and static \
-         bindings)."
+         type: it has compile-time components (generators,@ \
+         static bindings, or compile-time constructors)."
+  | Local_compile_time_constructor ->
+      Location.errorf ~loc
+        "A compile-time constructor cannot be declared in an expression.@ \
+         Declare it at the top level of a structure instead."
   | Macro_in_local_module ->
       Location.errorf ~loc
         "A locally bound module cannot have compile-time components@ \
-         (generators and static bindings).@ \
+         (generators, static bindings,@ \
+         or compile-time constructors).@ \
          Bind it at the top level of a structure instead."
 
 let report_error env ~loc err =

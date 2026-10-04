@@ -18,6 +18,12 @@ Line 1, characters 3-15:
        ^^^^^^^^^^^^
 Error: Counter.next cannot be used inside a quotation:
        the unit Counter is available to compile-time code only.
+Line 1, characters 7-20:
+1 | raise (Counter.Limit 1);;
+           ^^^^^^^^^^^^^
+Error: Counter.Limit cannot be used at run time:
+       the unit Counter is available to compile-time code only.
+$val l : int = 1
 Line 1, characters 11-18:
 1 | module M = Counter;;
                ^^^^^^^

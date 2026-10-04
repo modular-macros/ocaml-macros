@@ -1273,8 +1273,6 @@ let transl_type_decl env rec_flag sdecl_list =
 
 let transl_extension_constructor ~scope env type_path type_params
                                  typext_params priv sext =
-  if sext.pext_static then
-    Misc.fatal_error "compile-time constructors: not implemented";
   let id = Ident.create_scoped ~scope sext.pext_name.txt in
   let args, ret_type, kind =
     match sext.pext_kind with
@@ -1346,6 +1344,11 @@ let transl_extension_constructor ~scope env type_path type_params
             Cstr_extension(path, _) -> path
           | _ -> assert false
         in
+        (* A rebinding mentions its source at the level the new
+           constructor serves. *)
+        Env.check_constructor_level ~loc:lid.loc
+          (if sext.pext_static then Env.with_level_down env else env)
+          path;
         let args =
           match cdescr.cstr_inlined with
           | None ->
@@ -1374,6 +1377,7 @@ let transl_extension_constructor ~scope env type_path type_params
       ext_args = args;
       ext_ret_type = ret_type;
       ext_private = priv;
+      ext_static = sext.pext_static;
       Types.ext_loc = sext.pext_loc;
       Types.ext_attributes = sext.pext_attributes;
       ext_uid = Uid.mk ~current_unit:(Env.get_current_unit ());

@@ -1640,6 +1640,7 @@ let prepared_tree_of_extension_constructor id ext es =
       oext_type_params = ty_params;
       oext_args = args;
       oext_ret_type = ret;
+      oext_static = ext.ext_static;
       oext_private = ext.ext_private }
   in
   let es =

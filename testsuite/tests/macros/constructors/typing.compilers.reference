@@ -1,0 +1,16 @@
+exception $Stop of int
+exception Failed of string
+type t = ..
+type t += $A | B | $C of int
+$val stop : int -> 'a
+$val is_a : t -> bool
+$val caught : int
+val failed : unit -> string
+val b : t
+exception $Halt of int
+exception Broken of string
+type t += $A' | B'
+$val[..] guarded : int expr -> int expr
+$val[..] carry : unit -> int expr
+module M : sig exception $Inner type t += $D $val inner : unit -> int end
+val lookup : unit -> int

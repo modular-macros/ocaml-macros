@@ -568,7 +568,8 @@ let constructor_of_extension_constructor
     (ext : out_extension_constructor) : out_constructor
 =
   {
-    ocstr_name = ext.oext_name;
+    ocstr_name =
+      if ext.oext_static then "$" ^ ext.oext_name else ext.oext_name;
     ocstr_args = ext.oext_args;
     ocstr_return_type = ext.oext_ret_type;
   }

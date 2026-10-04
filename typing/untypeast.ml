@@ -273,7 +273,7 @@ let type_exception sub tyexn =
 let extension_constructor sub ext =
   let loc = sub.location sub ext.ext_loc in
   let attrs = sub.attributes sub ext.ext_attributes in
-  Te.constructor ~loc ~attrs
+  Te.constructor ~loc ~attrs ~static:ext.ext_type.ext_static
     (map_loc sub ext.ext_name)
     (match ext.ext_kind with
       | Text_decl (vs, args, ret) ->

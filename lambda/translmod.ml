@@ -122,6 +122,8 @@ let field_path path field =
 
 (* An extension constructor is allocated in the run-time part. *)
 let transl_extension ~ctx ~scopes env rootpath ext =
+  if ext.ext_type.ext_static then
+    Misc.fatal_error "compile-time constructors: not implemented";
   if in_run_world ctx then
     transl_extension_constructor ~scopes env
       (field_path rootpath ext.ext_id) ext
