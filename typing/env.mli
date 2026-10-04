@@ -148,6 +148,8 @@ val find_hash_type: Path.t -> t -> type_declaration
 
 val find_value_address: Path.t -> t -> address
 val find_module_address: Path.t -> t -> address
+val find_module_macros_address: Path.t -> t -> address
+(* The address of the compile-time block of a module *)
 val find_class_address: Path.t -> t -> address
 val find_constructor_address: Path.t -> t -> address
 

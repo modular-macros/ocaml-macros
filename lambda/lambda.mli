@@ -477,6 +477,7 @@ val is_evaluated : lambda -> bool
 val free_variables: lambda -> Ident.Set.t
 
 val transl_module_path: scoped_location -> Env.t -> Path.t -> lambda
+val transl_module_macros_path: scoped_location -> Env.t -> Path.t -> lambda
 val transl_value_path: scoped_location -> Env.t -> Path.t -> lambda
 val transl_extension_path: scoped_location -> Env.t -> Path.t -> lambda
 val transl_class_path: scoped_location -> Env.t -> Path.t -> lambda

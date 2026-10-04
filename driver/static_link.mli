@@ -22,6 +22,12 @@
     unit, in bytecode or in native code.  The static program is bytecode
     in both cases. *)
 
+val emit_macros_object :
+  Compile_common.info -> Typedtree.implementation -> unit
+(** Write the compile-time part of the unit as an object of its own,
+    [prefix ^ "$macros.cmo"], which the static programs of the units
+    that use it load. *)
+
 val build_static_program :
   native:bool -> Compile_common.info -> Typedtree.implementation ->
   Lambda.program
@@ -37,10 +43,11 @@ val implementation :
   fallback:(unit -> unit) ->
   finish:(Lambda.program -> unit) ->
   unit
-(** If the unit has a top-level splice, build its run-time term through
-    its static program and pass it to [finish], the driver's code
-    generation from a term; otherwise run [fallback], the driver's
-    ordinary code generation. *)
+(** Write the compile-time part of the unit if it has one.  Then, if the
+    unit has a top-level splice, build its run-time term through its
+    static program and pass it to [finish], the driver's code generation
+    from a term; otherwise run [fallback], the driver's ordinary code
+    generation. *)
 
 (** {2 Error report} *)
 

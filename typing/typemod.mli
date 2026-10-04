@@ -142,6 +142,7 @@ type error =
   | Macro_in_package
   | Macro_in_abstract_modtype
   | Macro_in_local_module
+  | Macro_in_packed_unit of string
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

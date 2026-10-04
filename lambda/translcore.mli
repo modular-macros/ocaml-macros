@@ -25,6 +25,10 @@ open Debuginfo.Scoped_location
    the parts of it, depend on.  See the .ml for the meaning of each
    component. *)
 
+type world =
+  | Run_world      (* the object that the program runs *)
+  | Compile_world  (* the compile-time part *)
+
 (* The field each ident of the unit occupies in the module block of the
    native closure backend's store form.  While set, an environment access
    baked into returned code names the block field rather than the local,
@@ -34,13 +38,19 @@ type native_slot_layout =
   { nsl_module : Ident.t;
     nsl_pos : Ident.t -> int option }
 
+type unit_state =
+  { mutable compile_world_dummies : Ident.Set.t }
+
 type context =
-  { native_slot_layout : native_slot_layout option;
+  { world : world;
+    native_slot_layout : native_slot_layout option;
     splice_source : (context -> expression -> lambda_splice) option;
     closing : Ident.t Ident.Map.t;
-    quoted_variables : Ident.Set.t ref option }
+    quoted_variables : Ident.Set.t ref option;
+    unit_state : unit_state }
 
-(* The context in which a unit's translation starts *)
+(* The context in which a unit's translation starts, with registries of
+   its own *)
 val initial_context: unit -> context
 
 val pure_module : module_expr -> let_kind

@@ -763,6 +763,9 @@ let transl_path find loc env path =
 let transl_module_path loc env path =
   transl_path Env.find_module_address loc env path
 
+let transl_module_macros_path loc env path =
+  transl_path Env.find_module_macros_address loc env path
+
 let transl_value_path loc env path =
   transl_path Env.find_value_address loc env path
 

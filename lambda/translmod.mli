@@ -31,6 +31,14 @@ val transl_static_program:
       string -> structure * module_coercion ->
       source_file:string -> prefix:string ->
       Lambda.program * Lambda.program
+
+(* Whether the structure defines anything at compile time *)
+val exports_macros: structure -> bool
+
+(* The compile-time part of a unit, as a bytecode unit of its own *)
+val transl_macros_object:
+      string -> structure * module_coercion -> Lambda.program
+
 val transl_store_phrases: string -> structure -> int * lambda
 val transl_store_implementation:
       string -> structure * module_coercion -> Lambda.program
@@ -69,6 +77,7 @@ type unsafe_info =
 type error =
   Circular_dependency of (Ident.t * unsafe_info) list
 | Conflicting_inline_attributes
+| Static_quotes_local of Ident.t
 
 exception Error of Location.t * error
 

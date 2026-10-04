@@ -44,8 +44,52 @@ type unsafe_info =
 type error =
   Circular_dependency of (Ident.t * unsafe_info) list
 | Conflicting_inline_attributes
+| Static_quotes_local of Ident.t
 
 exception Error of Location.t * error
+
+(* The translation of a module expression or of an item builds the part
+   of the unit that [ctx.world] gives. *)
+let in_compile_world ctx = ctx.world = Compile_world
+let in_run_world ctx = not (in_compile_world ctx)
+
+let in_world ctx world f = f { ctx with world }
+
+let record_compile_world_dummy ctx id =
+  let st = ctx.unit_state in
+  st.compile_world_dummies <- Ident.Set.add id st.compile_world_dummies
+
+(* Only the compile-time part asks: the run-time part binds the same
+   identifiers to their values. *)
+let is_compile_world_dummy ctx = function
+  | Lvar id ->
+      in_compile_world ctx
+      && Ident.Set.mem id ctx.unit_state.compile_world_dummies
+  | Lconst c -> in_compile_world ctx && c = const_unit
+  | _ -> false
+
+let module_address_is_dummy ctx env path =
+  let rec root = function
+    | Env.Aident id -> Ident.Set.mem id ctx.unit_state.compile_world_dummies
+    | Env.Adot (a, _) -> root a
+  in
+  match Env.find_module_address path env with
+  | addr -> root addr
+  | exception Not_found -> false
+
+(* In the compile-time part a module that has compile-time components
+   is its compile-time block, [M$macros] for a unit [M]: the run-time
+   objects are not linked at compile time.  This definition shadows
+   that of [Lambda]. *)
+let transl_module_path ~ctx loc env path =
+  if not (in_compile_world ctx) then Lambda.transl_module_path loc env path
+  else if
+    match Env.find_module path env with
+    | md -> Mtype.has_macro_components env md.md_type
+    | exception Not_found -> false
+  then transl_module_macros_path loc env path
+  else if module_address_is_dummy ctx env path then Lconst const_unit
+  else Lambda.transl_module_path loc env path
 
 let cons_opt x_opt xs =
   match x_opt with
@@ -67,22 +111,32 @@ let field_path path field =
 
 (* Compile type extensions *)
 
-let transl_type_extension ~scopes env rootpath tyext body =
+(* An extension constructor is allocated in the run-time part. *)
+let transl_extension ~ctx ~scopes env rootpath ext =
+  if in_run_world ctx then
+    transl_extension_constructor ~scopes env
+      (field_path rootpath ext.ext_id) ext
+  else begin
+    record_compile_world_dummy ctx ext.ext_id;
+    Lconst const_unit
+  end
+
+let transl_type_extension ~ctx ~scopes env rootpath tyext body =
   List.fold_right
     (fun ext body ->
-      let lam =
-        transl_extension_constructor ~scopes env
-          (field_path rootpath ext.ext_id) ext
-      in
+      let lam = transl_extension ~ctx ~scopes env rootpath ext in
       Llet(Strict, Pgenval, ext.ext_id, lam, body))
     tyext.tyext_constructors
     body
 
 (* Compile a coercion *)
 
-let rec apply_coercion loc strict restr arg =
+let rec apply_coercion ~ctx loc strict restr arg =
   match restr with
     Tcoerce_none ->
+      arg
+  | (Tcoerce_structure _ | Tcoerce_functor _)
+    when is_compile_world_dummy ctx arg ->
       arg
   | Tcoerce_structure(pos_cc_list, id_pos_list) ->
       name_lambda strict arg (fun id ->
@@ -92,30 +146,30 @@ let rec apply_coercion loc strict restr arg =
         in
         let lam =
           Lprim(Pmakeblock(0, Immutable, None),
-                List.map (apply_coercion_field loc get_field) pos_cc_list,
+                List.map (apply_coercion_field ~ctx loc get_field) pos_cc_list,
                 loc)
         in
-        wrap_id_pos_list loc id_pos_list get_field lam)
+        wrap_id_pos_list ~ctx loc id_pos_list get_field lam)
   | Tcoerce_functor(cc_arg, cc_res) ->
       let param = Ident.create_local "funarg" in
-      let carg = apply_coercion loc Alias cc_arg (Lvar param) in
-      apply_coercion_result loc strict arg [param, Pgenval] [carg] cc_res
+      let carg = apply_coercion ~ctx loc Alias cc_arg (Lvar param) in
+      apply_coercion_result ~ctx loc strict arg [param, Pgenval] [carg] cc_res
   | Tcoerce_primitive { pc_loc = _; pc_desc; pc_env; pc_type; } ->
       Translprim.transl_primitive loc pc_desc pc_env pc_type None
   | Tcoerce_alias (env, path, cc) ->
-      let lam = transl_module_path loc env path in
+      let lam = transl_module_path ~ctx loc env path in
       name_lambda strict arg
-        (fun _ -> apply_coercion loc Alias cc lam)
+        (fun _ -> apply_coercion ~ctx loc Alias cc lam)
 
-and apply_coercion_field loc get_field (pos, cc) =
-  apply_coercion loc Alias cc (get_field pos)
+and apply_coercion_field ~ctx loc get_field (pos, cc) =
+  apply_coercion ~ctx loc Alias cc (get_field pos)
 
-and apply_coercion_result loc strict funct params args cc_res =
+and apply_coercion_result ~ctx loc strict funct params args cc_res =
   match cc_res with
   | Tcoerce_functor(cc_arg, cc_res) ->
     let param = Ident.create_local "funarg" in
-    let arg = apply_coercion loc Alias cc_arg (Lvar param) in
-    apply_coercion_result loc strict funct
+    let arg = apply_coercion ~ctx loc Alias cc_arg (Lvar param) in
+    apply_coercion_result ~ctx loc strict funct
       ((param, Pgenval) :: params) (arg :: args) cc_res
   | _ ->
       name_lambda strict funct
@@ -129,7 +183,7 @@ and apply_coercion_result loc strict funct params args cc_res =
                         stub = true;
                         may_fuse_arity = true; }
              ~loc
-             ~body:(apply_coercion
+             ~body:(apply_coercion ~ctx
                    loc Strict cc_res
                    (Lapply{
                       ap_loc=loc;
@@ -140,7 +194,7 @@ and apply_coercion_result loc strict funct params args cc_res =
                       ap_specialised=Default_specialise;
                     })))
 
-and wrap_id_pos_list loc id_pos_list get_field lam =
+and wrap_id_pos_list ~ctx loc id_pos_list get_field lam =
   let fv = free_variables lam in
   (*Format.eprintf "%a@." Printlambda.lambda lam;
   Ident.Set.iter (fun id -> Format.eprintf "%a " Ident.print id) fv;
@@ -149,7 +203,7 @@ and wrap_id_pos_list loc id_pos_list get_field lam =
     List.fold_left (fun (lam, fv, s) (id',pos,c) ->
       if Ident.Set.mem id' fv then
         let id'' = Ident.create_local (Ident.name id') in
-        let rhs = apply_coercion loc Alias c (get_field pos) in
+        let rhs = apply_coercion ~ctx loc Alias c (get_field pos) in
         let fv_rhs = free_variables rhs in
         (Llet(Alias, Pgenval, id'', rhs, lam),
          Ident.Set.union fv fv_rhs,
@@ -161,8 +215,8 @@ and wrap_id_pos_list loc id_pos_list get_field lam =
 
 
 (* Compose two coercions
-   apply_coercion c1 (apply_coercion c2 e) behaves like
-   apply_coercion (compose_coercions c1 c2) e. *)
+   apply_coercion ~ctx c1 (apply_coercion ~ctx c2 e) behaves like
+   apply_coercion ~ctx (compose_coercions c1 c2) e. *)
 
 let rec compose_coercions c1 c2 =
   match (c1, c2) with
@@ -200,9 +254,9 @@ let rec compose_coercions c1 c2 =
       fatal_error "Translmod.compose_coercions"
 
 (*
-let apply_coercion a b c =
+let apply_coercion ~ctx a b c =
   Format.eprintf "@[<2>apply_coercion@ %a@]@." Includemod.print_coercion b;
-  apply_coercion a b c
+  apply_coercion ~ctx a b c
 
 let compose_coercions c1 c2 =
   let c3 = compose_coercions c1 c2 in
@@ -485,6 +539,71 @@ let merge_functors ~scopes mexp coercion root_path =
   in
   merge ~scopes mexp coercion root_path [] Default_inline
 
+(* The quotations of a static binding are not closed over anything, so
+   they may only mention the run-time values of other units.  The unit's
+   own are variables here, whatever the form of the unit. *)
+let check_static_quotes ~ctx ~scopes vb =
+  let ctx = { ctx with native_slot_layout = None } in
+  match
+    Ident.Set.choose_opt (Translcore.quoted_variables ~ctx ~scopes vb.vb_expr)
+  with
+  | None -> ()
+  | Some id -> raise (Error (vb.vb_loc, Static_quotes_local id))
+
+(* Whether a module expression binds something at compile time: a
+   value or a module that does, at any depth, whether or not its type
+   shows it.  The compile-time part translates an item if and only if
+   it binds something at compile time; otherwise the identifiers that
+   the item binds are placeholders there.  With [~expand_aliases:false]
+   an alias contributes nothing, and its target is not read. *)
+let binds_at_compile_time ?expand_aliases (me : Typedtree.module_expr) =
+  Mtype.has_macro_components ?expand_aliases me.mod_env me.mod_type
+  || Typemod.has_compile_time_bindings me
+
+(* Whether a structure item binds something at compile time; see
+   [binds_at_compile_time].  An include binds the components of its
+   module, whatever names it. *)
+let item_binds_at_compile_time ?expand_aliases (item : Typedtree.structure_item)
+  =
+  let binds me = binds_at_compile_time ?expand_aliases me in
+  match item.str_desc with
+  | Tstr_value (_, Static, _) -> true
+  | Tstr_module mb -> binds mb.mb_expr
+  | Tstr_recmodule mbs -> List.exists (fun mb -> binds mb.mb_expr) mbs
+  | Tstr_include incl -> binds_at_compile_time incl.incl_mod
+  | Tstr_open od -> binds od.open_expr
+  | Tstr_value (_, Value, _) | Tstr_eval _ | Tstr_primitive _ | Tstr_type _
+  | Tstr_typext _ | Tstr_exception _ | Tstr_modtype _ | Tstr_class _
+  | Tstr_class_type _ | Tstr_attribute _ ->
+      false
+
+(* The identifiers that a structure item binds, which have slots in the
+   blocks of the unit *)
+let item_bound_idents (item : Typedtree.structure_item) =
+  match item.str_desc with
+  | Tstr_value (_, _, vbs) -> let_bound_idents vbs
+  | Tstr_typext tyext ->
+      List.map (fun ext -> ext.ext_id) tyext.tyext_constructors
+  | Tstr_exception ext -> [ext.tyexn_constructor.ext_id]
+  | Tstr_module { mb_presence = Mp_present; mb_id; _ } -> Option.to_list mb_id
+  | Tstr_recmodule mbs -> List.filter_map (fun mb -> mb.mb_id) mbs
+  | Tstr_class cls -> List.map (fun (ci, _) -> ci.ci_id_class) cls
+  | Tstr_include incl -> bound_value_identifiers incl.incl_type
+  | Tstr_open od -> bound_value_identifiers od.open_bound_items
+  | Tstr_module { mb_presence = Mp_absent; _ } | Tstr_eval _
+  | Tstr_primitive _ | Tstr_type _ | Tstr_modtype _ | Tstr_class_type _
+  | Tstr_attribute _ -> []
+
+(* The components of the other part of the unit keep their positions:
+   the two blocks of a unit have one layout, so that the positions of a
+   coercion, and those that [Env] gives, serve for both. *)
+let dummy_slots ~ctx ids next fields =
+  List.iter (record_compile_world_dummy ctx) ids;
+  let body = next (List.rev_append ids fields) in
+  List.fold_right
+    (fun id body -> Llet (Alias, Pgenval, id, Lconst const_unit, body))
+    ids body
+
 let rec compile_functor ~ctx ~scopes mexp coercion root_path loc =
   let functor_params_rev, body, body_path, res_coercion, inline_attribute =
     merge_functors ~scopes mexp coercion root_path
@@ -493,7 +612,7 @@ let rec compile_functor ~ctx ~scopes mexp coercion root_path loc =
   let params, body =
     List.fold_left (fun (params, body) (param, loc, arg_coercion) ->
         let param' = Ident.rename param in
-        let arg = apply_coercion loc Alias arg_coercion (Lvar param') in
+        let arg = apply_coercion ~ctx loc Alias arg_coercion (Lvar param') in
         let params = (param', Pgenval) :: params in
         let body = Llet (Alias, Pgenval, param, arg, body) in
         params, body)
@@ -520,11 +639,17 @@ let rec compile_functor ~ctx ~scopes mexp coercion root_path loc =
 (* Compile a module expression *)
 
 and transl_module ~ctx ~scopes cc rootpath mexp =
+  begin match mexp.mod_desc with
+  | (Tmod_functor _ | Tmod_apply _ | Tmod_apply_unit _)
+    when in_compile_world ctx ->
+      Misc.fatal_error "mixed functors: not implemented"
+  | _ -> ()
+  end;
   let loc = of_location ~scopes mexp.mod_loc in
   match mexp.mod_desc with
   | Tmod_ident (path,_) ->
-      apply_coercion loc Strict cc
-        (transl_module_path loc mexp.mod_env path)
+      apply_coercion ~ctx loc Strict cc
+        (transl_module_path ~ctx loc mexp.mod_env path)
   | Tmod_structure str ->
       transl_struct ~ctx ~scopes loc [] cc rootpath str
   | Tmod_functor _ ->
@@ -538,14 +663,14 @@ and transl_module ~ctx ~scopes cc rootpath mexp =
   | Tmod_constraint(arg, _, _, ccarg) ->
       transl_module ~ctx ~scopes (compose_coercions cc ccarg) rootpath arg
   | Tmod_unpack(arg, _) ->
-      apply_coercion loc Strict cc (Translcore.transl_exp ~ctx ~scopes arg)
+      apply_coercion ~ctx loc Strict cc (Translcore.transl_exp ~ctx ~scopes arg)
 
 and transl_apply ~ctx ~scopes ~loc ~cc mod_env funct translated_arg =
   let inlined_attribute =
     Translattribute.get_inlined_attribute_on_module funct
   in
   oo_wrap mod_env true
-    (apply_coercion loc Strict cc)
+    (apply_coercion ~ctx loc Strict cc)
     (Lapply{
        ap_loc=loc;
        ap_func=transl_module ~ctx ~scopes Tcoerce_none None funct;
@@ -589,13 +714,13 @@ and transl_structure ~ctx ~scopes loc fields cc rootpath final_env = function
                           Translprim.transl_primitive
                             (of_location ~scopes p.pc_loc)
                             p.pc_desc p.pc_env p.pc_type None
-                      | _ -> apply_coercion loc Strict cc (get_field pos))
+                      | _ -> apply_coercion ~ctx loc Strict cc (get_field pos))
                     pos_cc_list, loc)
             and id_pos_list =
               List.filter (fun (id,_,_) -> not (Ident.Set.mem id ids))
                 id_pos_list
             in
-            wrap_id_pos_list loc id_pos_list get_field lam
+            wrap_id_pos_list ~ctx loc id_pos_list get_field lam
         | _ ->
             fatal_error "Translmod.transl_structure"
       in
@@ -616,12 +741,29 @@ and transl_structure ~ctx ~scopes loc fields cc rootpath final_env = function
            transl_structure ~ctx ~scopes loc fields cc rootpath final_env rem)
 
 and transl_struct_item ~ctx ~scopes fields rootpath item next =
+  if in_compile_world ctx && not (item_binds_at_compile_time item) then
+    (* The compile-time part translates an item that binds something at
+       compile time.  What another binds is a placeholder there. *)
+    dummy_slots ~ctx (item_bound_idents item) next fields
+  else
   match item.str_desc with
   | Tstr_eval (expr, _) ->
       let body = next fields in
       Lsequence(transl_exp ~ctx ~scopes expr, body)
-  | Tstr_value(_, Static, _) ->
-      Misc.fatal_error "static bindings: not implemented"
+  | Tstr_value(rec_flag, Static, pat_expr_list)
+    when in_compile_world ctx ->
+      List.iter
+        (fun vb ->
+           Translcore.check_no_objects vb.vb_expr;
+           check_static_quotes ~ctx ~scopes vb)
+        pat_expr_list;
+      let mk_lam_let =
+        transl_let ~ctx ~scopes ~in_structure:true rec_flag pat_expr_list in
+      let ext_fields =
+        List.rev_append (let_bound_idents pat_expr_list) fields in
+      mk_lam_let (next ext_fields)
+  | Tstr_value(_, Static, pat_expr_list) ->
+      dummy_slots ~ctx (let_bound_idents pat_expr_list) next fields
   | Tstr_value(rec_flag, Value, pat_expr_list) ->
       (* Translate bindings first *)
       let mk_lam_let =
@@ -639,16 +781,14 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
   | Tstr_typext(tyext) ->
       let ids = List.map (fun ext -> ext.ext_id) tyext.tyext_constructors in
       let body = next (List.rev_append ids fields) in
-      transl_type_extension ~scopes item.str_env rootpath tyext body
+      transl_type_extension ~ctx ~scopes item.str_env rootpath tyext body
   | Tstr_exception ext ->
       let id = ext.tyexn_constructor.ext_id in
-      let path = field_path rootpath id in
+      let lam =
+        transl_extension ~ctx ~scopes item.str_env rootpath
+          ext.tyexn_constructor in
       let body = next (id::fields) in
-      Llet(Strict, Pgenval, id,
-           transl_extension_constructor ~scopes
-             item.str_env
-             path
-             ext.tyexn_constructor, body)
+      Llet(Strict, Pgenval, id, lam, body)
   | Tstr_module ({mb_presence=Mp_present} as mb) ->
       let id = mb.mb_id in
       (* Translate module first *)
@@ -823,6 +963,55 @@ let transl_implementation ~ctx module_name (str, cc) =
   in
   { implementation with code }
 
+(* The globals that typing records are those of the run-time part.  Run
+   a translation of the compile-time part without them. *)
+let without_typing_required_globals f =
+  let saved = Env.get_required_globals () in
+  Env.reset_required_globals ();
+  let result = f () in
+  List.iter Env.add_required_global saved;
+  result
+
+let macros_global module_name =
+  Ident.create_persistent (Unit_info.macros_modname module_name)
+
+(* Whether a structure exports anything that it binds at compile time.
+   A module alias is not expanded: under -no-alias-deps its target is not
+   read.  What an open binds is not exported. *)
+let exports_macros str =
+  List.exists
+    (fun item -> match item.str_desc with
+       | Tstr_open _ -> false
+       | _ -> item_binds_at_compile_time ~expand_aliases:false item)
+    str.str_items
+
+(* The compile-time part of a unit: the global [M$macros], a block with
+   the layout of the block of the unit.  It refers to no run-time
+   object, and it is bytecode, whichever compiler builds it. *)
+let transl_macros_object module_name (str, cc) =
+  protect_refs [R (Clflags.native_code, false)] @@ fun () ->
+  let module_id = Ident.create_persistent module_name in
+  let macros_id = macros_global module_name in
+  let scopes = enter_module_definition ~scopes:empty_scopes module_id in
+  let ctx = initial_context () in
+  let body, required =
+    without_typing_required_globals @@ fun () ->
+      let body =
+        in_world ctx Compile_world @@ fun ctx ->
+          let mod_body =
+            transl_struct ~ctx ~scopes Loc_unknown [] cc
+              (Some (Path.Pident module_id)) str
+          in
+          Lprim (Psetglobal macros_id, [mod_body], Loc_unknown)
+      in
+      body, required_globals ~flambda:false body
+  in
+  { module_ident = macros_id;
+    main_module_block_size =
+      module_block_size (bound_value_identifiers str.str_type) cc;
+    required_globals = required;
+    code = body }
+
 (* Build the list of value identifiers defined by a toplevel structure
    (excluding primitive declarations). *)
 
@@ -970,16 +1159,16 @@ let nat_toplevel_name id =
   with Not_found ->
     fatal_error("Translmod.nat_toplevel_name: " ^ Ident.unique_name id)
 
-let field_of_str loc str =
+let field_of_str ~ctx loc str =
   let ids = Array.of_list (defined_idents str.str_items) in
   fun (pos, cc) ->
     match cc with
     | Tcoerce_primitive { pc_loc = _; pc_desc; pc_env; pc_type; } ->
         Translprim.transl_primitive loc pc_desc pc_env pc_type None
     | Tcoerce_alias (env, path, cc) ->
-        let lam = transl_module_path loc env path in
-        apply_coercion loc Alias cc lam
-    | _ -> apply_coercion loc Strict cc (Lvar ids.(pos))
+        let lam = transl_module_path ~ctx loc env path in
+        apply_coercion ~ctx loc Alias cc lam
+    | _ -> apply_coercion ~ctx loc Strict cc (Lvar ids.(pos))
 
 
 (* Within a recursive group, a module of the group is a variable in
@@ -1007,8 +1196,18 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
             Lsequence(Lambda.subst no_env_update subst
                         (transl_exp ~ctx ~scopes expr),
                       transl_store ~scopes rootpath subst cont rem)
-        | Tstr_value(_, Static, _) ->
-            Misc.fatal_error "static bindings: not implemented"
+        | Tstr_value(_, Static, pat_expr_list) ->
+            let ids = let_bound_idents pat_expr_list in
+            let lam =
+              List.fold_right
+                (fun id body ->
+                   Llet (Alias, Pgenval, id, Lconst const_unit, body))
+                ids
+                (store_idents Loc_unknown ids)
+            in
+            Lsequence(Lambda.subst no_env_update subst lam,
+                      transl_store ~scopes rootpath
+                        (add_idents false ids subst) cont rem)
         | Tstr_value(rec_flag, Value, pat_expr_list) ->
             let ids = let_bound_idents pat_expr_list in
             let lam =
@@ -1028,7 +1227,7 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
               List.map (fun ext -> ext.ext_id) tyext.tyext_constructors
             in
             let lam =
-              transl_type_extension ~scopes item.str_env rootpath tyext
+              transl_type_extension ~ctx ~scopes item.str_env rootpath tyext
                                     (store_idents Loc_unknown ids)
             in
             Lsequence(Lambda.subst no_env_update subst lam,
@@ -1101,7 +1300,7 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
             in
             (* Careful: see next case *)
             let subst = !transl_store_subst in
-            let field = field_of_str loc str in
+            let field = field_of_str ~ctx loc str in
             Lsequence(lam,
                       Llet(Strict, Pgenval, id,
                            Lambda.subst no_env_update subst
@@ -1180,7 +1379,7 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
                    a difference of behavior compared to bytecode. *)
             in
             let subst = !transl_store_subst in
-            let field = field_of_str (of_location ~scopes loc) str in
+            let field = field_of_str ~ctx (of_location ~scopes loc) str in
             let ids0 = bound_value_identifiers incl_type in
             let rec loop ids args =
               match ids, args with
@@ -1282,7 +1481,7 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
   and store_ident loc id =
     try
       let (pos, cc) = Ident.find_same id map in
-      let init_val = apply_coercion loc Alias cc (Lvar id) in
+      let init_val = apply_coercion ~ctx loc Alias cc (Lvar id) in
       Lprim(Psetfield(pos, Pointer, Root_initialization),
             [Lprim(Pgetglobal glob, [], loc); init_val],
             loc)
@@ -1319,8 +1518,8 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
               cont)
 
   and store_alias (pos, env, path, cc) =
-    let path_lam = transl_module_path Loc_unknown env path in
-    let init_val = apply_coercion Loc_unknown Strict cc path_lam in
+    let path_lam = transl_module_path ~ctx Loc_unknown env path in
+    let init_val = apply_coercion ~ctx Loc_unknown Strict cc path_lam in
     Lprim(Psetfield(pos, Pointer, Root_initialization),
           [Lprim(Pgetglobal glob, [], Loc_unknown);
            init_val],
@@ -1482,6 +1681,14 @@ let transl_static_program ?(native = false) module_name (str, cc)
     (* The static program is bytecode, whichever compiler builds it. *)
     protect_refs [R (Clflags.native_code, false)] @@ fun () ->
     Translcore.check_no_objects spl_exp;
+    let check_ident iter e =
+      match e.exp_desc with
+      | Texp_ident (_, _, desc) when desc.val_macro = Static ->
+          Misc.fatal_error "static bindings in splices: not implemented"
+      | _ -> Tast_iterator.default_iterator.expr iter e
+    in
+    check_ident { Tast_iterator.default_iterator with expr = check_ident }
+      spl_exp;
     (* A variable that is a field of the block of the unit is quoted as
        that field, and is not closed over. *)
     let roots = Translcore.quoted_variables ~ctx ~scopes spl_exp in
@@ -1617,7 +1824,7 @@ let transl_toplevel_item ~ctx ~scopes item =
          in a Lsequence returning unit. *)
       transl_exp ~ctx ~scopes expr
   | Tstr_value(_, Static, _) ->
-      Misc.fatal_error "static bindings: not implemented"
+      Misc.fatal_error "static bindings in the toplevel: not implemented"
   | Tstr_value(rec_flag, Value, pat_expr_list) ->
       let idents = let_bound_idents pat_expr_list in
       transl_let ~ctx ~scopes ~in_structure:true rec_flag pat_expr_list
@@ -1629,7 +1836,7 @@ let transl_toplevel_item ~ctx ~scopes item =
       (* we need to use unique name in case of multiple
          definitions of the same extension constructor in the toplevel *)
       List.iter set_toplevel_unique_name idents;
-        transl_type_extension ~scopes item.str_env None tyext
+        transl_type_extension ~ctx ~scopes item.str_env None tyext
           (make_sequence toploop_setvalue_id idents)
   | Tstr_exception ext ->
       set_toplevel_unique_name ext.tyexn_constructor.ext_id;
@@ -1732,19 +1939,19 @@ let get_component = function
     None -> Lconst const_unit
   | Some id -> Lprim(Pgetglobal id, [], Loc_unknown)
 
-let transl_package_flambda component_names coercion =
+let transl_package_flambda ~ctx component_names coercion =
   module_block_size component_names coercion,
-  apply_coercion Loc_unknown Strict coercion
+  apply_coercion ~ctx Loc_unknown Strict coercion
     (Lprim(Pmakeblock(0, Immutable, None),
            List.map get_component component_names,
            Loc_unknown))
 
-let transl_package component_names target_name coercion =
+let transl_package ~ctx component_names target_name coercion =
   let components =
     Lprim(Pmakeblock(0, Immutable, None),
           List.map get_component component_names, Loc_unknown) in
   Lprim(Psetglobal target_name,
-        [apply_coercion Loc_unknown Strict coercion components],
+        [apply_coercion ~ctx Loc_unknown Strict coercion components],
         Loc_unknown)
   (*
   let components =
@@ -1755,14 +1962,15 @@ let transl_package component_names target_name coercion =
               (* ignore id_pos_list as the ids are already bound *)
         let g = Array.of_list component_names in
         List.map
-          (fun (pos, cc) -> apply_coercion Strict cc (get_component g.(pos)))
+          (fun (pos, cc) ->
+             apply_coercion ~ctx Strict cc (get_component g.(pos)))
           pos_cc_list
     | _ ->
         assert false in
   Lprim(Psetglobal target_name, [Lprim(Pmakeblock(0, Immutable), components)])
    *)
 
-let transl_store_package component_names target_name coercion =
+let transl_store_package ~ctx component_names target_name coercion =
   let rec make_sequence fn pos arg =
     match arg with
       [] -> lambda_unit
@@ -1786,7 +1994,7 @@ let transl_store_package component_names target_name coercion =
       let blk = Ident.create_local "block" in
       (List.length pos_cc_list,
        Llet (Strict, Pgenval, blk,
-             apply_coercion Loc_unknown Strict coercion components,
+             apply_coercion ~ctx Loc_unknown Strict coercion components,
              make_sequence
                (fun pos _id ->
                  Lprim(Psetfield(pos, Pointer, Root_initialization),
@@ -1803,7 +2011,7 @@ let transl_store_package component_names target_name coercion =
          (fun dst (src, cc) ->
            Lprim(Psetfield(dst, false),
                  [Lprim(Pgetglobal target_name, []);
-                  apply_coercion Strict cc (get_component id.(src))]))
+                  apply_coercion ~ctx Strict cc (get_component id.(src))]))
          0 pos_cc_list)
   *)
   | _ -> assert false
@@ -1824,6 +2032,17 @@ let transl_store_implementation module_name str_cc =
 
 let transl_toplevel_definition str =
   transl_toplevel_definition ~ctx:(initial_context ()) str
+
+let transl_package_flambda component_names coercion =
+  transl_package_flambda ~ctx:(initial_context ()) component_names coercion
+
+let transl_package component_names target_name coercion =
+  transl_package ~ctx:(initial_context ()) component_names target_name
+    coercion
+
+let transl_store_package component_names target_name coercion =
+  transl_store_package ~ctx:(initial_context ()) component_names target_name
+    coercion
 
 (* Error report *)
 
@@ -1887,6 +2106,13 @@ let report_error loc = function
   | Conflicting_inline_attributes ->
       Location.errorf "@[Conflicting %a attributes@]"
         Style.inline_code "inline"
+  | Static_quotes_local id ->
+      Location.errorf ~loc
+        "The quotations in this static binding capture %a,@ \
+         a run-time name of the enclosing module or functor.@ \
+         A static value's quotations may only name run-time values@ \
+         of other compilation units (global values)."
+        Style.inline_code (Ident.name id)
 
 let () =
   Location.register_error_of_exn

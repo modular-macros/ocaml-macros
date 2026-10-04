@@ -125,6 +125,17 @@ let simplify_compile_time lam =
   Misc.protect_refs [ Misc.R (Clflags.native_code, false) ]
     (fun () -> Simplif.simplify_lambda lam)
 
+let emit_macros_object i Typedtree.{structure; coercion; _} =
+  let source_file = Unit_info.source_file i.target in
+  let prog =
+    Translmod.transl_macros_object (Unit_info.modname i.target)
+      (structure, coercion)
+  in
+  Emit_cmo.to_cmo ~source_file
+    ~prefix:(Unit_info.prefix i.target ^ "$macros")
+    ~required_globals:prog.Lambda.required_globals
+    (simplify_compile_time prog.Lambda.code)
+
 (* The run-time term of the unit, its holes filled by its static
    program.  The static program is printed under -dstatic, and the term
    is left to the caller, which compiles it as that of any unit. *)
@@ -178,6 +189,15 @@ let build_static_program ~native i Typedtree.{structure; coercion; _} =
     Lambda.code = Translquote.fill_holes run_time.Lambda.code holes }
 
 let implementation ~native i typed ~fallback ~finish =
+  (* An alias is not expanded: its components are those of another
+     unit. *)
+  let exports =
+    Translmod.exports_macros typed.Typedtree.structure
+    || Mtype.has_macro_components ~expand_aliases:false
+         typed.Typedtree.structure.str_final_env
+         (Types.Mty_signature typed.Typedtree.signature)
+  in
+  if exports then emit_macros_object i typed;
   if Env.get_unit_has_top_level_splice ()
   then finish (build_static_program ~native i typed)
   else fallback ()

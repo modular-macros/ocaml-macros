@@ -1,0 +1,5 @@
+File "objects.ml", line 11, characters 9-32:
+11 | $let o = object method m = 1 end
+              ^^^^^^^^^^^^^^^^^^^^^^^
+Error: Objects and classes are not yet supported in quotations,
+       or in compile-time code.

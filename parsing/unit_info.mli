@@ -50,6 +50,10 @@ val strict_modname_from_source: filename -> modname
     valid module name. *)
 val is_unit_name : modname -> bool
 
+(** [macros_modname m] is the name of the global that holds the
+    compile-time part of the unit [m].  It is not a valid module name. *)
+val macros_modname : modname -> modname
+
 
 (** {1:unit_info Metadata for compilation unit} *)
 

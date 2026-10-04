@@ -628,6 +628,8 @@ and functor_components = {
 and address_unforced =
   | Projection of { parent : address_lazy; pos : int; }
   | ModAlias of { env : t; path : Path.t; }
+  | Compile_time of address_lazy
+  (* The same position in the compile-time block of the unit *)
 
 and address_lazy = (address_unforced, address) Lazy_backtrack.t
 
@@ -1371,6 +1373,17 @@ let find_type p env =
 let find_type_descrs p env =
   (find_type_data p env).tda_descriptions
 
+(* The address of the same component in the compile-time part: the two
+   blocks of a unit have one layout.  An identifier of the current unit
+   denotes the block that the translation is building. *)
+let rec macros_address = function
+  | Aident id ->
+      if Ident.persistent id then
+        Aident (Ident.create_persistent
+                  (Unit_info.macros_modname (Ident.name id)))
+      else Aident id
+  | Adot (a, pos) -> Adot (macros_address a, pos)
+
 let rec find_module_address path env =
   match path with
   | Pident id -> get_address (find_ident_module id env).mda_address
@@ -1382,9 +1395,13 @@ let rec find_module_address path env =
 and force_address = function
   | Projection { parent; pos } -> Adot(get_address parent, pos)
   | ModAlias { env; path } -> find_module_address path env
+  | Compile_time addr -> macros_address (get_address addr)
 
 and get_address a =
   Lazy_backtrack.force force_address a
+
+let find_module_macros_address path env =
+  macros_address (find_module_address path env)
 
 let find_value_address path env =
   get_address (find_value_full path env).vda_address
@@ -1931,6 +1948,7 @@ let rec components_of_module_maker
         incr pos;
         Lazy_backtrack.create addr
       in
+      let compile_time addr = Lazy_backtrack.create (Compile_time addr) in
       List.iter (fun ((item : Subst.Lazy.signature_item), path) ->
         match item with
           SigL_value(id, decl, _) ->
@@ -1938,7 +1956,9 @@ let rec components_of_module_maker
             let addr =
               match decl.val_kind with
               | Val_prim _ -> Lazy_backtrack.create_failed Not_found
-              | _ -> next_address ()
+              | _ ->
+                  let addr = next_address () in
+                  if decl.val_macro = Static then compile_time addr else addr
             in
             let vda_shape = Shape.proj cm_shape (Shape.Item.value id) in
             let vda =

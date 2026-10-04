@@ -4844,7 +4844,9 @@ lambda/translcore.cmi : \
     parsing/asttypes.cmi
 lambda/translmod.cmo : \
     lambda/value_rec_compiler.cmi \
+    parsing/unit_info.cmi \
     typing/types.cmi \
+    typing/typemod.cmi \
     typing/typedtree.cmi \
     lambda/translquote.cmi \
     lambda/translprim.cmi \
@@ -4852,6 +4854,7 @@ lambda/translmod.cmo : \
     lambda/translcore.cmi \
     lambda/translclass.cmi \
     lambda/translattribute.cmi \
+    typing/tast_iterator.cmi \
     typing/primitive.cmi \
     typing/predef.cmi \
     typing/path.cmi \
@@ -4870,7 +4873,9 @@ lambda/translmod.cmo : \
     lambda/translmod.cmi
 lambda/translmod.cmx : \
     lambda/value_rec_compiler.cmx \
+    parsing/unit_info.cmx \
     typing/types.cmx \
+    typing/typemod.cmx \
     typing/typedtree.cmx \
     lambda/translquote.cmx \
     lambda/translprim.cmx \
@@ -4878,6 +4883,7 @@ lambda/translmod.cmx : \
     lambda/translcore.cmx \
     lambda/translclass.cmx \
     lambda/translattribute.cmx \
+    typing/tast_iterator.cmx \
     typing/primitive.cmx \
     typing/predef.cmx \
     typing/path.cmx \
@@ -7416,6 +7422,7 @@ driver/pparse.cmi : \
     utils/format_doc.cmi
 driver/static_link.cmo : \
     parsing/unit_info.cmi \
+    typing/types.cmi \
     typing/typedtree.cmi \
     lambda/translquote.cmi \
     lambda/translmod.cmi \
@@ -7423,6 +7430,7 @@ driver/static_link.cmo : \
     lambda/simplif.cmi \
     utils/profile.cmi \
     lambda/printlambda.cmi \
+    typing/mtype.cmi \
     utils/misc.cmi \
     parsing/location.cmi \
     lambda/lambda.cmi \
@@ -7433,6 +7441,7 @@ driver/static_link.cmo : \
     driver/static_link.cmi
 driver/static_link.cmx : \
     parsing/unit_info.cmx \
+    typing/types.cmx \
     typing/typedtree.cmx \
     lambda/translquote.cmx \
     lambda/translmod.cmx \
@@ -7440,6 +7449,7 @@ driver/static_link.cmx : \
     lambda/simplif.cmx \
     utils/profile.cmx \
     lambda/printlambda.cmx \
+    typing/mtype.cmx \
     utils/misc.cmx \
     parsing/location.cmx \
     lambda/lambda.cmx \

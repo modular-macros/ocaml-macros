@@ -84,6 +84,7 @@ type error =
   | Macro_in_package
   | Macro_in_abstract_modtype
   | Macro_in_local_module
+  | Macro_in_packed_unit of string
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -3554,6 +3555,10 @@ let package_units initial_env objfiles target_cmi =
             not(Mtype.no_code_needed_sig Env.initial sg)
          then raise(Error(Location.none, Env.empty,
                           Implementation_is_required f));
+         (* The compile-time part of a unit is not packed. *)
+         if Mtype.has_macro_components initial_env (Mty_signature sg) then
+           raise(Error(Location.in_file f, Env.empty,
+                       Macro_in_packed_unit f));
          Unit_info.Artifact.modname artifact, sg)
       objfiles in
   (* Compute signature of packaged unit *)
@@ -3847,6 +3852,12 @@ let report_error ~loc _env = function
       Location.errorf ~loc
         "This module type cannot be used as a first-class module:@ \
          it has compile-time components (static bindings)."
+  | Macro_in_packed_unit file ->
+      Location.errorf ~loc
+        "%a has compile-time components,@ and %a packs only run-time \
+         objects.@ Such a unit cannot be a member of a pack."
+        Location.Doc.quoted_filename file
+        Style.inline_code "-pack"
   | Macro_in_abstract_modtype ->
       Location.errorf ~loc
         "An abstract module type cannot be instantiated with this module@ \

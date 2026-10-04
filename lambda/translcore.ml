@@ -54,6 +54,11 @@ let use_dup_for_constant_mutable_arrays_bigger_than = 4
 
 (* The state of a translation *)
 
+(* The part of the unit that the translation is building *)
+type world =
+  | Run_world      (* the object that the program runs *)
+  | Compile_world  (* the compile-time part *)
+
 (* The closure backend translates a unit in the store form: its
    components are fields of the block of the unit, and the scope of a
    local binding does not span the items that follow.  Quoted code
@@ -63,8 +68,16 @@ type native_slot_layout =
   { nsl_module : Ident.t;
     nsl_pos : Ident.t -> int option }
 
+(* What the passes of the translation of a unit record, and read *)
+type unit_state =
+  { mutable compile_world_dummies : Ident.Set.t;
+    (* The identifiers that the compile-time part binds to
+       placeholders: the run-time components, which keep only their
+       positions in the compile-time block. *) }
+
 type context =
-  { native_slot_layout : native_slot_layout option;
+  { world : world;
+    native_slot_layout : native_slot_layout option;
     (* The fields of the unit's block, in the compile-time part of a
        native static program *)
     splice_source : (context -> expression -> lambda_splice) option;
@@ -78,13 +91,17 @@ type context =
     (* Where the quotations of the compile-time code being translated
        add the variables of run-time code that they mention: the free
        variables of their translated bodies, a splice in a body counting
-       as its arguments *) }
+       as its arguments *)
+    unit_state : unit_state }
 
 let initial_context () =
-  { native_slot_layout = None;
+  { world = Run_world;
+    native_slot_layout = None;
     splice_source = None;
     closing = Ident.Map.empty;
-    quoted_variables = None }
+    quoted_variables = None;
+    unit_state =
+      { compile_world_dummies = Ident.Set.empty } }
 
 let rec name_slots_through_block nsl lam =
   match lam with

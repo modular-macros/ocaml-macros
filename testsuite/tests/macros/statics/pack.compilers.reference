@@ -1,0 +1,4 @@
+File "pack_member.cmo", line 1:
+Error: pack_member.cmo has compile-time components,
+       and -pack packs only run-time objects.
+       Such a unit cannot be a member of a pack.
