@@ -183,3 +183,29 @@ Error: Signature mismatch:
        static bindings, or the contents of a module from a
        compile-time library (a directory given to -I-static)
 |}]
+
+$let[..] g () = let module M = struct let v = 1 end in << let module Q = M in Q.v >>
+;;
+[%%expect{|
+Line 1, characters 73-74:
+1 | $let[..] g () = let module M = struct let v = 1 end in << let module Q = M in Q.v >>
+                                                                             ^
+Error: The module "M" is bound in compile-time code, so the code this
+       quotation builds cannot name it: that code runs in another
+       program, which has no such module.
+       Bind the module outside the generator or splice body, or move the
+       reference into a splice.
+|}]
+
+$let[..] g (module M : S) = << let open M in v >>
+;;
+[%%expect{|
+Line 1, characters 45-46:
+1 | $let[..] g (module M : S) = << let open M in v >>
+                                                 ^
+Error: The module "M" is bound in compile-time code, so the code this
+       quotation builds cannot name it: that code runs in another
+       program, which has no such module.
+       Bind the module outside the generator or splice body, or move the
+       reference into a splice.
+|}]

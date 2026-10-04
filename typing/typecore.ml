@@ -5435,13 +5435,6 @@ and type_expect_
            exp_env = env }
 
   | Pexp_struct_item (si, e) ->
-      begin match si.pstr_desc with
-      | Pstr_open { popen_expr = { pmod_desc = Pmod_ident _ } } -> ()
-      | Pstr_exception _ -> ()
-      | _ ->
-          if Env.get_env_mode env = Types.M_Q then
-            Misc.fatal_error "structures in quotations: not implemented"
-      end;
       let tv = newvar () in
       let (_, si, exp) =
         with_local_level_generalize begin fun () ->

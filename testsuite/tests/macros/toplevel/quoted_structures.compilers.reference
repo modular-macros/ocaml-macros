@@ -1,0 +1,19 @@
+val ( let* ) : 'a -> ('a -> 'b) -> 'b = <fun>
+val ( and* ) : 'a -> 'b -> 'a * 'b = <fun>
+$val[..] mlet : unit -> int expr = <fun>
+$val[..] mand : unit -> int expr = <fun>
+val a : int = 4
+val b : int = 7
+module M : sig val v : int end
+module type S = sig val v : int end
+$val[..] mmod : unit -> int expr = <fun>
+$val[..] mpack : unit -> (module S) expr = <fun>
+$val[..] mchain : unit -> int expr = <fun>
+val c : int = 5
+val d : int = 5
+val e : int = 5
+a=4 b=7 c=5 d=5 e=5
+- : unit = ()
+$val[..] built : int expr -> int expr = <fun>
+val f : int = 6
+
