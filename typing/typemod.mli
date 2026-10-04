@@ -104,6 +104,10 @@ type hiding_error =
       user_loc: Location.t;
     }
 
+type staged_context =
+  | In_quotation
+  | In_compile_time_code
+
 type error =
     Cannot_apply of module_type
   | Not_included of Includemod.explanation
@@ -138,6 +142,7 @@ type error =
   | Non_packable_local_modtype_subst of Path.t
   | With_cannot_remove_packed_modtype of Path.t * module_type
   | Cannot_alias of Path.t
+  | Definition_in_staged_code of staged_context
   | Macro_is_not_function
   | Macro_binds_not_one_name
   | Macro_in_functor_argument
@@ -146,6 +151,9 @@ type error =
   | Macro_in_local_module
   | Local_compile_time_constructor
   | Macro_in_packed_unit of string
+  | Pack_in_compile_time_code
+  | Functor_in_compile_time_package of Ident.t
+  | Runtime_module_in_compile_time_code of Path.t option
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

@@ -46,6 +46,12 @@ type hiding_error =
       user_loc: Location.t;
     }
 
+(* Where a structure-level definition was found, for
+   [Definition_in_staged_code]. *)
+type staged_context =
+  | In_quotation
+  | In_compile_time_code
+
 type error =
     Cannot_apply of module_type
   | Not_included of Includemod.explanation
@@ -80,6 +86,7 @@ type error =
   | Non_packable_local_modtype_subst of Path.t
   | With_cannot_remove_packed_modtype of Path.t * module_type
   | Cannot_alias of Path.t
+  | Definition_in_staged_code of staged_context
   | Macro_is_not_function
   | Macro_binds_not_one_name
   | Macro_in_functor_argument
@@ -88,6 +95,9 @@ type error =
   | Macro_in_local_module
   | Local_compile_time_constructor
   | Macro_in_packed_unit of string
+  | Pack_in_compile_time_code
+  | Functor_in_compile_time_package of Ident.t
+  | Runtime_module_in_compile_time_code of Path.t option
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -250,6 +260,36 @@ let check_plain_functor_range loc env ~arg =
   match arg with
   | Types.Unit -> ()
   | Types.Named (_, mty) -> check_functor_argument_range loc env mty
+
+(* A structure that is typed in compile-time code has its values
+   typed at the level of that code, and its signature records them at
+   their levels relative to the structure: [relative_signature ambient]
+   shifts the levels of the values by [-ambient].  The modules of the
+   structure have such signatures already. *)
+let relative_signature ambient sg =
+  if ambient = 0 then sg else
+  List.map
+    (function
+      | Sig_value (id, vd, vis) ->
+          Sig_value (id, { vd with val_staging_level =
+                                  vd.val_staging_level - ambient }, vis)
+      | item -> item)
+    sg
+
+(* A structure that is the value of an expression, in a quotation or in
+   compile-time code, is built as one block, in the part that evaluates
+   the expression: a plain [let] of it is an ordinary value of that
+   part, and a compile-time definition is refused. *)
+let check_definition_stage loc env =
+  let mode = Env.get_env_mode env in
+  let level = Env.get_env_level env in
+  if mode = Types.M_Q || level <> 0 then
+    let ctx =
+      match mode with
+      | Types.M_Q -> In_quotation
+      | Types.M_C | Types.M_S -> In_compile_time_code
+    in
+    raise (Error (loc, env, Definition_in_staged_code ctx))
 
 (* Additional validity checks on type definitions arising from
    recursive modules *)
@@ -1539,12 +1579,27 @@ end
 let transl_modtype_longident loc env lid =
   Env.lookup_modtype_path ~loc lid env
 
+let rec path_root : Path.t -> Ident.t option = function
+  | Pident id -> Some id
+  | Pdot (p, _) | Pextra_ty (p, _) -> path_root p
+  | Papply _ -> None
+
 (* Run-time code cannot name a module of a unit that is available to
    compile-time code only, as a module expression or as an alias: the
-   unit is not linked with it. *)
+   unit is not linked with it.  Nor can the code that a quotation
+   builds name a module bound in compile-time code. *)
 let check_run_time_module loc env path =
-  if Env.get_env_level env >= 0 then
-    Env.check_compile_time_only_unit ~loc env path ~own_level:0
+  if Env.get_env_level env >= 0 then begin
+    Env.check_compile_time_only_unit ~loc env path ~own_level:0;
+    let path =
+      try Env.normalize_module_path None env path with Not_found -> path
+    in
+    match path_root path with
+    | Some id when Env.is_compile_time_module id env ->
+        raise (Typecore.Error (loc, env,
+                               Typecore.Compile_time_module_in_runtime_code id))
+    | _ -> ()
+  end
 
 let transl_module_alias loc env lid =
   Env.lookup_module_path ~load:false ~loc lid env
@@ -2390,12 +2445,12 @@ let () =
     Ctype.package_subtype := package_subtype;
     Ctype.set_modtype_of_package modtype_of_package
 
-let wrap_constraint_package env mark arg mty explicit =
+let wrap_constraint_package ?relativity env mark arg mty explicit =
   let mty1 = Subst.modtype Keep Subst.identity arg.mod_type in
   let mty2 = Subst.modtype Keep Subst.identity mty in
   let coercion =
     try
-      Includemod.modtypes ~loc:arg.mod_loc env ~mark mty1 mty2
+      Includemod.modtypes ?relativity ~loc:arg.mod_loc env ~mark mty1 mty2
     with Includemod.Error msg ->
       raise(Error(arg.mod_loc, env, Not_included msg)) in
   { mod_desc = Tmod_constraint(arg, mty, explicit, coercion);
@@ -2482,6 +2537,102 @@ let type_value_bindings ?macro ~names ~shape_map ~def_env ~rec_env ~record
   in
   defs, List.rev items, shape_map, newenv
 
+(* Whether [mty] has, at any depth, a value or an extension constructor
+   that [value] or [constructor] selects, a class or a functor.  Abstract
+   module types are assumed to have them. *)
+let rec mty_has_contents ~value ~constructor env mty =
+  match Mtype.scrape env mty with
+  | Mty_signature sg ->
+      List.exists
+        (function
+          | Sig_value (_, vd, _) -> value vd
+          | Sig_typext (_, ext, _, _) -> constructor ext
+          | Sig_class _ -> true
+          | Sig_module (_, Mp_absent, _, _, _) -> false
+          | Sig_module (_, Mp_present, md, _, _) ->
+              mty_has_contents ~value ~constructor env md.md_type
+          | Sig_type _ | Sig_modtype _ | Sig_class_type _ -> false)
+        sg
+  | Mty_functor _ | Mty_ident _ -> true
+  | Mty_alias _ -> false
+
+(* Whether [mty] names any run-time contents -- values, extension
+   constructors, classes, functors -- at any depth.  A signature of
+   types alone makes an inert package: nothing is ever read out of it,
+   so it is exempt from the admissibility and relativity checks below. *)
+let mty_has_runtime_contents =
+  mty_has_contents ~value:(fun _ -> true) ~constructor:(fun _ -> true)
+
+let rec peel_module_expr (m : Typedtree.module_expr) =
+  match m.mod_desc with
+  | Tmod_constraint (m, _, _, _) -> peel_module_expr m
+  | _ -> m
+
+(* The shift under which compile-time code reads the components of a
+   module: -1 for a module whose components it has, which are
+   recorded at their levels relative to the module -- a module of a
+   compile-time library, a module bound in compile-time code, an
+   unpacked package, a structure built there -- and 0 for a module
+   made at run time, of which compile-time code has placeholders.
+   [None] for a module expression that compile-time code cannot
+   evaluate. *)
+let compile_time_world_shift env (modl : Typedtree.module_expr) =
+  match (peel_module_expr modl).mod_desc with
+  | Tmod_ident (p, _) ->
+      (match path_root (Env.normalize_module_path None env p) with
+       | Some _ ->
+           if List.mem (-1) (Env.module_shifts env p) then Some (-1)
+           else Some 0
+       | None -> None)
+  | Tmod_unpack _ | Tmod_structure _ -> Some (-1)
+  | _ -> None
+
+(* Whether [mty] has components that are made at run time: values that
+   serve level 0, run-time extension constructors, classes, functors.
+   A module without them may be bound in compile-time code wherever it
+   is from. *)
+let mty_has_run_world_contents =
+  mty_has_contents
+    ~value:(fun vd -> Types.val_serving_level vd >= 0)
+    ~constructor:(fun ext -> not ext.ext_static)
+
+let check_module_served_in_compile_time_code ?(alias = false) env
+      (modl : Typedtree.module_expr) =
+  if Env.get_env_level env < 0
+  && not (alias && (match modl.mod_type with Mty_alias _ -> true
+                                          | _ -> false))
+  && mty_has_run_world_contents env (Env.scrape_alias env modl.mod_type)
+  then
+    match compile_time_world_shift env modl with
+    | Some (-1) -> ()
+    | _ ->
+        let path =
+          match (peel_module_expr modl).mod_desc with
+          | Tmod_ident (p, _) -> Some p
+          | _ -> None
+        in
+        raise (Error (modl.mod_loc, env,
+                      Runtime_module_in_compile_time_code path))
+
+(* A package built in compile-time code cannot have functor members. *)
+let check_no_functor_members env loc mty =
+  let rec walk mty =
+    match Mtype.scrape env mty with
+    | Mty_signature sg ->
+        List.iter
+          (function
+            | Sig_module (id, Mp_present, md, _, _) ->
+                (match Mtype.scrape env md.md_type with
+                 | Mty_functor _ ->
+                     raise (Error (loc, env,
+                                   Functor_in_compile_time_package id))
+                 | _ -> walk md.md_type)
+            | _ -> ())
+          sg
+    | _ -> ()
+  in
+  walk mty
+
 let rec type_module ?(alias=false) ~strengthen ~funct_body anchor env smod =
   Builtin_attributes.warning_scope smod.pmod_attributes
     (fun () -> type_module_aux ~alias ~strengthen ~funct_body anchor env smod)
@@ -2531,6 +2682,9 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
   | Pmod_structure sstr ->
       let (str, sg, names, shape, _finalenv) =
         type_structure ~funct_body anchor env sstr in
+      (* The signature of a structure records the levels of its values
+         relative to the structure. *)
+      let sg = relative_signature (Env.get_env_level env) sg in
       let md =
         { mod_desc = Tmod_structure str;
           mod_type = Mty_signature sg;
@@ -2814,7 +2968,9 @@ and type_open_decl_aux ?used_slot ?toplevel ~funct_body names env od =
     let scope = Ctype.create_scope () in
     let sg, newenv =
       Env.enter_signature ~scope ~mod_shape
-        (extract_sig_open env md.mod_loc md.mod_type) env
+        (relative_signature (- Env.get_env_level env)
+           (extract_sig_open env md.mod_loc md.mod_type))
+        env
     in
     let info, visibility =
       match toplevel with
@@ -2875,7 +3031,8 @@ and type_structure ?(toplevel = false) ~funct_body anchor env sstr =
   if toplevel then run ()
   else Builtin_attributes.warning_scope [] run
 
-and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
+and type_str_item ?(local = false) ~names ~toplevel ~funct_body anchor env
+      shape_map
     {pstr_loc = loc; pstr_desc = desc} =
   let desc, sg, shape_map, new_env =
     match desc with
@@ -2895,6 +3052,7 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         shape_map,
         newenv
     | Pstr_value (rec_flag, Macro, sdefs) ->
+        check_definition_stage loc env;
         (* The right-hand sides are compile-time code, typed one level
            down.  The values bound are generators at that level, within
            a recursive group as well as after it. *)
@@ -2913,6 +3071,7 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         shape_map,
         Env.with_level original_level newenv
     | Pstr_value (rec_flag, Static, sdefs) ->
+        check_definition_stage loc env;
         (* The right-hand sides are compile-time code, typed one level
            down.  The values bound are static bindings, which record the
            level of the binding. *)
@@ -2968,6 +3127,10 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         shape_map,
         enrich_type_decls anchor decls env newenv
     | Pstr_typext styext ->
+        if List.exists
+             (fun sext -> sext.pext_static)
+             styext.ptyext_constructors
+        then check_definition_stage loc env;
         let (tyext, newenv, shapes) =
           Typedecl.transl_type_extension true env loc styext
         in
@@ -2984,6 +3147,8 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         shape_map,
          newenv)
     | Pstr_exception sext ->
+        if sext.ptyexn_constructor.pext_static
+        then check_definition_stage loc env;
         let (ext, newenv, shape) = Typedecl.transl_type_exception env sext in
         let constructor = ext.tyexn_constructor in
         Signature_names.check_typext names constructor.ext_loc
@@ -3009,6 +3174,10 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
                  (anchor_submodule name.txt anchor) env smodl
             )
         in
+        (* A module bound in compile-time code must have its components
+           there.  A local alias binds no block: its components are those
+           of the module that it names, each at its level. *)
+        check_module_served_in_compile_time_code ~alias:local env modl;
         let pres =
           match modl.mod_type with
           | Mty_alias _ -> Mp_absent
@@ -3214,11 +3383,15 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
           Builtin_attributes.warning_scope sincl.pincl_attributes
             (fun () -> type_module ~strengthen:true ~funct_body None env smodl)
         in
+        check_module_served_in_compile_time_code env modl;
         let scope = Ctype.create_scope () in
         (* Rename all identifiers bound by this signature to avoid clashes *)
         let sg, shape, new_env =
           Env.enter_signature_and_shape ~scope ~parent_shape:shape_map
-            modl_shape (extract_sig_open env smodl.pmod_loc modl.mod_type) env
+            modl_shape
+            (relative_signature (- Env.get_env_level env)
+               (extract_sig_open env smodl.pmod_loc modl.mod_type))
+            env
         in
         Signature_group.iter (Signature_names.check_sig_item names loc) sg;
         let incl =
@@ -3324,7 +3497,15 @@ let lookup_type_in_sig sg =
     | Ldot({ txt = m; _ }, { txt = name; _ }) -> Pdot(module_path m, name)
     | Lapply _ -> assert false
 
-let type_package env m pack =
+(* [annotation] is the package type written at the pack itself --
+   the [S] of [(module M : S)] -- when the caller has one to give.
+   It is applied below, with the coercion to [pack], INSIDE the
+   relativity window: it states the type of the package being built,
+   so in compile-time code it is read relative to the package's level
+   like any other package type.  An ascription the user wrote inside
+   the pack, [(module (M : S) : T)], is part of [m] instead and is
+   matched by [type_module] absolutely, as every ascription is. *)
+let type_package ?annotation env m pack =
   let modl, scope =
     Typetexp.TyVarEnv.with_local_scope begin fun () ->
       (* type the module and create a scope in a raised level *)
@@ -3388,7 +3569,40 @@ let type_package env m pack =
         let lid = Longident.unflatten n |> Option.get in
         raise (Error(modl.mod_loc, env, Scoping_pack (lid,ty))))
     fl';
-  let modl = wrap_constraint_package env true modl mty Tmodtype_implicit in
+  (* A package type is read at the level of the package: in
+     compile-time code the module is matched against it relatively. *)
+  let ambient = Env.get_env_level env in
+  let relativity =
+    if ambient < 0 then begin
+      check_no_functor_members env modl.mod_loc mty;
+      match compile_time_world_shift env modl with
+      | Some source_shift -> Some { Includecore.source_shift; ambient }
+      | None ->
+          if mty_has_runtime_contents env mty then
+            raise (Error (modl.mod_loc, env, Pack_in_compile_time_code));
+          Some { Includecore.source_shift = 0; ambient }
+    end else None
+  in
+  (* Only the coercion below is relative, not the typing of the
+     annotation. *)
+  let ann_mty = Option.map (transl_modtype env) annotation in
+  (* One coercion takes the module to the level of the package: with an
+     annotation, the coercion to the annotation.  The coercion from the
+     annotation to the package type relates two package types read at
+     the same level. *)
+  let modl =
+    match ann_mty with
+    | None ->
+        wrap_constraint_package ?relativity env true modl mty
+          Tmodtype_implicit
+    | Some tmty ->
+        let modl =
+          wrap_constraint_package ?relativity env true modl tmty.mty_type
+            (Tmodtype_explicit tmty)
+        in
+        wrap_constraint_package env true modl mty Tmodtype_implicit
+  in
+
   modl, {pack with pack_constraints = fl'}
 
 (* Fill in the forward declarations *)
@@ -3406,7 +3620,7 @@ let type_open_descr ?used_slot env od =
    introduce compile-time components. *)
 let type_str_item env pstri =
   let si, _, _, new_env =
-    type_str_item
+    type_str_item ~local:true
       ~toplevel:false ~funct_body:false ~names:(Signature_names.create ())
       None env Shape.Map.empty pstri
   in
@@ -3414,9 +3628,13 @@ let type_str_item env pstri =
     if Mtype.has_macro_components env mty then
       raise (Error (loc, env, Macro_in_local_module))
   in
-  (* A signature may hide the compile-time components of a module. *)
+  (* A signature may hide the compile-time components of a module.  An
+     alias binds no module of its own: it names one whose compile-time
+     components are where they are. *)
   let check_module loc (me : Typedtree.module_expr) =
-    check loc me.mod_type;
+    (match me.mod_type with
+     | Mty_alias _ -> ()
+     | _ -> check loc me.mod_type);
     if has_compile_time_bindings me then
       raise (Error (loc, env, Macro_in_local_module))
   in
@@ -3911,6 +4129,19 @@ let report_error ~loc _env = function
          for an anonymous module type.@ %a"
         Style.inline_code (Path.name p)
         Misc.print_see_manual manual_ref
+  | Definition_in_staged_code In_quotation ->
+      Location.errorf ~loc
+        "A module defined inside a quotation cannot define generators,@ \
+         static bindings or compile-time constructors:@ \
+         the code a quotation builds is run-time code.@ \
+         Define them at the top level of a structure instead."
+  | Definition_in_staged_code In_compile_time_code ->
+      Location.errorf ~loc
+        "A module defined in compile-time code (the body of a generator@ \
+         or of a splice) cannot define generators, static bindings@ \
+         or compile-time constructors:@ \
+         they would sit one further level down.@ \
+         Define them at the top level of a structure instead."
   | Macro_binds_not_one_name ->
       Location.errorf ~loc
         "A generator must bind exactly one name.@ \
@@ -3943,6 +4174,43 @@ let report_error ~loc _env = function
         "An abstract module type cannot be instantiated with this module@ \
          type: it has compile-time components (generators,@ \
          static bindings, or compile-time constructors)."
+  | Functor_in_compile_time_package id ->
+      Location.errorf ~loc
+        "This package type has a functor member, %a.@ \
+         Packing a functor in compile-time code@ \
+         (the body of a generator or of a splice) is not yet supported."
+        Style.inline_code (Ident.name id)
+  | Runtime_module_in_compile_time_code mpath ->
+      begin match mpath with
+      | Some p ->
+          Location.errorf ~loc
+            "The module %a is made at run time, so it cannot be bound@ \
+             or packed in compile-time code@ \
+             (the body of a generator or of a splice):@ \
+             its contents are not available there.@ \
+             Use a module from a compile-time library@ \
+             (a directory given to %a),@ \
+             or unpack a compile-time package."
+            (Style.as_inline_code path) p
+            Style.inline_code "-I-static"
+      | None ->
+          Location.errorf ~loc
+            "This module expression cannot be evaluated in compile-time@ \
+             code (the body of a generator or of a splice):@ \
+             only a module from a compile-time library,@ \
+             an unpacked compile-time package,@ \
+             or a literal structure can be."
+      end
+  | Pack_in_compile_time_code ->
+      Location.errorf ~loc
+        "This module cannot be packed here, in compile-time code@ \
+         (the body of a generator or of a splice):@ \
+         the module is made at run time,@ \
+         so its contents are not available to build the package.@ \
+         Pack a module from a compile-time library@ \
+         (a directory given to %a),@ \
+         or build the package inside a quotation."
+        Style.inline_code "-I-static"
   | Local_compile_time_constructor ->
       Location.errorf ~loc
         "A compile-time constructor cannot be declared in an expression.@ \

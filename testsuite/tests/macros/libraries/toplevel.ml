@@ -50,5 +50,7 @@ let e = Counter.next () + $(Expr.int (Counter.next ()));;
 $let f = Both.v + Both.s + Both.Sub.w + Both.Sub.t;;
 let g = $(Both.add (Expr.int Both.v)) + Both.v;;
 module Included = struct include Both.Sub end;;
+module type FS = sig module F : Both.V -> sig val w : int end end;;
+$let j = (module Both : FS);;
 $let h = Included.t;;
 let i = Included.w;;

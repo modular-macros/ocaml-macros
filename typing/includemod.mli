@@ -149,8 +149,10 @@ val is_runtime_component: Types.signature_item -> bool
 (* Typechecking *)
 
 val modtypes:
-  loc:Location.t -> Env.t -> mark:bool ->
+  ?relativity:Includecore.relativity -> loc:Location.t -> Env.t -> mark:bool ->
   module_type -> module_type -> module_coercion
+(** With [relativity], the levels of the components are compared relatively;
+    see {!Includecore.relativity}. *)
 
 val modtypes_consistency:
   loc:Location.t -> Env.t -> module_type -> module_type -> unit

@@ -576,6 +576,12 @@ type t = {
   flags: int;
   env_staging_level: staging_level;
   env_staging_mode: staging_mode;
+  (* The levels of the modules bound at a level other than 0: in
+     compile-time code, whose modules the code that a quotation builds
+     cannot name (see [is_compile_time_module]), or in a quotation.
+     The components of such a module serve at the level of the
+     binding. *)
+  env_module_levels: staging_level Ident.Map.t;
   (* Whether typing is inside the right-hand side of a static binding,
      where a generator may not be used *)
   env_in_static_init: bool;
@@ -823,6 +829,7 @@ let empty = {
   not_aliasable = Ident.empty;
   env_staging_level = 0;
   env_staging_mode = M_C;
+  env_module_levels = Ident.Map.empty;
   env_in_static_init = false;
  }
 
@@ -885,6 +892,11 @@ let with_level_down env = with_level (get_env_level env - 1) env
 
 let get_env_mode env = env.env_staging_mode
 let with_mode mode env = {env with env_staging_mode = mode}
+
+let is_compile_time_module id env =
+  match Ident.Map.find_opt id env.env_module_levels with
+  | Some level -> level < 0
+  | None -> false
 
 let in_static_init env = env.env_in_static_init
 let with_static_init b env = {env with env_in_static_init = b}
@@ -2396,6 +2408,10 @@ and store_module ?(update_summary=true) ~check
     else Env_module (env.summary, id, presence, force_module_decl md) in
   { env with
     modules = IdTbl.add id (Mod_local mda) env.modules;
+    env_module_levels =
+      if env.env_staging_level <> 0
+      then Ident.Map.add id env.env_staging_level env.env_module_levels
+      else env.env_module_levels;
     summary }
 
 and store_modtype ?(update_summary=true) id info shape env =
@@ -3127,19 +3143,23 @@ let served_unit env path =
 
 (* The shifts under which the module [path] serves its components: a
    component recorded at the level [l] serves the levels [l + s].  A
-   unit serves at the levels for which it is available, both for a unit
-   that is available to compile-time code and to run-time code; any
-   other module at the level of the code around it.  An alias stands for
-   the module that it names: the path, or the open, that reaches a
-   module only locates it. *)
+   module bound in compile-time code serves at the level of its binding;
+   a unit at the levels for which it is available, both for a unit that
+   is available to compile-time code and to run-time code; any other
+   module at the level of the code around it.  An alias stands for the
+   module that it names: the path, or the open, that reaches a module
+   only locates it. *)
 let module_shifts env path =
   let path =
     try normalize_module_path None env path with Not_found -> path
   in
-  match served_unit env path with
-  | Some s when String.Set.mem s !static_stage_units ->
-      if String.Set.mem s !run_stage_units then [-1; 0] else [-1]
-  | Some _ | None -> [0]
+  match Ident.Map.find_opt (Path.head path) env.env_module_levels with
+  | Some level -> [level]
+  | None ->
+      match served_unit env path with
+      | Some s when String.Set.mem s !static_stage_units ->
+          if String.Set.mem s !run_stage_units then [-1; 0] else [-1]
+      | Some _ | None -> [0]
 
 (* The shift under which the module [path] serves a component recorded
    at the level [natural], where it is used, if it serves that level *)

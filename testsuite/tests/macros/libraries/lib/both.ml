@@ -6,3 +6,4 @@ module Sub = struct
   $let t = 6
 end
 module type V = sig val v : int end
+module F (X : V) = struct let w = X.v + 1 end

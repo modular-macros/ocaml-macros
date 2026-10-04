@@ -34,8 +34,16 @@ type value_mismatch =
   | Type of Errortrace.moregen_error
   | Staging_level_mismatch
   | Staging_world_mismatch
+  | Runtime_value_in_compile_time_package
 
 exception Dont_match of value_mismatch
+
+(* How the levels of a module's components are compared with those that
+   a signature records.  Without a relativity they are compared as
+   recorded.  A package type in compile-time code is read relatively:
+   [source_shift] is the shift under which that code reads the components
+   of the module, and [ambient] the level of the package. *)
+type relativity = { source_shift : int; ambient : int }
 
 (* Documents which kind of private thing would be revealed *)
 type privacy_mismatch =
@@ -76,6 +84,7 @@ type constructor_mismatch =
 type extension_constructor_mismatch =
   | Constructor_privacy
   | Constructor_world
+  | Runtime_constructor_in_compile_time_package
   | Constructor_mismatch of Ident.t
                             * extension_constructor
                             * extension_constructor
@@ -110,7 +119,7 @@ type type_mismatch =
   | Immediate of Type_immediacy.Violation.t
 
 val value_descriptions:
-  loc:Location.t -> Env.t -> string ->
+  ?relativity:relativity -> loc:Location.t -> Env.t -> string ->
   value_description -> value_description -> module_coercion
 
 val type_declarations:
@@ -120,7 +129,7 @@ val type_declarations:
   type_declaration -> Path.t -> type_declaration -> type_mismatch option
 
 val extension_constructors:
-  loc:Location.t -> Env.t -> mark:bool -> Ident.t ->
+  ?relativity:relativity -> loc:Location.t -> Env.t -> mark:bool -> Ident.t ->
   extension_constructor -> extension_constructor ->
   extension_constructor_mismatch option
 

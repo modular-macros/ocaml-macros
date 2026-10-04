@@ -89,6 +89,20 @@ val with_level_down: t -> t
 val get_env_mode : t -> staging_mode
 val with_mode: staging_mode -> t -> t
 
+(* Whether the identifier names a module bound below level 0, by a [let
+   module] in a macro or splice body: it exists in the compile-time world
+   only, so the code a quotation builds may not name it.  Module
+   declarations carry no staging level of their own, which is why this is
+   asked of the environment. *)
+val is_compile_time_module : Ident.t -> t -> bool
+
+(* The shifts under which a module serves its components: a component
+   recorded at the level [l] serves the levels [l + s].  A module bound
+   in compile-time code serves at the level of its binding, a unit at
+   the levels for which it is available, any other module at the level
+   of the code around it; an alias as the module that it names. *)
+val module_shifts : t -> Path.t -> int list
+
 (* Whether typing is inside the right-hand side of a static binding,
    where a generator may not be used: the code that a generator builds
    refers to run-time values through an environment that the splice

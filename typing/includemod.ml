@@ -242,12 +242,13 @@ module Core_inclusion = struct
 
   (* Inclusion between value descriptions *)
 
-  let value_descriptions ~loc env ~direction subst id vd1 vd2 =
+  let value_descriptions ~relativity ~loc env ~direction subst id vd1 vd2 =
     if Directionality.mark_as_used direction then
       Env.mark_value_used vd1.val_uid;
     let vd2 = Subst.value_description subst vd2 in
     try
-      Ok (Includecore.value_descriptions ~loc env (Ident.name id) vd1 vd2)
+      Ok (Includecore.value_descriptions ?relativity ~loc env (Ident.name id)
+            vd1 vd2)
     with Includecore.Dont_match err ->
       Error Error.(Core (Value_descriptions (diff vd1 vd2 err)))
 
@@ -268,10 +269,14 @@ module Core_inclusion = struct
 
   (* Inclusion between extension constructors *)
 
-  let extension_constructors ~loc env ~direction subst id ext1 ext2 =
+  let extension_constructors ~relativity ~loc env ~direction subst id ext1
+      ext2 =
     let mark = Directionality.mark_as_used direction in
     let ext2 = Subst.extension_constructor subst ext2 in
-    match Includecore.extension_constructors ~loc env ~mark id ext1 ext2 with
+    match
+      Includecore.extension_constructors ?relativity ~loc env ~mark id ext1
+        ext2
+    with
     | None -> Ok Tcoerce_none
     | Some err ->
         Error Error.(Core(Extension_constructors(diff ext1 ext2 err)))
@@ -1036,13 +1041,15 @@ and check_modtype_equiv ~core ~direction ~loc env mty1 mty2 =
 
 (* Simplified inclusion check between module types (for Env) *)
 
-let core_inclusion = Core_inclusion.{
+let core_inclusion_with relativity = Core_inclusion.{
   type_declarations;
-  value_descriptions;
-  extension_constructors;
+  value_descriptions = value_descriptions ~relativity;
+  extension_constructors = extension_constructors ~relativity;
   class_type_declarations;
   class_declarations;
 }
+
+let core_inclusion = core_inclusion_with None
 
 let core_consistency =
   let type_declarations ~loc:_ env ~direction:_ _ _ d1 d2 =
@@ -1366,11 +1373,11 @@ let modtypes_consistency ~loc env mty1 mty2 =
   | Ok _ -> ()
   | Error reason -> raise (Error (env, Error.(In_Module_type reason)))
 
-let modtypes ~loc env ~mark mty1 mty2 =
+let modtypes ?relativity ~loc env ~mark mty1 mty2 =
   let direction = Directionality.unknown ~mark in
   match
-    modtypes ~core:core_inclusion ~direction ~loc env Subst.identity
-      mty1 mty2 Shape.dummy_mod
+    modtypes ~core:(core_inclusion_with relativity) ~direction ~loc env
+      Subst.identity mty1 mty2 Shape.dummy_mod
   with
   | Ok (cc, _) -> cc
   | Error reason -> raise (Error (env, Error.(In_Module_type reason)))
@@ -1448,12 +1455,13 @@ module Check = struct
     check_only (module_declarations ~core:core_inclusion) env subst m1 m2
       Shape.(leaf Uid.internal_not_actually_unique)
 
-  let values env subst v1 v2 = check_ok value_descriptions env subst v1 v2
+  let values env subst v1 v2 =
+    check_ok core_inclusion.value_descriptions env subst v1 v2
   let types env subst t1 t2 = check_ok type_declarations env subst t1 t2
   let classes env subst c1 c2 = check_ok class_declarations env subst c1 c2
   let class_types env subst ct1 ct2 =
     check_ok class_type_declarations env subst ct1 ct2
   let extensions env subst e1 e2 =
-    check_ok extension_constructors env subst e1 e2
+    check_ok core_inclusion.extension_constructors env subst e1 e2
 
 end

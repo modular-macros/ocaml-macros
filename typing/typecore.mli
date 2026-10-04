@@ -234,6 +234,7 @@ type error =
   | Unrefuted_pattern of Typedtree.pattern
   | Invalid_extension_constructor_payload
   | Not_an_extension_constructor
+  | Compile_time_module_in_runtime_code of Ident.t
   | Invalid_atomic_loc_payload
   | Label_not_atomic of Longident.t
   | Atomic_in_pattern of Longident.t
@@ -290,7 +291,8 @@ val type_object:
   (Env.t -> Location.t -> Parsetree.class_structure ->
    Typedtree.class_structure * string list) ref
 val type_package:
-  (Env.t -> Parsetree.module_expr -> package ->
+  (?annotation:Parsetree.module_type ->
+   Env.t -> Parsetree.module_expr -> package ->
    Typedtree.module_expr * package) ref
 (* Forward declaration, to be filled in by Typemod.check_package_closed.
    Ensures that the package type does not contain any type variable. *)

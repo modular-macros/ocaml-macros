@@ -1287,8 +1287,16 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
 
 (* Update forward declaration in Translcore *)
 let _ =
-  Translcore.transl_module := transl_module;
-  Translcore.transl_struct_item := transl_struct_item
+  Translcore.transl_module :=
+    (fun ~ctx ~scopes cc rootpath mexp ->
+       if in_compile_world ctx then
+         Misc.fatal_error "modules in compile-time code: not implemented";
+       transl_module ~ctx ~scopes cc rootpath mexp);
+  Translcore.transl_struct_item :=
+    (fun ~ctx ~scopes fields rootpath item next ->
+       if in_compile_world ctx then
+         Misc.fatal_error "modules in compile-time code: not implemented";
+       transl_struct_item ~ctx ~scopes fields rootpath item next)
 
 (* Introduce dependencies on modules referenced only by "external". *)
 

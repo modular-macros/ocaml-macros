@@ -1,0 +1,17 @@
+module type S = sig type t val v : t val show : t -> string end
+$val literal : int
+$val packed : (module S)
+$val unpacked : string
+$val[..] shown : (module S) -> string expr
+$val[..] shown_all : (module S) list -> string expr
+module Static : sig $val v : int val r : int end
+$val of_static : (module S)
+$val aliased : int
+$val opened : int
+val aliased_at_run_time : int
+$val packs : (module S) list
+module type Types = sig type t end
+module R : sig type t = int val v : int end
+$val inert : (module Types)
+module type Counter = sig val count : int ref end
+$val mutable_state : (module Counter)

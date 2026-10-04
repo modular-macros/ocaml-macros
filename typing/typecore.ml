@@ -189,6 +189,7 @@ type error =
   | Unrefuted_pattern of pattern
   | Invalid_extension_constructor_payload
   | Not_an_extension_constructor
+  | Compile_time_module_in_runtime_code of Ident.t
   | Invalid_atomic_loc_payload
   | Label_not_atomic of Longident.t
   | Atomic_in_pattern of Longident.t
@@ -262,10 +263,13 @@ let type_open_decl :
     ref =
   ref (fun ?used_slot:_ _ -> assert false)
 
-(* Forward declaration, to be filled in by Typemod.type_package *)
+(* Forward declaration, to be filled in by Typemod.type_package.
+   [?annotation] is the package type written at the pack, as a module
+   type; [type_package] applies it as part of the package's own
+   coercion (see [package_type_as_module_type]). *)
 
 let type_package =
-  ref (fun _ -> assert false)
+  ref (fun ?annotation:_ _ -> assert false)
 
 (* Forward declaration, to be filled in by Typemod.check_package_closed *)
 
@@ -310,10 +314,6 @@ let mk_expected ?explanation ty = { ty; explanation; }
 
 let case lhs rhs =
   {c_lhs = lhs; c_cont = None; c_guard = None; c_rhs = rhs; c_evidence = None}
-
-let not_implemented_in_staged_code env feature =
-  if Env.get_env_level env <> 0 then
-    Misc.fatal_error (feature ^ " in staged code: not implemented")
 
 (* Typing of constants *)
 
@@ -1926,7 +1926,6 @@ and type_pat_aux
         pat_attributes = sp.ppat_attributes;
         pat_env = !!penv }
   | Ppat_unpack (name, optyp) ->
-      not_implemented_in_staged_code !!penv "first-class modules";
       let optyp, wrap, expected_ty =
         match optyp with
         | Some ptyp ->
@@ -2990,11 +2989,13 @@ let dependent_labeled_app_error env err ~rev_args ~funct me_opt ty_fun
     let loc = beginning_function_loc rev_args ~funct in
     raise(Error(loc, env, Cannot_omit_tfunctor_argument (id_us, ty_res)))
 
-(* Given the module expression [M] and package type [(module S with cstrs)],
-   this returns the module expression [(M : S with cstrs)]. *)
-let module_with_package_type_constraint me optyp =
+(* Given the package type [(module S with cstrs)] written at a pack, the
+   module type [S with cstrs].  It is the type of the package, not an
+   ascription written inside the pack, and [type_package] matches the
+   module against it as against the package type. *)
+let package_type_as_module_type optyp =
   match optyp with
-  | None -> me
+  | None -> None
   | Some ptyp ->
     let loc = ptyp.ppt_loc in
     let path = Ast_helper.Mty.ident ~loc ptyp.ppt_path in
@@ -3006,8 +3007,7 @@ let module_with_package_type_constraint me optyp =
         in Pwith_type (lid, t))
         ptyp.ppt_constraints
     in
-    let mty = Ast_helper.Mty.with_ ~loc path cstrs in
-    Ast_helper.Mod.constraint_ ~loc ~attrs:ptyp.ppt_attrs me mty
+    Some (Ast_helper.Mty.with_ ~loc ~attrs:ptyp.ppt_attrs path cstrs)
 
 let extract_packing sarg =
   match sarg.pexp_desc with
@@ -3036,10 +3036,10 @@ let collect_arrow_arg ~may_warn ~funct ~optional ~sargs ~ty_arg ~ty_arg0 ~lv
       end
 
 let type_tfunctor_module_arg ~env ~sarg ~me ~optyp ~pack ~pack0 =
-  let me = module_with_package_type_constraint me optyp in
+  let annotation = package_type_as_module_type optyp in
   (* We expanded the code here to prevent a principality warning
       because the expected signature is not closed. *)
-  let (modl, pack') = !type_package env me pack in
+  let (modl, pack') = !type_package ?annotation env me pack in
   let texp =
     {
       exp_desc = Texp_pack modl;
@@ -4137,6 +4137,15 @@ let check_env_mode loc accepted err env =
   if not (List.mem (Env.get_env_mode env) accepted) then
     raise (Error (loc, env, err))
 
+(* The code a quotation builds may not name a module bound in
+   compile-time code. *)
+let check_module_root_staging_level loc (path : Path.t) (env : Env.t) : unit =
+  if Env.get_env_level env >= 0 then
+    match Path.head path with
+    | id when Env.is_compile_time_module id env ->
+        raise (Error (loc, env, Compile_time_module_in_runtime_code id))
+    | _ | exception _ -> ()
+
 (* A value may be used only at the level at which it is bound. *)
 let check_value_staging_level loc lid path (value : Types.value_description)
     env =
@@ -5188,7 +5197,6 @@ and type_expect_
             (Texp_newtype name.txt, loc, sexp.pexp_attributes) :: body.exp_extra
           }
   | Pexp_pack (m, optyp) ->
-      not_implemented_in_staged_code env "first-class modules";
       begin match optyp with
       | Some ptyp ->
         let t = Ast_helper.Typ.package ~loc:ptyp.ppt_loc ptyp in
@@ -5429,7 +5437,10 @@ and type_expect_
   | Pexp_struct_item (si, e) ->
       begin match si.pstr_desc with
       | Pstr_open { popen_expr = { pmod_desc = Pmod_ident _ } } -> ()
-      | _ -> not_implemented_in_staged_code env "structure items"
+      | Pstr_exception _ -> ()
+      | _ ->
+          if Env.get_env_mode env = Types.M_Q then
+            Misc.fatal_error "structures in quotations: not implemented"
       end;
       let tv = newvar () in
       let (_, si, exp) =
@@ -5631,6 +5642,7 @@ and type_newtype
 
 and type_ident env ~loc ?(recarg=Rejected) lid =
   let (path, desc) = Env.lookup_value ~loc:lid.loc lid.txt env in
+  check_module_root_staging_level loc path env;
   check_value_staging_level loc lid.txt path desc env;
   let is_recarg =
     match get_desc desc.val_type with
@@ -5780,7 +5792,6 @@ and type_function
             ({txt = name; loc}, pack_param)
         | _ -> assert false
       in
-      not_implemented_in_staged_code env "first-class modules";
       type_moddep_fun ~env ~name ~pack_param ~rest ~arg_label ~first
         ~in_function ~ty_expected ~pparam_loc ~loc ~body_constraint ~body
   | { pparam_desc = Pparam_val (arg_label, default_arg, pat); pparam_loc }
@@ -8353,6 +8364,15 @@ let report_error ~loc env = function
        @ with no run-time context to supply one.\
        @ Call it from a splice, or from another generator, instead."
         (Style.as_inline_code Printtyp.path) path
+  | Compile_time_module_in_runtime_code id ->
+      Location.errorf ~loc
+        "The module %a is bound in compile-time code, so the code this\
+       @ quotation builds cannot name it: that code runs in another\
+       @ program, which has no such module.\
+       @ Bind the module outside the generator or splice body, or move the\
+       @ reference into a splice."
+        Style.inline_code (Ident.name id)
+
 
 let report_error ~loc env err =
   Printtyp.wrap_printing_env ~error:true env

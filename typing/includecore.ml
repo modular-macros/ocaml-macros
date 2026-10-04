@@ -69,8 +69,11 @@ type value_mismatch =
   | Type of Errortrace.moregen_error
   | Staging_level_mismatch
   | Staging_world_mismatch
+  | Runtime_value_in_compile_time_package
 
 exception Dont_match of value_mismatch
+
+type relativity = { source_shift : int; ambient : int }
 
 (* A value description [vd1] is consistent with the value description [vd2] if
    there is a context E such that [E |- vd1 <: vd2] for the ordinary subtyping.
@@ -92,7 +95,7 @@ let value_descriptions_consistency env vd1 vd2 =
   | (_, Val_prim _) -> raise (Dont_match Not_a_primitive)
   | (_, _) -> Tcoerce_none
 
-let value_descriptions ~loc env name
+let value_descriptions ?relativity ~loc env name
     (vd1 : Types.value_description)
     (vd2 : Types.value_description) =
   Builtin_attributes.check_alerts_inclusion
@@ -104,11 +107,23 @@ let value_descriptions ~loc env name
   match Ctype.moregeneral env vd1.val_type vd2.val_type with
   | exception Ctype.Moregen err -> raise (Dont_match (Type err))
   | () ->
+  begin match relativity with
+  | Some { source_shift; ambient } ->
+      (* The package type is read at the level of the package: the
+         component must serve, under the shift of its module, the level
+         that the package type records plus that of the package. *)
+      if (vd1.val_macro = Macro) <> (vd2.val_macro = Macro)
+      then raise (Dont_match Staging_level_mismatch);
+      if Types.val_serving_level vd1 + source_shift
+         <> vd2.val_staging_level + ambient
+      then raise (Dont_match Runtime_value_in_compile_time_package)
+  | None ->
       if vd1.val_staging_level <> vd2.val_staging_level then
         raise (Dont_match Staging_level_mismatch);
       if (vd1.val_macro = Static) <> (vd2.val_macro = Static) then
-        raise (Dont_match Staging_world_mismatch);
-      value_descriptions_consistency env vd1 vd2
+        raise (Dont_match Staging_world_mismatch)
+  end;
+  value_descriptions_consistency env vd1 vd2
 
 (* Inclusion between manifest types (particularly for private row types) *)
 
@@ -184,6 +199,7 @@ type constructor_mismatch =
 type extension_constructor_mismatch =
   | Constructor_privacy
   | Constructor_world
+  | Runtime_constructor_in_compile_time_package
   | Constructor_mismatch of Ident.t
                             * Types.extension_constructor
                             * Types.extension_constructor
@@ -260,6 +276,13 @@ let report_value_mismatch first second env ppf err =
      pr "One is a generator ($val[..]) and the other is not"
   | Staging_world_mismatch ->
      pr "One is a compile-time binding ($val) and the other an ordinary value"
+  | Runtime_value_in_compile_time_package ->
+     pr "The first is made at run time, but this package is built in@ \
+         compile-time code (the body of a generator or of a splice),@ \
+         which holds only compile-time values:@ \
+         static bindings, or the contents of a module from a@ \
+         compile-time library (a directory given to -I-static)"
+
 
 let report_type_inequality env ppf err =
   let msg = Fmt.Doc.msg in
@@ -405,6 +428,9 @@ let report_extension_constructor_mismatch first second decl env ppf err =
       pr "One is a compile-time constructor, declared with %a,@ \
           and the other an ordinary constructor."
         Style.inline_code "$"
+  | Runtime_constructor_in_compile_time_package ->
+      pr "The first is made at run time, but this package is built in@ \
+          compile-time code,@ which holds only compile-time constructors."
   | Constructor_mismatch (id, ext1, ext2, err) ->
       let constructor =
         Style.as_inline_code (Printtyp.extension_only_constructor id)
@@ -1090,7 +1116,7 @@ let type_declarations ?(equality = false) ~loc env ~mark name
 
 (* Inclusion between extension constructors *)
 
-let extension_constructors ~loc env ~mark id ext1 ext2 =
+let extension_constructors ?relativity ~loc env ~mark id ext1 ext2 =
   if mark then begin
     let usage : Env.constructor_usage =
       if ext2.ext_private = Public then Env.Exported
@@ -1122,6 +1148,12 @@ let extension_constructors ~loc env ~mark id ext1 ext2 =
       match ext1.ext_private, ext2.ext_private with
       | Private, Public -> Some Constructor_privacy
       | _, _ ->
-          if ext1.ext_static <> ext2.ext_static
-          then Some Constructor_world
-          else None
+          match relativity with
+          | Some { source_shift; ambient } ->
+              if Types.ext_level_shift ext1 + source_shift <> ambient
+              then Some Runtime_constructor_in_compile_time_package
+              else None
+          | None ->
+              if ext1.ext_static <> ext2.ext_static
+              then Some Constructor_world
+              else None

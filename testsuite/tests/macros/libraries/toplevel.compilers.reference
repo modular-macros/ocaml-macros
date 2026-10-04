@@ -59,6 +59,13 @@ val e : int = 4
 $val f : int = 41
 val g : int = 30
 module Included : sig val w : int $val t : int end
+module type FS = sig module F : Both.V -> sig val w : int end end
+Line 1, characters 17-21:
+1 | $let j = (module Both : FS);;
+                     ^^^^
+Error: This package type has a functor member, F.
+       Packing a functor in compile-time code
+       (the body of a generator or of a splice) is not yet supported.
 $val h : int = 6
 val i : int = 20
 
