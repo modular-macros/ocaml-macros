@@ -204,9 +204,7 @@ Error: A locally bound module cannot have compile-time components
 $let x = let exception Local in try raise Local with Local -> 0
 ;;
 [%%expect{|
->> Fatal error: structure items in staged code: not implemented
-Uncaught exception: Misc.Fatal_error
-
+$val x : int = 0
 |}]
 
 let f () = let exception $E in ()

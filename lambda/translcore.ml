@@ -47,7 +47,14 @@ let check_no_objects ?(anywhere = false) (e : Typedtree.expression) =
      | _ -> ());
     Tast_iterator.default_iterator.expr iter e
   in
-  let iter = { Tast_iterator.default_iterator with expr } in
+  let structure_item iter (item : Typedtree.structure_item) =
+    (match item.str_desc with
+     | Tstr_class _ when staged item.str_env ->
+         raise (Error (item.str_loc, Objects_in_staged_code))
+     | _ -> ());
+    Tast_iterator.default_iterator.structure_item iter item
+  in
+  let iter = { Tast_iterator.default_iterator with expr; structure_item } in
   iter.expr iter e
 
 let use_dup_for_constant_mutable_arrays_bigger_than = 4
@@ -92,6 +99,15 @@ type unit_state =
 
 type context =
   { world : world;
+    single_block : bool;
+    (* Whether the module being translated is the value of an
+       expression: a pack, a [let module], a [let open struct .. end].
+       Such a module is built as one block, in the part that evaluates
+       the expression, with no placeholders; only a unit's structure and
+       the modules named in it have a run-time block and a compile-time
+       block.  The items of such a module are translated as in the
+       run-time part, while a path names the block of the part that the
+       expression is really in. *)
     quotation_depth : int;
     (* The depth of quotations around the expression being translated,
        less that of the splices inside them: quoted code is run-time
@@ -125,6 +141,7 @@ type context =
 
 let initial_context () =
   { world = Run_world;
+    single_block = false;
     quotation_depth = 0;
     macro_env = None;
     native_slot_layout = None;

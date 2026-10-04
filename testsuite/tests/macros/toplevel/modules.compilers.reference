@@ -1,0 +1,23 @@
+module type S = sig val v : int end
+$val packed : (module S) = <module>
+$val unpacked : int = 1
+$val nested : int = 2
+module Static : sig $val v : int val r : int end
+$val aliased : int = 3
+val at_run_time : int = 4
+val spliced : int = 1
+$val[..] shown : (module S) -> int expr = <fun>
+- : int = 5
+module R : sig val v : int end
+Line 1, characters 19-20:
+1 | $let bad = (module R : S);;
+                       ^
+Error: Signature mismatch:
+       Modules do not match: sig val v : int end is not included in S
+       Values do not match: val v : int is not included in val v : int
+       The first is made at run time, but this package is built in
+       compile-time code (the body of a generator or of a splice),
+       which holds only compile-time values:
+       static bindings, or the contents of a module from a
+       compile-time library (a directory given to -I-static)
+

@@ -49,8 +49,13 @@ type error =
 exception Error of Location.t * error
 
 (* The translation of a module expression or of an item builds the part
-   of the unit that [ctx.world] gives. *)
-let in_compile_world ctx = ctx.world = Compile_world
+   of the unit that [ctx.world] gives.  A module that is the value of an
+   expression ([ctx.single_block]; see [Translcore.context]) has one
+   block, whose items are translated as in the run-time part, while a
+   path names the block of the part that the expression is really in;
+   see [transl_module_path]. *)
+let true_compile_world ctx = ctx.world = Compile_world
+let in_compile_world ctx = true_compile_world ctx && not ctx.single_block
 let in_run_world ctx = not (in_compile_world ctx)
 
 let in_world ctx world f = f { ctx with world }
@@ -86,18 +91,40 @@ let register_toplevel_shifted_units names =
   toplevel_shifted_units :=
     Misc.Stdlib.String.Set.union names !toplevel_shifted_units
 
+(* Whether the path is rooted at a unit of a compile-time library. *)
+let rooted_at_static_unit env path =
+  let path =
+    try Env.normalize_module_path None env path
+    with Not_found -> path
+  in
+  let rec root : Path.t -> bool = function
+    | Pident id ->
+        Ident.persistent id && Env.is_static_stage_unit (Ident.name id)
+    | Pdot (p, _) | Pextra_ty (p, _) -> root p
+    | Papply _ -> false
+  in
+  root path
+
 (* In the compile-time part a module that has compile-time components
    is its compile-time block, [M$macros] for a unit [M]: the run-time
-   objects are not linked at compile time.  This definition shadows
-   that of [Lambda]. *)
+   objects are not linked at compile time.  Inside a quotation the
+   reference belongs to the code being built, and names the run-time
+   block.  So does a module of a compile-time library that an
+   expression of compile-time code names: the library is linked at
+   compile time, and it is used there for its run-time components.
+   This definition shadows that of [Lambda]. *)
 let transl_module_path ~ctx loc env path =
-  if not (in_compile_world ctx) then Lambda.transl_module_path loc env path
-  else if
-    match Env.find_module path env with
-    | md -> Mtype.has_macro_components env md.md_type
-    | exception Not_found -> false
+  let compile_world =
+    true_compile_world ctx && not (Translcore.in_quotation ctx)
+  in
+  if compile_world
+     && (match Env.find_module path env with
+         | md -> Mtype.has_macro_components env md.md_type
+         | exception Not_found -> false)
+     && not (ctx.single_block && rooted_at_static_unit env path)
   then transl_module_macros_path loc env path
-  else if module_address_is_dummy ctx env path then Lconst const_unit
+  else if compile_world && module_address_is_dummy ctx env path
+  then Lconst const_unit
   else Lambda.transl_module_path loc env path
 
 let cons_opt x_opt xs =
@@ -1285,18 +1312,17 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
   | Tstr_attribute _ ->
       next fields
 
-(* Update forward declaration in Translcore *)
+(* Update forward declaration in Translcore.  The modules that
+   expressions evaluate are single blocks; see [Translcore.context]. *)
 let _ =
   Translcore.transl_module :=
     (fun ~ctx ~scopes cc rootpath mexp ->
-       if in_compile_world ctx then
-         Misc.fatal_error "modules in compile-time code: not implemented";
-       transl_module ~ctx ~scopes cc rootpath mexp);
+       transl_module ~ctx:{ ctx with single_block = true } ~scopes cc
+         rootpath mexp);
   Translcore.transl_struct_item :=
     (fun ~ctx ~scopes fields rootpath item next ->
-       if in_compile_world ctx then
-         Misc.fatal_error "modules in compile-time code: not implemented";
-       transl_struct_item ~ctx ~scopes fields rootpath item next)
+       transl_struct_item ~ctx:{ ctx with single_block = true } ~scopes
+         fields rootpath item next)
 
 (* Introduce dependencies on modules referenced only by "external". *)
 

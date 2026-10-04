@@ -51,6 +51,7 @@ type unit_state =
 
 type context =
   { world : world;
+    single_block : bool;
     quotation_depth : int;
     macro_env : macro_env option;
     native_slot_layout : native_slot_layout option;
