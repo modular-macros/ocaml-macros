@@ -531,6 +531,7 @@ and extension_constructor i ppf x =
   attributes i ppf x.pext_attributes;
   let i = i + 1 in
   line i ppf "pext_name = \"%s\"\n" x.pext_name.txt;
+  if x.pext_static then line i ppf "pext_static\n";
   line i ppf "pext_kind =\n";
   extension_constructor_kind (i + 1) ppf x.pext_kind;
 

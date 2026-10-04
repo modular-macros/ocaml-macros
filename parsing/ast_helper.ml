@@ -597,28 +597,32 @@ module Te = struct
     }
 
   let constructor ?(loc = !default_loc) ?(attrs = [])
-        ?(docs = empty_docs) ?(info = empty_info) name kind =
+        ?(docs = empty_docs) ?(info = empty_info) ?(static = false) name kind =
     {
      pext_name = name;
      pext_kind = kind;
+     pext_static = static;
      pext_loc = loc;
      pext_attributes = add_docs_attrs docs (add_info_attrs info attrs);
     }
 
   let decl ?(loc = !default_loc) ?(attrs = []) ?(docs = empty_docs)
-         ?(info = empty_info) ?(vars = []) ?(args = Pcstr_tuple []) ?res name =
+         ?(info = empty_info) ?(static = false) ?(vars = [])
+         ?(args = Pcstr_tuple []) ?res name =
     {
      pext_name = name;
      pext_kind = Pext_decl(vars, args, res);
+     pext_static = static;
      pext_loc = loc;
      pext_attributes = add_docs_attrs docs (add_info_attrs info attrs);
     }
 
   let rebind ?(loc = !default_loc) ?(attrs = [])
-        ?(docs = empty_docs) ?(info = empty_info) name lid =
+        ?(docs = empty_docs) ?(info = empty_info) ?(static = false) name lid =
     {
      pext_name = name;
      pext_kind = Pext_rebind lid;
+     pext_static = static;
      pext_loc = loc;
      pext_attributes = add_docs_attrs docs (add_info_attrs info attrs);
     }

@@ -1852,14 +1852,16 @@ and constructor_declaration ctxt f (name, vars, args, res, attrs) =
 
 and extension_constructor ctxt f x =
   (* Cf: #7200 *)
+  let name =
+    if x.pext_static then "$" ^ x.pext_name.txt else x.pext_name.txt in
+  let attrs = x.pext_attributes in
   match x.pext_kind with
   | Pext_decl(v, l, r) ->
-      constructor_declaration ctxt f
-        (x.pext_name.txt, v, l, r, x.pext_attributes)
+      constructor_declaration ctxt f (name, v, l, r, attrs)
   | Pext_rebind li ->
-      pp f "%s@;=@;%a%a" x.pext_name.txt
+      pp f "%s@;=@;%a%a" name
         (with_loc constr) li
-        (attributes ctxt) x.pext_attributes
+        (attributes ctxt) attrs
 
 and case_list ctxt f l : unit =
   let aux f {pc_lhs; pc_guard; pc_rhs} =

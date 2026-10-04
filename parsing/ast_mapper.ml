@@ -265,11 +265,12 @@ module T = struct
   let map_extension_constructor sub
       {pext_name;
        pext_kind;
+       pext_static;
        pext_loc;
        pext_attributes} =
     let loc = sub.location sub pext_loc in
     let attrs = sub.attributes sub pext_attributes in
-    Te.constructor ~loc ~attrs
+    Te.constructor ~loc ~attrs ~static:pext_static
       (map_loc map_string sub pext_name)
       (map_extension_constructor_kind sub pext_kind)
 

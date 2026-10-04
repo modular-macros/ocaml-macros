@@ -659,6 +659,8 @@ and extension_constructor =
     {
      pext_name: string loc;
      pext_kind: extension_constructor_kind;
+     pext_static: bool;
+       (** Whether the constructor is a compile-time one, declared [$C] *)
      pext_loc: Location.t;
      pext_attributes: attributes;  (** [C of ... [\@id1] [\@id2]] *)
    }

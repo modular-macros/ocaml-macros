@@ -3540,22 +3540,23 @@ constructor_declarations:
    are identical except for their semantic actions, we introduce the symbol
    [generic_constructor_declaration], whose semantic action is neutral -- it
    merely returns a tuple. *)
-generic_constructor_declaration(opening):
+generic_constructor_declaration(opening, name):
   opening
-  cid = mkrhs(constr_ident)
+  name = name
   vars_args_res = generalized_constructor_arguments
   attrs = attributes
     {
+      let cid, static = name in
       let vars, args, res = vars_args_res in
       let info = symbol_info $endpos in
       let loc = make_loc $sloc in
-      cid, vars, args, res, attrs, loc, info
+      cid, static, vars, args, res, attrs, loc, info
     }
 ;
 %inline constructor_declaration(opening):
-  d = generic_constructor_declaration(opening)
+  d = generic_constructor_declaration(opening, plain_constr_name)
     {
-      let cid, vars, args, res, attrs, loc, info = d in
+      let cid, _, vars, args, res, attrs, loc, info = d in
       Type.constructor cid ~vars ~args ?res ~attrs ~loc ~info
     }
 ;
@@ -3563,30 +3564,33 @@ str_exception_declaration:
   EXCEPTION
   ext = ext
   attrs1 = attributes
-  id = mkrhs(constr_ident)
+  name = ext_constr_name
   EQUAL
   lid = mkrhs(constr_longident)
   attrs2 = attributes
   attrs = post_item_attributes
-  { let loc = make_loc $sloc in
+  { let id, static = name in
+    let loc = make_loc $sloc in
     let docs = symbol_docs $sloc in
     Te.mk_exception ~attrs ~loc
-      (Te.rebind id lid ~attrs:(attrs1 @ attrs2) ~loc ~docs)
+      (Te.rebind id lid ~static ~attrs:(attrs1 @ attrs2) ~loc ~docs)
     , ext }
 ;
 sig_exception_declaration:
   EXCEPTION
   ext = ext
   attrs1 = attributes
-  id = mkrhs(constr_ident)
+  name = ext_constr_name
   vars_args_res = generalized_constructor_arguments
   attrs2 = attributes
   attrs = post_item_attributes
-    { let vars, args, res = vars_args_res in
+    { let id, static = name in
+      let vars, args, res = vars_args_res in
       let loc = make_loc ($startpos, $endpos(attrs2)) in
       let docs = symbol_docs $sloc in
       Te.mk_exception ~attrs ~loc
-        (Te.decl id ~vars ~args ?res ~attrs:(attrs1 @ attrs2) ~loc ~docs)
+        (Te.decl id ~static ~vars ~args ?res ~attrs:(attrs1 @ attrs2) ~loc
+           ~docs)
       , ext }
 ;
 generalized_constructor_arguments:
@@ -3664,20 +3668,21 @@ label_declaration_semi:
       { $1 }
 ;
 %inline extension_constructor_declaration(opening):
-  d = generic_constructor_declaration(opening)
+  d = generic_constructor_declaration(opening, ext_constr_name)
     {
-      let cid, vars, args, res, attrs, loc, info = d in
-      Te.decl cid ~vars ~args ?res ~attrs ~loc ~info
+      let cid, static, vars, args, res, attrs, loc, info = d in
+      Te.decl cid ~static ~vars ~args ?res ~attrs ~loc ~info
     }
 ;
 extension_constructor_rebind(opening):
   opening
-  cid = mkrhs(constr_ident)
+  name = ext_constr_name
   EQUAL
   lid = mkrhs(constr_longident)
   attrs = attributes
-      { let info = symbol_info $endpos in
-        Te.rebind cid lid ~attrs ~loc:(make_loc $sloc) ~info }
+      { let cid, static = name in
+        let info = symbol_info $endpos in
+        Te.rebind cid lid ~static ~attrs ~loc:(make_loc $sloc) ~info }
 ;
 
 /* "with" constraints (additional type equations over signature components) */
@@ -4190,6 +4195,18 @@ constr_extra_nonprefix_ident:
   | LPAREN RPAREN                               { "()" }
   | FALSE                                       { "false" }
   | TRUE                                        { "true" }
+;
+(* The name an extension constructor is declared with: [$A] declares a
+   compile-time constructor. *)
+%inline plain_constr_name:
+    id = mkrhs(constr_ident)
+      { id, false }
+;
+%inline ext_constr_name:
+    id = mkrhs(constr_ident)
+      { id, false }
+  | id = mkrhs(DOLLARUIDENT)
+      { id, true }
 ;
 constr_ident:
     UIDENT                                      { $1 }

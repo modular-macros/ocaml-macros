@@ -241,14 +241,15 @@ module Te:
       extension_constructor -> type_exception
 
     val constructor: ?loc:loc -> ?attrs:attrs -> ?docs:docs -> ?info:info ->
-      str -> extension_constructor_kind -> extension_constructor
+      ?static:bool -> str -> extension_constructor_kind ->
+      extension_constructor
 
     val decl: ?loc:loc -> ?attrs:attrs -> ?docs:docs -> ?info:info ->
-      ?vars:str list -> ?args:constructor_arguments -> ?res:core_type ->
-      str ->
+      ?static:bool -> ?vars:str list -> ?args:constructor_arguments ->
+      ?res:core_type -> str ->
       extension_constructor
     val rebind: ?loc:loc -> ?attrs:attrs -> ?docs:docs -> ?info:info ->
-      str -> lid -> extension_constructor
+      ?static:bool -> str -> lid -> extension_constructor
   end
 
 (** {1 Module language} *)

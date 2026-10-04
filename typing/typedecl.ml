@@ -1273,6 +1273,8 @@ let transl_type_decl env rec_flag sdecl_list =
 
 let transl_extension_constructor ~scope env type_path type_params
                                  typext_params priv sext =
+  if sext.pext_static then
+    Misc.fatal_error "compile-time constructors: not implemented";
   let id = Ident.create_scoped ~scope sext.pext_name.txt in
   let args, ret_type, kind =
     match sext.pext_kind with
