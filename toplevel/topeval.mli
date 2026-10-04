@@ -50,4 +50,7 @@ include module type of Topcommon.MakeEvalPrinter(EvalBase)
 (* For topmain.ml. Maybe shouldn't be there *)
 val load_file : bool -> formatter -> string -> bool
 
+(* Load an object file or a library for compile-time code *)
+val load_static_file : formatter -> string -> bool
+
 val init: unit -> unit

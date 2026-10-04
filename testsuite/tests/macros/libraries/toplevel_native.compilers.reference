@@ -1,0 +1,2 @@
+Cannot #static_use counter.cmo: compile-time evaluation is not supported by the native toplevel.
+

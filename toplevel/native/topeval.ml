@@ -286,6 +286,12 @@ let setvalue _ _ = assert false
 
 (* Load in-core a .cmxs file *)
 
+let load_static_file ppf name =
+  Format.fprintf ppf
+    "Cannot #static_use %s: compile-time evaluation is not supported by \
+     the native toplevel.@." name;
+  false
+
 let load_file _ (* fixme *) ppf name0 =
   let name =
     try Some (Load_path.find name0)

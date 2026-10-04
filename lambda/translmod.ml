@@ -77,6 +77,15 @@ let module_address_is_dummy ctx env path =
   | addr -> root addr
   | exception Not_found -> false
 
+(* The units that the toplevel directive #static_dir makes available to
+   compile-time code.  They are loaded for it under other names; see
+   [static_unit_suffix]. *)
+let toplevel_shifted_units = ref Misc.Stdlib.String.Set.empty
+
+let register_toplevel_shifted_units names =
+  toplevel_shifted_units :=
+    Misc.Stdlib.String.Set.union names !toplevel_shifted_units
+
 (* In the compile-time part a module that has compile-time components
    is its compile-time block, [M$macros] for a unit [M]: the run-time
    objects are not linked at compile time.  This definition shadows
@@ -815,6 +824,16 @@ let dummy_slots ~ctx ids next fields =
   List.fold_right
     (fun id body -> Llet (Alias, Pgenval, id, Lconst const_unit, body))
     ids body
+
+(* The toplevel directive #static_use loads a unit for compile-time code
+   under the name of the unit followed by this suffix, and compile-time
+   code refers to the unit by that name. *)
+let static_unit_suffix = "$static"
+
+let toplevel_unit_globals id =
+  if Misc.Stdlib.String.Set.mem (Ident.name id) !toplevel_shifted_units
+  then Ident.create_persistent (Ident.name id ^ static_unit_suffix)
+  else id
 
 let rec compile_functor ~ctx ~scopes mexp coercion root_path loc =
   let functor_params_rev, body, body_path, res_coercion, inline_attribute =
@@ -2380,7 +2399,9 @@ let transl_toplevel_phrase str =
   Translprim.clear_used_primitives ();
   let scopes = empty_scopes in
   let env = str.str_final_env in
-  let ctx = initial_context () in
+  let ctx =
+    { (initial_context ()) with unit_globals = toplevel_unit_globals }
+  in
   ctx.unit_state.compile_world_dummies <- !toplevel_compile_world_dummies;
   (* What the phrase binds, and in which part *)
   let run_time_idents, compile_time_idents =
@@ -2480,7 +2501,9 @@ let transl_toplevel_phrase str =
   toplevel_compile_time_idents :=
     List.fold_left (fun s id -> Ident.Set.add id s)
       !toplevel_compile_time_idents compile_time_idents;
-  static
+  (* Every global that the term names directly is named by compile-time
+     code: the run-time term is a constant in it. *)
+  rename_unit_globals ctx static
 
 let get_component = function
     None -> Lconst const_unit

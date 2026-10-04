@@ -78,11 +78,13 @@ let dir_directory s =
   Dll.add_path [d];
   let dir = Load_path.Dir.create ~hidden:false d in
   Load_path.prepend_dir dir;
+  let units = Env.persistent_structures_of_dir dir in
+  Env.register_stage_units ~static:Stdlib.String.Set.empty ~run:units;
   toplevel_env :=
     Stdlib.String.Set.fold
       (fun name env ->
          Env.add_persistent_structure (Ident.create_persistent name) env)
-      (Env.persistent_structures_of_dir dir)
+      units
       !toplevel_env
 
 let _ = add_directive "directory" (Directive_string dir_directory)
@@ -90,6 +92,14 @@ let _ = add_directive "directory" (Directive_string dir_directory)
       section = section_run;
       doc = "Add the given directory to search path for source and compiled \
              files.";
+    }
+
+let _ = add_directive "static_dir"
+    (Directive_string Topcommon.add_static_directory)
+    {
+      section = section_run;
+      doc = "Add the given directory to search path for the compiled \
+             files that compile-time code uses.";
     }
 
 (* To remove a directory from the load path *)
@@ -135,6 +145,9 @@ let with_error_fmt f x = f (error_fmt ()) x
 let dir_load ppf name =
   action_on_suberror (Topeval.load_file false ppf name)
 
+let dir_static_use ppf name =
+  action_on_suberror (Topeval.load_static_file ppf name)
+
 let _ = add_directive "load" (Directive_string (with_error_fmt dir_load))
     {
       section = section_run;
@@ -149,6 +162,14 @@ let _ = add_directive "load_rec"
     {
       section = section_run;
       doc = "As #load, but loads dependencies recursively.";
+    }
+
+let _ = add_directive "static_use"
+    (Directive_string (with_error_fmt dir_static_use))
+    {
+      section = section_run;
+      doc = "Load in memory a bytecode object, for use by compile-time \
+             code.";
     }
 
 let load_file = Topeval.load_file false

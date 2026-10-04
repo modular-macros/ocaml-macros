@@ -92,6 +92,10 @@ type unit_state =
 
 type context =
   { world : world;
+    quotation_depth : int;
+    (* The depth of quotations around the expression being translated,
+       less that of the splices inside them: quoted code is run-time
+       code. *)
     macro_env : macro_env option;
     (* The environment of the generator whose body is being translated *)
     native_slot_layout : native_slot_layout option;
@@ -109,6 +113,10 @@ type context =
        add the variables of run-time code that they mention: the free
        variables of their translated bodies, a splice in a body counting
        as its arguments *)
+    unit_globals : Ident.t -> Ident.t;
+    (* The global of a unit that compile-time code names: in the
+       toplevel, a unit loaded for compile-time code has a name of its
+       own *)
     innermost_free_variables : Ident.Set.t;
     (* The free variables of the code at the innermost point of the
        compile-time part, which fills the holes of the run-time term:
@@ -117,14 +125,27 @@ type context =
 
 let initial_context () =
   { world = Run_world;
+    quotation_depth = 0;
     macro_env = None;
     native_slot_layout = None;
     splice_source = None;
     closing = Ident.Map.empty;
     quoted_variables = None;
+    unit_globals = Fun.id;
     innermost_free_variables = Ident.Set.empty;
     unit_state =
       { compile_world_dummies = Ident.Set.empty } }
+
+let in_quotation ctx = ctx.quotation_depth > 0
+
+(* The globals of the units that compile-time code names, renamed *)
+let rename_unit_globals ctx lam =
+  Lambda.map
+    (function
+      | Lprim (Pgetglobal id, args, loc) ->
+          Lprim (Pgetglobal (ctx.unit_globals id), args, loc)
+      | lam -> lam)
+    lam
 
 let rec name_slots_through_block nsl lam =
   match lam with
@@ -338,6 +359,13 @@ let transl_ident ~ctx loc env ty path desc =
             Lvar me.me_param
         | (Some _ | None), _ ->
             let access = transl_value_env_path Loc_unknown env path in
+            (* The access is built where the generator is called, in
+               compile-time code. *)
+            let access =
+              if ctx.world = Compile_world && not (in_quotation ctx)
+              then rename_unit_globals ctx access
+              else access
+            in
             let access =
               match ctx.macro_env with
               | Some me -> project_captured me access
@@ -756,7 +784,10 @@ and transl_exp0 ~in_new_scope ~ctx ~scopes e =
            partial)
   | Texp_quote (e, evidence) ->
     check_no_objects e;
-    let body = transl_exp ~ctx ~scopes e in
+    let body =
+      transl_exp ~ctx:{ ctx with quotation_depth = ctx.quotation_depth + 1 }
+        ~scopes e
+    in
     let body =
       match ctx.macro_env with
       | Some me -> project_captured me body
@@ -778,11 +809,16 @@ and transl_exp0 ~in_new_scope ~ctx ~scopes e =
       ctx.quoted_variables;
     Translquote.quote_expression body
   | Texp_splice { spl_top_level = false; spl_exp = e } ->
-      let vars = ref Ident.Set.empty in
-      let body =
-        transl_exp ~ctx:{ ctx with quoted_variables = Some vars } ~scopes e
-      in
-      Lsplice (close_splice (of_location ~scopes e.exp_loc) !vars body)
+     let ctx =
+       if in_quotation ctx
+       then { ctx with quotation_depth = ctx.quotation_depth - 1 }
+       else ctx
+     in
+     let vars = ref Ident.Set.empty in
+     let body =
+       transl_exp ~ctx:{ ctx with quoted_variables = Some vars } ~scopes e
+     in
+     Lsplice (close_splice (of_location ~scopes e.exp_loc) !vars body)
   | Texp_splice { spl_exp; spl_top_level = true } ->
     begin
       match ctx.splice_source with

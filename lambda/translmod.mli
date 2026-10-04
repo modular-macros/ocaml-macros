@@ -81,6 +81,12 @@ val toplevel_macros_name: Ident.t -> string
    of the toplevel, which the compile-time part of a phrase calls with
    the location of a splice whose code raises *)
 val toplevel_splice_failed_key: string
+
+(* In the toplevel, the units that the directive #static_dir makes
+   available to compile-time code are loaded for it under their names
+   followed by [static_unit_suffix]. *)
+val static_unit_suffix : string
+val register_toplevel_shifted_units : Misc.Stdlib.String.Set.t -> unit
 val nat_toplevel_name: Ident.t -> Ident.t * int
 
 val primitive_declarations: Primitive.description list ref

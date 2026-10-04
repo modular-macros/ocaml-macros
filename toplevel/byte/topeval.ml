@@ -418,6 +418,82 @@ and really_load_file recursive ppf name filename ic =
   | Load_failed -> false
   | End_of_file | Failure _ | Sys_error _ -> report_corrupt ppf name
 
+(* The units that the directive #static_use loads are for compile-time
+   code only, and have their own state.  They are loaded under other
+   names, so that #load can load the same units for run-time code. *)
+let rename_static_reloc members ((reloc : Cmo_format.reloc_info), pos) =
+  let rename cu =
+    let name = Symtable.Compunit.name cu in
+    if Misc.Stdlib.String.Set.mem name members
+    then Cmo_format.Compunit (name ^ Translmod.static_unit_suffix)
+    else cu
+  in
+  (match reloc with
+   | Cmo_format.Reloc_getcompunit cu ->
+       Cmo_format.Reloc_getcompunit (rename cu)
+   | Cmo_format.Reloc_setcompunit cu ->
+       Cmo_format.Reloc_setcompunit (rename cu)
+   | (Cmo_format.Reloc_literal _ | Cmo_format.Reloc_getpredef _
+     | Cmo_format.Reloc_primitive _) as r -> r),
+  pos
+
+let load_static_file ppf name =
+  match Load_path.find name with
+  | exception Not_found ->
+      fprintf ppf "Cannot find file %s.@." name; false
+  | filename ->
+      let ic = open_in_bin filename in
+      Misc.try_finally ~always:(fun () -> close_in ic) @@ fun () ->
+      try
+        let buffer =
+          really_input_string ic (String.length Config.cmo_magic_number)
+        in
+        let units =
+          if buffer = Config.cmo_magic_number then begin
+            let compunit_pos = input_binary_int ic in
+            seek_in ic compunit_pos;
+            [ (input_value ic : compilation_unit) ]
+          end
+          else if buffer = Config.cma_magic_number then begin
+            let toc_pos = input_binary_int ic in
+            seek_in ic toc_pos;
+            let lib = (input_value ic : library) in
+            List.iter
+              (fun dllib ->
+                 let name = Dll.extract_dll_name dllib in
+                 try Dll.open_dlls Dll.For_execution [name]
+                 with Failure reason ->
+                   fprintf ppf
+                     "Cannot load required shared library %s.@.\
+                      Reason: %s.@." name reason;
+                   raise Load_failed)
+              lib.lib_dllibs;
+            lib.lib_units
+          end
+          else begin
+            fprintf ppf "File %s is not a bytecode object file.@." name;
+            raise Load_failed
+          end
+        in
+        let members =
+          List.fold_left
+            (fun s cu ->
+               Misc.Stdlib.String.Set.add
+                 (Symtable.Compunit.name cu.cu_name) s)
+            Misc.Stdlib.String.Set.empty units
+        in
+        List.iter
+          (fun cu ->
+             load_compunit ic filename ppf
+               { cu with
+                 cu_reloc =
+                   List.map (rename_static_reloc members) cu.cu_reloc })
+          units;
+        true
+      with
+      | Load_failed -> false
+      | End_of_file | Failure _ | Sys_error _ -> report_corrupt ppf name
+
 let init () =
   let crc_intfs = Symtable.init_toplevel() in
   Compmisc.init_path ();

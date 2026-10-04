@@ -428,12 +428,16 @@ let prepare ppf ?input () =
   with Env.Error _ | Typetexp.Error _ as exn ->
     Location.report_exception ppf exn; raise (Compenv.Exit_with_status 2)
   end;
+  List.iter Topcommon.add_static_directory
+    (List.rev !Clflags.static_include_dirs);
   try
     let res =
       let objects =
         List.rev (!preload_objects @ !Compenv.first_objfiles)
       in
-      List.for_all (Topeval.load_file false ppf) objects
+      List.for_all (Topeval.load_static_file ppf)
+        (List.rev !Clflags.static_use)
+      && List.for_all (Topeval.load_file false ppf) objects
     in
     Topcommon.run_hooks Topcommon.Startup;
     res

@@ -1,0 +1,58 @@
+Line 1:
+Error: Reference to undefined compilation unit `Counter$static'
+Hint: This means that compile-time code uses the module Counter, 
+      whose implementation is not loaded for compile-time code.
+      Found lib/counter.cmo in the load paths. Did you mean to load it using 
+      #static_use "counter.cmo"?
+Cannot find file absent.cmo.
+$val a : int = 1
+val b : int = 3
+$val c : string = "B"
+Line 3, characters 0-12:
+3 | Counter.next ();;
+    ^^^^^^^^^^^^
+Error: Counter.next cannot be used at run time:
+       the unit Counter is available to compile-time code only.
+Line 1, characters 3-15:
+1 | << Counter.next () >>;;
+       ^^^^^^^^^^^^
+Error: Counter.next cannot be used inside a quotation:
+       the unit Counter is available to compile-time code only.
+Line 1, characters 11-18:
+1 | module M = Counter;;
+               ^^^^^^^
+Error: Counter cannot be used at run time:
+       the unit Counter is available to compile-time code only.
+Line 1, characters 31-38:
+1 | module type T = sig module M = Counter end;;
+                                   ^^^^^^^
+Error: Counter cannot be used at run time:
+       the unit Counter is available to compile-time code only.
+val f : Counter.t -> Counter.t = <fun>
+$val d : string = "A"
+val g : Counter.t list = [A; B]
+Line 1, characters 0-4:
+1 | next ();;
+    ^^^^
+Error: Counter.next cannot be used at run time:
+       the unit Counter is available to compile-time code only.
+$val h : int = 10
+Line 1, characters 9-15:
+1 | $let h = Both.s;;
+             ^^^^^^
+Error: Both.s cannot be used in compile-time code:
+       the unit Both is available to compile-time code only,
+       without its compile-time components.
+Line 1, characters 26-27:
+1 | $let h = let open Both in s;;
+                              ^
+Error: Both.s cannot be used in compile-time code:
+       the unit Both is available to compile-time code only,
+       without its compile-time components.
+val e : int = 4
+$val f : int = 41
+val g : int = 30
+module Included : sig val w : int $val t : int end
+$val h : int = 6
+val i : int = 20
+

@@ -1247,6 +1247,8 @@ struct
     mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
+    mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_init F._init;
     mk_labels F._labels;
     mk_alias_deps F._alias_deps;
@@ -1500,6 +1502,8 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
+    mk_I_static F._I_static;
+    mk_static_use F._static_use;
     mk_init F._init;
     mk_inline F._inline;
     mk_inline_toplevel F._inline_toplevel;

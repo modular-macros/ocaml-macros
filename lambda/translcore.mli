@@ -51,17 +51,26 @@ type unit_state =
 
 type context =
   { world : world;
+    quotation_depth : int;
     macro_env : macro_env option;
     native_slot_layout : native_slot_layout option;
     splice_source : (context -> expression -> lambda_splice) option;
     closing : Ident.t Ident.Map.t;
     quoted_variables : Ident.Set.t ref option;
+    unit_globals : Ident.t -> Ident.t;
     innermost_free_variables : Ident.Set.t;
     unit_state : unit_state }
 
 (* The context in which a unit's translation starts, with registries of
    its own *)
 val initial_context: unit -> context
+
+(* Whether the expression being translated is quoted code *)
+val in_quotation: context -> bool
+
+(* The globals of the units that a term of compile-time code names, as
+   [unit_globals] gives them *)
+val rename_unit_globals: context -> lambda -> lambda
 
 val pure_module : module_expr -> let_kind
 

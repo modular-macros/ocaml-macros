@@ -1,0 +1,18 @@
+$val a : int = 1
+Line 1, characters 8-14:
+1 | let b = Slib.u;;
+            ^^^^^^
+Error: Slib.u cannot be used at run time:
+       the unit Slib is available to compile-time code only.
+Line 1:
+Error: Reference to undefined compilation unit `Slib'
+Hint: This means that the interface of a module is loaded, but its implementation is not.
+      Found avail/slib.cmo in the load paths. Did you mean to load it using 
+      #load "slib.cmo" or by passing it as an argument to the toplevel?
+val b : int = 1
+val c : int = 2
+Line 1, characters 9-15:
+1 | $let d = Rlib.v;;
+             ^^^^^^
+Error: Rlib.v is bound at run time, but this use is in compile-time code.
+

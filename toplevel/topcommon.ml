@@ -386,8 +386,23 @@ let set_paths ?(auto_include=Compmisc.auto_include) ?(dir="") () =
       hidden
     ]
   in
+  Load_path.set_stage_paths ~static:[] ~run:visible;
   Load_path.init ~auto_include ~visible ~hidden;
   Dll.add_path (visible @ hidden)
+
+let add_static_directory s =
+  let d = Misc.expand_directory Config.standard_library s in
+  let dir = Load_path.Dir.create ~hidden:false d in
+  Load_path.prepend_dir dir;
+  let units = Env.persistent_structures_of_dir dir in
+  Env.register_stage_units ~static:units ~run:Misc.Stdlib.String.Set.empty;
+  Translmod.register_toplevel_shifted_units units;
+  toplevel_env :=
+    Misc.Stdlib.String.Set.fold
+      (fun name env ->
+         Env.add_persistent_structure (Ident.create_persistent name) env)
+      units
+      !toplevel_env
 
 let update_search_path_from_env () =
   let extra_paths =
@@ -516,9 +531,35 @@ let loading_hint_printer ppf cu =
   let open Format_doc in
   let global = Symtable.Global.Glob_compunit (Cmo_format.Compunit cu) in
   Symtable.report_error_doc ppf (Symtable.Undefined_global global);
-  let find_with_ext ext =
-    try Some (Load_path.find_normalized (cu ^ ext)) with Not_found -> None
+  let find_with_ext base ext =
+    try Some (Load_path.find_normalized (base ^ ext))
+    with Not_found -> None
   in
+  if Filename.check_suffix cu Translmod.static_unit_suffix then begin
+    let base = Filename.chop_suffix cu Translmod.static_unit_suffix in
+    fprintf ppf
+      "@.Hint: @[\
+       This means that compile-time code uses the module %a, \
+       @,whose implementation is not loaded for compile-time code.@ "
+      Style.inline_code base;
+    begin match List.find_map (find_with_ext base) [".cma"; ".cmo"] with
+    | Some path ->
+        let use ppf path =
+          Format_doc.fprintf ppf "#static_use \"%s\"" path
+        in
+        fprintf ppf
+          "Found %a @,in the load paths. \
+           @,Did you mean to load it using @,%a?"
+          Style.inline_code path
+          (Style.as_inline_code use) (Filename.basename path)
+    | None ->
+        fprintf ppf
+          "Did you mean to load it using %a?"
+          Style.inline_code "#static_use"
+    end;
+    fprintf ppf "@]"
+  end else begin
+  let find_with_ext ext = find_with_ext cu ext in
   fprintf ppf
     "@.Hint: @[\
      This means that the interface of a module is loaded, \
@@ -542,6 +583,7 @@ let loading_hint_printer ppf cu =
       Style.inline_code "#load"
   end;
   fprintf ppf "@]"
+  end
 
 let () =
   Location.register_error_of_exn

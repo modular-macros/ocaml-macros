@@ -1,0 +1,4 @@
+$val a : int = 1
+val b : int = 3
+- : int = 1
+

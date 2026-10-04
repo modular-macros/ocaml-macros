@@ -37,6 +37,11 @@ val set_paths :
 
 val update_search_path_from_env : unit -> unit
 
+(* Add a directory to the search path, for the compiled files that
+   compile-time code uses *)
+
+val add_static_directory : string -> unit
+
 (* Management and helpers for the execution *)
 
 val toplevel_env : Env.t ref
