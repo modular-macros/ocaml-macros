@@ -52,8 +52,10 @@ val implementation :
 (** {2 Error report} *)
 
 type error =
+  | Not_a_bytecode_object of string
   | Static_runner_not_found of string
   | Static_link_failed of string
+  | Macro_object_not_found of { file : string; unit_name : string }
   | Static_program_failed of { base : string; status : int }
   | Static_program_no_holes of { base : string; file : string }
       (** The static program exited with status 0 without writing the

@@ -468,11 +468,29 @@ let eval_rec_bindings bindings cont =
   in
     bind_inits bindings
 
-let compile_recmodule ~scopes compile_rhs bindings cont =
+let allocate_cells exported lam =
+  List.fold_left
+    (fun lam (_, cell) ->
+       Llet (Strict, Pgenval, cell,
+             Lprim (Pmakeblock (0, Mutable, None), [lambda_unit],
+                    Loc_unknown),
+             lam))
+    lam exported
+
+let bind_from_cells exported lam =
+  List.fold_left
+    (fun lam (id, cell) ->
+       Llet (Strict, Pgenval, id,
+             Lprim (Pfield (0, Pointer, Mutable), [Lvar cell], Loc_unknown),
+             lam))
+    lam exported
+
+(* A recursive group, each binding with its translation *)
+let compile_recmodule_translated ~scopes translated cont =
   eval_rec_bindings
     (reorder_rec_bindings
        (List.map
-          (fun {mb_id=id; mb_name; mb_expr=modl; _} ->
+          (fun ({mb_id=id; mb_name; mb_expr=modl; _}, lam) ->
              let id_or_ignore_loc, shape =
                match id with
                | None ->
@@ -480,8 +498,13 @@ let compile_recmodule ~scopes compile_rhs bindings cont =
                  Ignore_loc loc, Result.Error Unnamed
                | Some id -> Id id, init_shape id modl
              in
-             (id_or_ignore_loc, modl.mod_loc, shape, compile_rhs id modl))
-          bindings))
+             (id_or_ignore_loc, modl.mod_loc, shape, lam))
+          translated))
+    cont
+
+let compile_recmodule ~scopes compile_rhs bindings cont =
+  compile_recmodule_translated ~scopes
+    (List.map (fun mb -> mb, compile_rhs mb.mb_id mb.mb_expr) bindings)
     cont
 
 (* Code to translate class entries in a structure *)
@@ -550,6 +573,18 @@ let check_static_quotes ~ctx ~scopes vb =
   | None -> ()
   | Some id -> raise (Error (vb.vb_loc, Static_quotes_local id))
 
+(* Bind each of [ids] to the field of [block] at its position, and
+   continue with [next]. *)
+let rebind_fields ~scopes ~loc ~block ids fields next =
+  let rec go pos fields = function
+    | [] -> next fields
+    | id :: ids ->
+        Llet (Alias, Pgenval, id,
+              Lprim (Pfield (pos, Pointer, Mutable), [Lvar block],
+                     of_location ~scopes loc),
+              go (pos + 1) (id :: fields) ids)
+  in
+  go 0 fields ids
 (* Whether a module expression binds something at compile time: a
    value or a module that does, at any depth, whether or not its type
    shows it.  The compile-time part translates an item if and only if
@@ -679,14 +714,26 @@ and transl_apply ~ctx ~scopes ~loc ~cc mod_env funct translated_arg =
        ap_inlined=inlined_attribute;
        ap_specialised=Default_specialise})
 
-and transl_struct ~ctx ~scopes loc fields cc rootpath
+(* Whether a module expression is, through constraints, a literal
+   structure. *)
+and is_literal_structure me =
+  match me.mod_desc with
+  | Tmod_structure _ -> true
+  | Tmod_constraint (me, _, _, _) -> is_literal_structure me
+  | _ -> false
+
+and transl_struct ?cont ~ctx ~scopes loc fields cc rootpath
       {str_final_env; str_items; _} =
-  transl_structure ~ctx ~scopes loc fields cc rootpath str_final_env str_items
+  transl_structure ?cont ~ctx ~scopes loc fields cc rootpath str_final_env
+    str_items
 
 (* The function  transl_structure is called by  the bytecode compiler.
    Some effort is made to compile in top to bottom order, in order to display
    warning by increasing locations. *)
-and transl_structure ~ctx ~scopes loc fields cc rootpath final_env = function
+(* [cont] is given the block of the structure inside the scope of the
+   bindings of its items. *)
+and transl_structure ?cont ~ctx ~scopes loc fields cc rootpath final_env =
+  function
     [] ->
       let body =
         match cc with
@@ -727,18 +774,70 @@ and transl_structure ~ctx ~scopes loc fields cc rootpath final_env = function
       (* This debugging event provides information regarding the structure
          items. It is ignored by the OCaml debugger but is used by
          Js_of_ocaml to preserve variable names. *)
-      if !Clflags.debug && not !Clflags.native_code then
-        Levent(body,
-               {lev_loc = loc;
-                lev_kind = Lev_pseudo;
-                lev_repr = None;
-                lev_env = final_env})
-      else
-        body
+      let body =
+        if !Clflags.debug && not !Clflags.native_code then
+          Levent(body,
+                 {lev_loc = loc;
+                  lev_kind = Lev_pseudo;
+                  lev_repr = None;
+                  lev_env = final_env})
+        else
+          body
+      in
+      (match cont with Some k -> k body | None -> body)
   | item :: rem ->
       transl_struct_item ~ctx ~scopes fields rootpath item
         (fun fields ->
-           transl_structure ~ctx ~scopes loc fields cc rootpath final_env rem)
+           transl_structure ?cont ~ctx ~scopes loc fields cc rootpath final_env
+             rem)
+
+(* A literal structure of the compile-time part, with the rest of the
+   part, [k], inside the scope of its bindings: the code of a splice
+   runs at the innermost point, and may use any of them. *)
+and transl_module_hoisted ~ctx ~scopes cc rootpath me k =
+  match me.mod_desc with
+  | Tmod_structure str ->
+      transl_struct ~cont:k ~ctx ~scopes Loc_unknown [] cc rootpath str
+  | Tmod_constraint (me', _, _, ccarg) ->
+      transl_module_hoisted ~ctx ~scopes (compose_coercions cc ccarg) rootpath
+        me' k
+  | _ -> k (transl_module ~ctx ~scopes cc rootpath me)
+
+(* The body of a recursive module in the compile-time part.  The code at
+   the innermost point of the part, after the group, uses variables that
+   the body binds, and which do not reach it: each is stored in a cell at
+   the innermost point of the body, to be bound again from the cell after
+   the group.  The bindings of the body are renamed, so that each
+   identifier is still bound once.  The result is the translation, and
+   each carried variable with its cell. *)
+and transl_recursive_body ~ctx ~scopes rootpath modl =
+  let hole = Ident.create_local "*hole*" in
+  let lam =
+    transl_module_hoisted ~ctx ~scopes Tcoerce_none rootpath modl
+      (fun block -> Lsequence (Lvar hole, block))
+  in
+  let fill code =
+    Lambda.subst (fun _ _ env -> env) (Ident.Map.singleton hole code) lam
+  in
+  (* The variables of the innermost code that are bound at the hole *)
+  let carried =
+    let candidates = Ident.Set.elements ctx.innermost_free_variables in
+    let free =
+      free_variables (fill (make_sequence (fun v -> Lvar v) candidates))
+    in
+    List.filter (fun v -> not (Ident.Set.mem v free)) candidates
+  in
+  let cells = List.map (fun v -> v, Ident.create_local "*cell*") carried in
+  let stores =
+    make_sequence
+      (fun (v, cell) ->
+         Lprim (Psetfield (0, Pointer, Assignment), [Lvar cell; Lvar v],
+                Loc_unknown))
+      cells
+  in
+  Lambda.subst (fun _ _ env -> env) ~freshen_bound_variables:true
+    Ident.Map.empty (fill stores),
+  cells
 
 and transl_struct_item ~ctx ~scopes fields rootpath item next =
   if in_compile_world ctx && not (item_binds_at_compile_time item) then
@@ -789,6 +888,23 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
           ext.tyexn_constructor in
       let body = next (id::fields) in
       Llet(Strict, Pgenval, id, lam, body)
+  | Tstr_module ({mb_presence=Mp_present} as mb)
+    when in_compile_world ctx && is_literal_structure mb.mb_expr ->
+      (* The rest of the part is in the scope of what the module binds;
+         see [transl_module_hoisted]. *)
+      let id = mb.mb_id in
+      let subscopes = match id with
+        | None -> scopes
+        | Some id -> enter_module_definition ~scopes id in
+      transl_module_hoisted ~ctx ~scopes:subscopes Tcoerce_none
+        (Option.bind id (field_path rootpath)) mb.mb_expr
+        (fun block ->
+           let body = next (cons_opt id fields) in
+           match id with
+           | None ->
+               Lsequence (Lprim (Pignore, [block],
+                                 of_location ~scopes mb.mb_name.loc), body)
+           | Some id -> Llet (Strict, Pgenval, id, block, body))
   | Tstr_module ({mb_presence=Mp_present} as mb) ->
       let id = mb.mb_id in
       (* Translate module first *)
@@ -820,17 +936,29 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
           fields
       in
       let body = next ext_fields in
-      let lam =
-        compile_recmodule ~scopes (fun id modl ->
-            match id with
-            | None -> transl_module ~ctx ~scopes Tcoerce_none None modl
-            | Some id ->
-                transl_module
-                  ~ctx ~scopes:(enter_module_definition ~scopes id)
-                  Tcoerce_none (field_path rootpath id) modl
-          ) bindings body
+      let cells = ref [] in
+      let translated =
+        List.map
+          (fun ({ mb_id; mb_expr = modl; _ } as mb) ->
+             let scopes, rootpath =
+               match mb_id with
+               | None -> scopes, None
+               | Some id ->
+                   enter_module_definition ~scopes id, field_path rootpath id
+             in
+             if in_compile_world ctx then begin
+               let lam, carried =
+                 transl_recursive_body ~ctx ~scopes rootpath modl
+               in
+               cells := carried @ !cells;
+               mb, lam
+             end
+             else mb, transl_module ~ctx ~scopes Tcoerce_none rootpath modl)
+          bindings
       in
-      lam
+      allocate_cells !cells
+        (compile_recmodule_translated ~scopes translated
+           (bind_from_cells !cells body))
   | Tstr_class cl_list ->
       let (ids, class_bindings) = transl_class_bindings ~ctx ~scopes cl_list in
       let body = next (List.rev_append ids fields) in
@@ -839,21 +967,24 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
       let ids = bound_value_identifiers incl.incl_type in
       let modl = incl.incl_mod in
       let mid = Ident.create_local "include" in
-      let rec rebind_idents pos newfields = function
-          [] ->
-            next newfields
-        | id :: ids ->
-            let body =
-              rebind_idents (pos + 1) (id :: newfields) ids
-            in
-            Llet(Alias, Pgenval, id,
-                 Lprim(Pfield (pos, Pointer, Mutable),
-                       [Lvar mid], of_location ~scopes incl.incl_loc), body)
+      let rebind_idents fields ids =
+        rebind_fields ~scopes ~loc:incl.incl_loc ~block:mid ids fields next
       in
-      let body = rebind_idents 0 fields ids in
-      Llet(pure_module modl, Pgenval, mid,
-           transl_module ~ctx ~scopes Tcoerce_none None modl, body)
-
+      if in_compile_world ctx then
+        transl_module_hoisted ~ctx ~scopes Tcoerce_none None modl
+          (fun block ->
+             (* A module that is translated only for what it binds has
+                no compile-time value. *)
+             if Mtype.has_macro_components modl.mod_env
+                  (Mty_signature incl.incl_type)
+             then Llet (Strict, Pgenval, mid, block, rebind_idents fields ids)
+             else
+               Lsequence (Lprim (Pignore, [block], Loc_unknown),
+                          dummy_slots ~ctx ids next fields))
+      else
+        Llet(pure_module modl, Pgenval, mid,
+             transl_module ~ctx ~scopes Tcoerce_none None modl,
+             rebind_idents fields ids)
   | Tstr_open od ->
       let pure = pure_module od.open_expr in
       (* this optimization shouldn't be needed because Simplif would
@@ -866,19 +997,24 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
       | _ ->
           let ids = bound_value_identifiers od.open_bound_items in
           let mid = Ident.create_local "open" in
-          let rec rebind_idents pos newfields = function
-              [] -> next newfields
-            | id :: ids ->
-                let body =
-                  rebind_idents (pos + 1) (id :: newfields) ids
-                in
-                Llet(Alias, Pgenval, id,
-                     Lprim(Pfield (pos, Pointer, Mutable), [Lvar mid],
-                           of_location ~scopes od.open_loc), body)
+          let rebind_idents fields ids =
+            rebind_fields ~scopes ~loc:od.open_loc ~block:mid ids fields next
           in
-          let body = rebind_idents 0 fields ids in
-          Llet(pure, Pgenval, mid,
-               transl_module ~ctx ~scopes Tcoerce_none None od.open_expr, body)
+          if in_compile_world ctx then
+            transl_module_hoisted ~ctx ~scopes Tcoerce_none None od.open_expr
+              (fun block ->
+                 if Mtype.has_macro_components od.open_expr.mod_env
+                      (Mty_signature od.open_bound_items)
+                 then
+                   Llet (Strict, Pgenval, mid, block,
+                         rebind_idents fields ids)
+                 else
+                   Lsequence (Lprim (Pignore, [block], Loc_unknown),
+                              dummy_slots ~ctx ids next fields))
+          else
+            Llet(pure, Pgenval, mid,
+                 transl_module ~ctx ~scopes Tcoerce_none None od.open_expr,
+                 rebind_idents fields ids)
       end
   | Tstr_modtype _
   | Tstr_class_type _
@@ -1648,10 +1784,12 @@ let call_static_support m args =
 (* The static program of a unit with top-level splices, and the run-time
    term of the unit, with a hole for each top-level splice.
 
-   The static program evaluates the code of each splice and writes the
-   terms that fill the holes; the compiler fills the holes of its own
-   term with them, and compiles it.  The term is not simplified before
-   because a hole hides the binders that its contents mention. *)
+   The static program is the compile-time part of the unit with, at its
+   innermost point, code that evaluates the code of each splice and
+   writes the terms that fill the holes; the compiler fills the holes
+   of its own term with them, and compiles it.  The term is not
+   simplified before because a hole hides the binders that its contents
+   mention. *)
 let transl_static_program ?(native = false) module_name (str, cc)
     ~source_file ~prefix =
   let module_id = Ident.create_persistent module_name in
@@ -1673,6 +1811,7 @@ let transl_static_program ?(native = false) module_name (str, cc)
     else None
   in
   let ctx = { (initial_context ()) with native_slot_layout = slot_layout } in
+  without_typing_required_globals @@ fun () ->
   (* The code of each splice is a function, bound around the call that
      writes the code of the holes, which the hole applies: a splice is
      evaluated when the term around it is built. *)
@@ -1680,15 +1819,8 @@ let transl_static_program ?(native = false) module_name (str, cc)
   let splice_thunk ctx spl_exp =
     (* The static program is bytecode, whichever compiler builds it. *)
     protect_refs [R (Clflags.native_code, false)] @@ fun () ->
+    in_world ctx Compile_world @@ fun ctx ->
     Translcore.check_no_objects spl_exp;
-    let check_ident iter e =
-      match e.exp_desc with
-      | Texp_ident (_, _, desc) when desc.val_macro = Static ->
-          Misc.fatal_error "static bindings in splices: not implemented"
-      | _ -> Tast_iterator.default_iterator.expr iter e
-    in
-    check_ident { Tast_iterator.default_iterator with expr = check_ident }
-      spl_exp;
     (* A variable that is a field of the block of the unit is quoted as
        that field, and is not closed over. *)
     let roots = Translcore.quoted_variables ~ctx ~scopes spl_exp in
@@ -1745,13 +1877,24 @@ let transl_static_program ?(native = false) module_name (str, cc)
           Translquote.quote_module_holes run_time.code])
   in
   let static_id = Ident.create_persistent (module_name ^ "$static") in
+  (* The call that writes the code of the holes is inside the scope of
+     every binding of the compile-time part. *)
   let code =
-    Lsequence
-      (emit,
-       Lprim (Psetglobal static_id,
-              [Lprim (Pmakeblock (0, Immutable, None),
-                      [Lconst const_unit], Loc_unknown)],
-              Loc_unknown))
+    protect_refs [R (Clflags.native_code, false)] @@ fun () ->
+    let ctx = { ctx with innermost_free_variables = free_variables emit } in
+    in_world ctx Compile_world @@ fun ctx ->
+      transl_struct ~ctx ~scopes Loc_unknown [] cc
+        (Some (Path.Pident module_id)) str
+        ~cont:(fun macros_block ->
+          Lsequence
+            (Lprim (Psetglobal (macros_global module_name), [macros_block],
+                    Loc_unknown),
+             Lsequence
+               (emit,
+                Lprim (Psetglobal static_id,
+                       [Lprim (Pmakeblock (0, Immutable, None),
+                               [Lconst const_unit], Loc_unknown)],
+                       Loc_unknown))))
   in
   (* A failure outside any splice is attributed to the unit. *)
   let code =

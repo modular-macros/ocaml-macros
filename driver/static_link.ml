@@ -17,8 +17,10 @@ open Misc
 open Compile_common
 
 type error =
+  | Not_a_bytecode_object of string
   | Static_runner_not_found of string
   | Static_link_failed of string
+  | Macro_object_not_found of { file : string; unit_name : string }
   | Static_program_failed of { base : string; status : int }
   | Static_program_no_holes of { base : string; file : string }
   | Static_program_reported of string
@@ -55,15 +57,67 @@ let static_runner () =
   | Installed ->
       Filename.concat (Filename.dirname Sys.executable_name) "staticrun"
 
+(* The compile-time parts that a static program needs are read from
+   relocation tables: the compile-time part of a unit may itself use
+   that of another.  The run-time objects are not loaded. *)
+let read_compunit ~loc filename =
+  let ic = open_in_bin filename in
+  Misc.try_finally ~always:(fun () -> close_in ic)
+    (fun () ->
+       (* A file that cannot be read as an object, such as an
+          interrupted build leaves, is reported as not being one. *)
+       match
+         let magic = String.length Config.cmo_magic_number in
+         if really_input_string ic magic <> Config.cmo_magic_number then
+           raise (Error (loc, Not_a_bytecode_object filename));
+         seek_in ic (input_binary_int ic);
+         (input_value ic : Cmo_format.compilation_unit)
+       with
+       | cu -> cu
+       | exception (End_of_file | Failure _ | Sys_error _) ->
+           raise (Error (loc, Not_a_bytecode_object filename)))
+
+let macro_units_of compunit =
+  List.filter_map
+    (function
+      | (Cmo_format.Reloc_getcompunit (Cmo_format.Compunit name), _)
+        when Filename.check_suffix name "$macros" -> Some name
+      | _ -> None)
+    compunit.Cmo_format.cu_reloc
+
+(* Depth first, emitting each object after the ones it depends on, since a
+   bytecode link requires that order. *)
+let macro_object_closure ~loc roots =
+  let seen = Hashtbl.create 8 and order = ref [] in
+  let rec visit name =
+    if not (Hashtbl.mem seen name) then begin
+      Hashtbl.add seen name ();
+      let file = Unit_info.normalize name ^ ".cmo" in
+      match Load_path.find_normalized file with
+      | exception Not_found ->
+          raise (Error (loc, Macro_object_not_found
+                               { file;
+                                 unit_name =
+                                   Filename.chop_suffix name "$macros" }))
+      | path ->
+          let cu = read_compunit ~loc path in
+          List.iter visit (macro_units_of cu);
+          order := path :: !order
+    end
+  in
+  List.iter visit roots;
+  List.rev !order
+
 (* The objects that the runner loads *)
-let static_objfiles ~static_cmo =
+let static_objfiles ~loc ~static_cmo =
   (* [Dynlink] resolves a relative name against the current directory. *)
   let static_cmo =
     if Filename.is_relative static_cmo
     then Filename.concat (Sys.getcwd ()) static_cmo
     else static_cmo
   in
-  [ static_cmo ]
+  macro_object_closure ~loc (macro_units_of (read_compunit ~loc static_cmo))
+  @ [ static_cmo ]
 
 (* The failures of the run are read from files.  A failure to load the
    static program is text in [base ^ ".linkerr"], which the runner
@@ -163,7 +217,9 @@ let build_static_program ~native i Typedtree.{structure; coercion; _} =
       (fun () ->
          Emit_cmo.to_cmo ~source_file ~prefix:static_prefix
            ~required_globals:prog.Lambda.required_globals lambda;
-         let objs = static_objfiles ~static_cmo:(static_prefix ^ ".cmo") in
+         let objs =
+           static_objfiles ~loc ~static_cmo:(static_prefix ^ ".cmo")
+         in
          let objs_file = static_prefix ^ ".objs" in
          let oc = open_out objs_file in
          Misc.try_finally ~always:(fun () -> close_out oc)
@@ -222,6 +278,9 @@ let describe_status status =
   else Printf.sprintf "exited with code %i" status
 
 let report_error loc = function
+  | Not_a_bytecode_object file ->
+      Location.errorf ~loc "%a is not a bytecode object file."
+        Style.inline_code file
   | Static_runner_not_found file ->
       Location.errorf ~loc
         "Cannot find %a,@ the static-program runner built with the \
@@ -230,6 +289,10 @@ let report_error loc = function
   | Static_link_failed msg ->
       Location.errorf ~loc
         "Linking this unit's compile-time part failed:@ %s" msg
+  | Macro_object_not_found { file; unit_name } ->
+      Location.errorf ~loc
+        "Cannot find %a, which holds the compile-time definitions of %a."
+        Style.inline_code file Style.inline_code unit_name
   | Static_program_failed { base; status } ->
       Location.errorf ~loc
         "Compile-time evaluation failed:@ the static program %s.@ \

@@ -47,6 +47,7 @@ type context =
     splice_source : (context -> expression -> lambda_splice) option;
     closing : Ident.t Ident.Map.t;
     quoted_variables : Ident.Set.t ref option;
+    innermost_free_variables : Ident.Set.t;
     unit_state : unit_state }
 
 (* The context in which a unit's translation starts, with registries of

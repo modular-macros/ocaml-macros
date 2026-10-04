@@ -1,0 +1,2 @@
+File "missing_object.ml", line 1:
+Error: Cannot find missing_object_lib$macros.cmo, which holds the compile-time definitions of Missing_object_lib.

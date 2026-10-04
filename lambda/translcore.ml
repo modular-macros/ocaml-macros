@@ -92,6 +92,10 @@ type context =
        add the variables of run-time code that they mention: the free
        variables of their translated bodies, a splice in a body counting
        as its arguments *)
+    innermost_free_variables : Ident.Set.t;
+    (* The free variables of the code at the innermost point of the
+       compile-time part, which fills the holes of the run-time term:
+       each must be in scope there. *)
     unit_state : unit_state }
 
 let initial_context () =
@@ -100,6 +104,7 @@ let initial_context () =
     splice_source = None;
     closing = Ident.Map.empty;
     quoted_variables = None;
+    innermost_free_variables = Ident.Set.empty;
     unit_state =
       { compile_world_dummies = Ident.Set.empty } }
 

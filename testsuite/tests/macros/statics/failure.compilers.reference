@@ -1,0 +1,2 @@
+File "failure.ml", line 1:
+Error: Compile-time evaluation of the compile-time part of this unit raised Failure("no value").
