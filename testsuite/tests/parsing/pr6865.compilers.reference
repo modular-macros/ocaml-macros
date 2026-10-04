@@ -3,7 +3,7 @@
     Pstr_extension "foo"
     [
       structure_item (pr6865.ml[9,153+0]..[9,153+14])
-        Pstr_value Nonrec
+        Pstr_value Nonrec Value
         [
           <def>
             pattern (pr6865.ml[9,153+8]..[9,153+9])
@@ -18,7 +18,7 @@
     Pstr_extension "foo"
     [
       structure_item (pr6865.ml[10,168+0]..[10,168+25])
-        Pstr_value Nonrec
+        Pstr_value Nonrec Value
         [
           <def>
             pattern (pr6865.ml[10,168+8]..[10,168+9])
@@ -38,7 +38,7 @@
     Pstr_extension "foo"
     [
       structure_item (pr6865.ml[11,194+0]..[11,194+14])
-        Pstr_value Nonrec
+        Pstr_value Nonrec Value
         [
           <def>
             pattern (pr6865.ml[11,194+8]..[11,194+9])

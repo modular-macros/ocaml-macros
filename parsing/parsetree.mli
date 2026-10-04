@@ -528,14 +528,17 @@ and type_constraint =
 and value_description =
     {
      pval_name: string loc;
+     pval_macro: macro_flag;
      pval_type: core_type;
      pval_prim: string list;
      pval_attributes: attributes;  (** [... [\@\@id1] [\@\@id2]] *)
      pval_loc: Location.t;
     }
 (** Values of type {!value_description} represents:
-    - [val x: T],
+    - [val x: T] or [$val x: T],
             when {{!value_description.pval_prim}[pval_prim]} is [[]]
+             and {{!value_description.pval_macro}[pval_macro]} is
+             [Value] or [Static]
     - [external x: T = "s1" ... "sn"]
             when {{!value_description.pval_prim}[pval_prim]} is [["s1";..."sn"]]
 *)
@@ -922,6 +925,7 @@ and signature_item =
 and signature_item_desc =
   | Psig_value of value_description
       (** - [val x: T]
+            - [$val x: T]
             - [external x: T = "s1" ... "sn"]
          *)
   | Psig_type of rec_flag * type_declaration list
@@ -1064,12 +1068,15 @@ and structure_item =
 
 and structure_item_desc =
   | Pstr_eval of expression * attributes  (** [E] *)
-  | Pstr_value of rec_flag * value_binding list
-      (** [Pstr_value(rec, [(P1, E1 ; ... ; (Pn, En))])] represents:
+  | Pstr_value of rec_flag * macro_flag * value_binding list
+      (** [Pstr_value(rec, mac, [(P1, E1 ; ... ; (Pn, En))])] represents:
             - [let P1 = E1 and ... and Pn = EN]
                 when [rec] is {{!Asttypes.rec_flag.Nonrecursive}[Nonrecursive]},
             - [let rec P1 = E1 and ... and Pn = EN ]
                 when [rec] is {{!Asttypes.rec_flag.Recursive}[Recursive]}.
+
+          [let] is written [$let] when [mac] is
+          {{!Asttypes.macro_flag.Static}[Static]}.
         *)
   | Pstr_primitive of value_description
       (** - [val x: T]

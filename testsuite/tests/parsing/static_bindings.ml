@@ -1,0 +1,26 @@
+(* TEST
+ flags = "-dsource -stop-after parsing";
+ setup-ocamlc.byte-build-env;
+ ocamlc.byte;
+ check-ocamlc.byte-output;
+*)
+
+(* Static bindings.  This test only exercises the syntax. *)
+
+$let a = 1
+$let rec f n = if n = 0 then 1 else n * g (n - 1)
+and g n = f n
+$let (b, c) = (2, 3)
+$let d : int list = [a; b; c]
+$let[@inline] h x = x
+
+module M = struct
+  let e = 4
+  $let e' = 5
+end
+
+module type S = sig
+  val e : int
+  $val e' : int
+  $val h : 'a -> 'a
+end

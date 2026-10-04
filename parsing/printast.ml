@@ -82,6 +82,11 @@ let fmt_rec_flag f x =
   | Nonrecursive -> fprintf f "Nonrec"
   | Recursive -> fprintf f "Rec"
 
+let fmt_mac_flag f x =
+  match x with
+  | Value -> fprintf f "Value"
+  | Static -> fprintf f "Static"
+
 let fmt_direction_flag f x =
   match x with
   | Upto -> fprintf f "Up"
@@ -441,8 +446,8 @@ and type_constraint i ppf constraint_ =
       core_type (i+1) ppf ty2
 
 and value_description i ppf x =
-  line i ppf "value_description %a %a\n" fmt_string_loc
-       x.pval_name fmt_location x.pval_loc;
+  line i ppf "value_description %a %a %a\n" fmt_string_loc
+       x.pval_name fmt_mac_flag x.pval_macro fmt_location x.pval_loc;
   attributes i ppf x.pval_attributes;
   core_type (i+1) ppf x.pval_type;
   list (i+1) string ppf x.pval_prim
@@ -870,8 +875,8 @@ and structure_item i ppf x =
       line i ppf "Pstr_eval\n";
       attributes i ppf attrs;
       expression i ppf e;
-  | Pstr_value (rf, l) ->
-      line i ppf "Pstr_value %a\n" fmt_rec_flag rf;
+  | Pstr_value (rf, mf, l) ->
+      line i ppf "Pstr_value %a %a\n" fmt_rec_flag rf fmt_mac_flag mf;
       list i value_binding ppf l;
   | Pstr_primitive vd ->
       line i ppf "Pstr_primitive\n";

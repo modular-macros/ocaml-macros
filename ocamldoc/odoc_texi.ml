@@ -581,7 +581,8 @@ class texi =
       Odoc_info.reset_type_names () ;
       let t = [ self#fixedblock
                   [ Newline ; minus ;
-                    Raw ("val " ^ (Name.simple v.val_name) ^ " :\n") ;
+                    Raw (Value.keyword v ^ " " ^ (Name.simple v.val_name)
+                         ^ " :\n") ;
                     self#text_el_of_type_expr
                       (Name.father v.val_name) v.val_type ] ;
                 self#index `Value v.val_name ; Newline  ] @

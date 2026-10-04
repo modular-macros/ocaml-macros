@@ -1,6 +1,6 @@
 [
   structure_item (shortcut_ext_attr.ml[9,170+0]..[30,721+31])
-    Pstr_value Nonrec
+    Pstr_value Nonrec Value
     [
       <def>
         pattern (shortcut_ext_attr.ml[9,170+4]..[9,170+6])
@@ -580,7 +580,7 @@
     Pstr_extension "foo"
     [
       structure_item (shortcut_ext_attr.ml[76,1578+0]..[77,1598+15])
-        Pstr_value Nonrec
+        Pstr_value Nonrec Value
         [
           <def>
               attribute "foo"
@@ -703,7 +703,7 @@
     [
       structure_item (shortcut_ext_attr.ml[85,1728+0]..[85,1728+30]) ghost
         Pstr_primitive
-        value_description "x" (shortcut_ext_attr.ml[85,1728+19]..[85,1728+20]) (shortcut_ext_attr.ml[85,1728+0]..[85,1728+30])
+        value_description "x" (shortcut_ext_attr.ml[85,1728+19]..[85,1728+20]) Value (shortcut_ext_attr.ml[85,1728+0]..[85,1728+30])
           attribute "foo"
             []
           core_type (shortcut_ext_attr.ml[85,1728+23]..[85,1728+24])
@@ -804,7 +804,7 @@
             [
               signature_item (shortcut_ext_attr.ml[98,1965+2]..[98,1965+21]) ghost
                 Psig_value
-                value_description "x" (shortcut_ext_attr.ml[98,1965+16]..[98,1965+17]) (shortcut_ext_attr.ml[98,1965+2]..[98,1965+21])
+                value_description "x" (shortcut_ext_attr.ml[98,1965+16]..[98,1965+17]) Value (shortcut_ext_attr.ml[98,1965+2]..[98,1965+21])
                   attribute "foo"
                     []
                   core_type (shortcut_ext_attr.ml[98,1965+20]..[98,1965+21])
@@ -817,7 +817,7 @@
             [
               signature_item (shortcut_ext_attr.ml[99,1987+2]..[99,1987+31]) ghost
                 Psig_value
-                value_description "x" (shortcut_ext_attr.ml[99,1987+21]..[99,1987+22]) (shortcut_ext_attr.ml[99,1987+2]..[99,1987+31])
+                value_description "x" (shortcut_ext_attr.ml[99,1987+21]..[99,1987+22]) Value (shortcut_ext_attr.ml[99,1987+2]..[99,1987+31])
                   attribute "foo"
                     []
                   core_type (shortcut_ext_attr.ml[99,1987+25]..[99,1987+26])

@@ -24,6 +24,7 @@ type t_value = {
   mutable val_info : Odoc_types.info option;
   val_type : Types.type_expr;
   val_recursive : bool;
+  val_macro : Asttypes.macro_flag;
   mutable val_parameters : Odoc_parameter.parameter list;
   mutable val_code : string option;
   mutable val_loc : Odoc_types.location;
@@ -62,3 +63,7 @@ val dummy_parameter_list : Types.type_expr -> Odoc_parameter.param_info list
 
 val is_function : t_value -> bool
 (** Return true if the value is a function, i.e. has a functional type.*)
+
+val keyword : t_value -> string
+(** The keyword that declares the value: [val], or [$val] for a static
+    binding. *)

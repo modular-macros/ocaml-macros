@@ -300,8 +300,8 @@ class virtual to_text =
       let name = v.val_name in
       let s_name = Name.simple name in
       let s =
-        Format.fprintf Format.str_formatter "@[<hov 2>val %s :@ %s"
-          s_name
+        Format.fprintf Format.str_formatter "@[<hov 2>%s %s :@ %s"
+          (Value.keyword v) s_name
           (self#normal_type (Name.father v.val_name) v.val_type);
         Format.flush_str_formatter ()
       in

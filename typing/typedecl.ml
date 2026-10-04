@@ -1661,6 +1661,8 @@ let check_unboxable env loc ty =
 let transl_value_decl env loc valdecl =
   let cty = Typetexp.transl_type_scheme env valdecl.pval_type in
   let ty = cty.ctyp_type in
+  if valdecl.pval_macro = Asttypes.Static then
+    Misc.fatal_error "static bindings: not implemented";
   let v =
   match valdecl.pval_prim with
     [] when Env.is_in_signature env ->

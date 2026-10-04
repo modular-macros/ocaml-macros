@@ -311,7 +311,7 @@ module Str = struct
   let mk ?(loc = !default_loc) d = {pstr_desc = d; pstr_loc = loc}
 
   let eval ?loc ?(attrs = []) a = mk ?loc (Pstr_eval (a, attrs))
-  let value ?loc a b = mk ?loc (Pstr_value (a, b))
+  let value ?loc ?(macro = Value) a b = mk ?loc (Pstr_value (a, macro, b))
   let primitive ?loc a = mk ?loc (Pstr_primitive a)
   let type_ ?loc rec_flag a = mk ?loc (Pstr_type (rec_flag, a))
   let type_extension ?loc a = mk ?loc (Pstr_typext a)
@@ -423,9 +423,10 @@ end
 
 module Val = struct
   let mk ?(loc = !default_loc) ?(attrs = []) ?(docs = empty_docs)
-        ?(prim = []) name typ =
+        ?(prim = []) ?(macro = Value) name typ =
     {
      pval_name = name;
+     pval_macro = macro;
      pval_type = typ;
      pval_attributes = add_docs_attrs docs attrs;
      pval_loc = loc;

@@ -22,6 +22,7 @@ type t_value = {
     mutable val_info : Odoc_types.info option ;
     val_type : Types.type_expr ;
     val_recursive : bool ;
+    val_macro : Asttypes.macro_flag ;
     mutable val_parameters : Odoc_parameter.parameter list ;
     mutable val_code : string option ;
     mutable val_loc : Odoc_types.location ;
@@ -123,3 +124,8 @@ let is_function v =
             false
       in
   f v.val_type
+
+let keyword v =
+  match v.val_macro with
+  | Asttypes.Value -> "val"
+  | Asttypes.Static -> "$val"

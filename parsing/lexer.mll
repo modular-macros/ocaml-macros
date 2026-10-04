@@ -111,6 +111,13 @@ let all_keywords =
     "asr", INFIXOP4("asr"), always
 ]
 
+(* The keywords that have a staged form, a dollar glued to the keyword.
+   A dollar glued to any other keyword is an error. *)
+let staged_keywords = [
+    "let", DOLLARLET;
+    "val", DOLLARVAL;
+]
+
 
 let keyword_table = Hashtbl.create 149
 
@@ -531,8 +538,11 @@ rule token = parse
   | "$("
       { DOLLARLPAREN }
   | "$" (lowercase identchar * as s)
-      { if s = "_" || is_keyword s then error lexbuf (Unstaged_keyword s)
-        else DOLLARLIDENT s }
+      { match List.assoc_opt s staged_keywords with
+        | Some token -> token
+        | None ->
+            if s = "_" || is_keyword s then error lexbuf (Unstaged_keyword s)
+            else DOLLARLIDENT s }
   | "$" (uppercase identchar * as s)
       { DOLLARUIDENT s }
   | "$" (raw_ident_escape? as escape) (ident_ext as raw_name)

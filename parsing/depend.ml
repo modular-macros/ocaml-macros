@@ -523,7 +523,7 @@ and add_struct_item (bv, m) item : _ String.Map.t * _ String.Map.t =
   match item.pstr_desc with
     Pstr_eval (e, _attrs) ->
       add_expr bv e; (bv, m)
-  | Pstr_value(rf, pel) ->
+  | Pstr_value(rf, _, pel) ->
       let bv = add_bindings rf bv pel in (bv, m)
   | Pstr_primitive vd ->
       add_type bv vd.pval_type; (bv, m)

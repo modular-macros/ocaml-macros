@@ -880,7 +880,7 @@ and expression ctxt f x =
            (*no indentation here, a new line*) *)
         (*   rec_flag rf *)
         pp f "@[<2>%a in@;<1 -2>%a@]"
-          (bindings reset_ctxt) (rf,l)
+          (bindings "let" reset_ctxt) (rf,l)
           (expression ctxt) e
     | Pexp_apply (e, l) ->
         begin if not (sugar_expr ctxt f x) then
@@ -1264,7 +1264,7 @@ and class_expr ctxt f x =
           (class_expr ctxt) e
     | Pcl_let (rf, l, ce) ->
         pp f "%a@ in@ %a"
-          (bindings ctxt) (rf,l)
+          (bindings "let" ctxt) (rf,l)
           (class_expr ctxt) ce
     | Pcl_apply (ce, l) ->
         pp f "((%a)@ %a)" (* Cf: #7200 *)
@@ -1361,7 +1361,11 @@ and signature_item ctxt f x : unit =
       *)
       type_def_list ctxt f (Recursive, false, l)
   | Psig_value vd ->
-      let intro = if vd.pval_prim = [] then "val" else "external" in
+      let intro =
+        if vd.pval_prim <> [] then "external"
+        else match vd.pval_macro with
+          | Value -> "val" | Static -> "$val"
+      in
       pp f "@[<2>%s@ %a@ :@ %a@]%a" intro
         ident_of_name vd.pval_name.txt
         (value_description ctxt) vd
@@ -1540,17 +1544,17 @@ and binding ?(is_method=false) ctxt f
     end
 
 (* [in] is not printed *)
-and bindings ctxt f (rf,l) =
+and bindings fst_kwd ctxt f (rf,l) =
   let binding kwd rf f x =
     pp f "@[<2>%s %a%a@]%a" kwd rec_flag rf
       (binding ctxt) x (item_attributes ctxt) x.pvb_attributes
   in
   match l with
   | [] -> ()
-  | [x] -> binding "let" rf f x
+  | [x] -> binding fst_kwd rf f x
   | x::xs ->
       pp f "@[<v>%a@,%a@]"
-        (binding "let" rf) x
+        (binding fst_kwd rf) x
         (list ~sep:"@," (binding "and" Nonrecursive)) xs
 
 and binding_op ctxt f x =
@@ -1571,9 +1575,11 @@ and structure_item ctxt f x =
         (item_attributes ctxt) attrs
   | Pstr_type (_, []) -> assert false
   | Pstr_type (rf, l)  -> type_def_list ctxt f (rf, true, l)
-  | Pstr_value (rf, l) ->
+  | Pstr_value (rf, Value, l) ->
       (* pp f "@[<hov2>let %a%a@]"  rec_flag rf bindings l *)
-      pp f "@[<2>%a@]" (bindings ctxt) (rf,l)
+      pp f "@[<2>%a@]" (bindings "let" ctxt) (rf,l)
+  | Pstr_value (rf, Static, l) ->
+      pp f "@[<2>%a@]" (bindings "$let" ctxt) (rf,l)
   | Pstr_typext te -> type_extension ctxt f te
   | Pstr_exception ed -> exception_declaration ctxt f ed
   | Pstr_module x ->

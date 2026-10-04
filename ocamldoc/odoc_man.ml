@@ -440,7 +440,7 @@ class man =
     (** Print groff string code for a value. *)
     method man_of_value b v =
       Odoc_info.reset_type_names () ;
-      bs b "\n.I val ";
+      bs b ("\n.I " ^ Value.keyword v ^ " ");
       bs b (Name.simple v.val_name);
       bs b " \n: ";
       self#man_of_type_expr b (Name.father v.val_name) v.val_type;

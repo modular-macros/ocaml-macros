@@ -1551,7 +1551,7 @@ class html =
       Odoc_info.reset_type_names ();
       bs b "\n<pre>" ;
       bp b "<span id=\"%s\">" (Naming.value_target v);
-      bs b (self#keyword "val");
+      bs b (self#keyword (Value.keyword v));
       bs b " ";
       (
        match v.val_code with

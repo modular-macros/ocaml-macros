@@ -331,7 +331,7 @@ module Analyser =
 
      (** Analysis of a Tstr_value from the typedtree. Create and return a list of [t_value].
         @raise Failure if an error occurs.*)
-     let tt_analyse_value env current_module_name comment_opt loc pat_exp rec_flag attrs =
+     let tt_analyse_value env current_module_name comment_opt loc pat_exp rec_flag macro attrs =
        let (pat, exp) = pat_exp in
        let comment_opt = Odoc_sig.analyze_alerts comment_opt attrs in
        match pat.pat_desc with
@@ -356,6 +356,7 @@ module Analyser =
              val_info = comment_opt ;
              val_type = Odoc_env.subst_type env pat.Typedtree.pat_type ;
              val_recursive = rec_flag = Asttypes.Recursive ;
+             val_macro = macro ;
              val_parameters =
                tt_analyse_function_parameters env comment_opt params body ;
              val_code = code ;
@@ -381,6 +382,7 @@ module Analyser =
              val_info = comment_opt ;
              val_type = Odoc_env.subst_type env pat.Typedtree.pat_type ;
              val_recursive = rec_flag = Asttypes.Recursive ;
+             val_macro = macro ;
              val_parameters = [] ;
              val_code = code ;
              val_loc = { loc_impl = Some loc ; loc_inter = None } ;
@@ -511,6 +513,7 @@ module Analyser =
                 val_info = info_opt ;
                 val_type = Odoc_env.subst_type env type_exp ;
                 val_recursive = false ;
+                val_macro = Asttypes.Value ;
                 val_parameters = [] ;
                 val_code = code ;
                 val_loc = { loc_impl = Some loc ; loc_inter = None } ;
@@ -550,6 +553,7 @@ module Analyser =
                 val_info = info_opt ;
                 val_type = Odoc_env.subst_type env real_type ;
                 val_recursive = false ;
+                val_macro = Asttypes.Value ;
                 val_parameters = [] ;
                 val_code = code ;
                 val_loc = { loc_impl = Some loc ; loc_inter = None } ;
@@ -591,6 +595,7 @@ module Analyser =
                 val_info = info_opt ;
                 val_type = Odoc_env.subst_type env real_type ;
                 val_recursive = false ;
+                val_macro = Asttypes.Value ;
                 val_parameters = tt_analyse_method_expression env complete_name info_opt exp ;
                 val_code = code ;
                 val_loc = { loc_impl = Some loc ; loc_inter = None } ;
@@ -1011,7 +1016,7 @@ module Analyser =
       | Parsetree.Pstr_attribute _
       | Parsetree.Pstr_extension _ ->
           (0, env, [])
-      | Parsetree.Pstr_value (rec_flag, pat_exp_list) ->
+      | Parsetree.Pstr_value (rec_flag, macro, pat_exp_list) ->
           (* of rec_flag * (pattern * expression) list *)
           (* For each value, look for the value name, then look in the
              typedtree for the corresponding information,
@@ -1052,6 +1057,7 @@ module Analyser =
                           loc
                           pat_exp
                           rec_flag
+                          macro
                           attrs
                       in
                       let new_env = List.fold_left
@@ -1093,6 +1099,7 @@ module Analyser =
                 val_info = comment_opt ;
                 val_type = Odoc_env.subst_type env typ ;
                 val_recursive = false ;
+                val_macro = Asttypes.Value ;
                 val_parameters = [] ;
                 val_code = code ;
                 val_loc = { loc_impl = Some loc ; loc_inter = None } ;

@@ -421,7 +421,8 @@ module M = struct
     | Pstr_eval (x, attrs) ->
         let attrs = sub.attributes sub attrs in
         eval ~loc ~attrs (sub.expr sub x)
-    | Pstr_value (r, vbs) -> value ~loc r (List.map (sub.value_binding sub) vbs)
+    | Pstr_value (r, macro, vbs) ->
+        value ~loc ~macro r (List.map (sub.value_binding sub) vbs)
     | Pstr_primitive vd -> primitive ~loc (sub.value_description sub vd)
     | Pstr_type (rf, l) -> type_ ~loc rf (List.map (sub.type_declaration sub) l)
     | Pstr_typext te -> type_extension ~loc (sub.type_extension sub te)
@@ -709,8 +710,9 @@ let default_mapper =
     package_type = T.map_package_type;
     value_description =
       (fun this {pval_name; pval_type; pval_prim; pval_loc;
-                 pval_attributes} ->
+                 pval_macro; pval_attributes} ->
         Val.mk
+          ~macro:pval_macro
           (map_loc map_string this pval_name)
           (this.typ this pval_type)
           ~attrs:(this.attributes this pval_attributes)

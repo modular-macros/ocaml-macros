@@ -8344,6 +8344,7 @@ tools/ocamlprof.cmo : \
     parsing/parse.cmi \
     parsing/location.cmi \
     utils/clflags.cmi \
+    parsing/asttypes.cmi \
     parsing/ast_iterator.cmi \
     tools/ocamlprof.cmi
 tools/ocamlprof.cmx : \
@@ -8352,6 +8353,7 @@ tools/ocamlprof.cmx : \
     parsing/parse.cmx \
     parsing/location.cmx \
     utils/clflags.cmx \
+    parsing/asttypes.cmx \
     parsing/ast_iterator.cmx \
     tools/ocamlprof.cmi
 tools/ocamlprof.cmi :
@@ -10096,7 +10098,8 @@ ocamldoc/odoc_value.cmi : \
     typing/types.cmi \
     ocamldoc/odoc_types.cmi \
     ocamldoc/odoc_parameter.cmi \
-    ocamldoc/odoc_name.cmi
+    ocamldoc/odoc_name.cmi \
+    parsing/asttypes.cmi
 ocamltest/actions.cmo : \
     ocamltest/variables.cmi \
     ocamltest/result.cmi \

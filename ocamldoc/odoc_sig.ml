@@ -648,6 +648,7 @@ module Analyser =
               val_info = comment_opt ;
               val_type = subst_typ ;
               val_recursive = false ;
+              val_macro = Asttypes.Value ;
               val_parameters = Odoc_value.dummy_parameter_list subst_typ ;
               val_code = None ;
               val_loc = { loc_impl = None ; loc_inter = Some loc };
@@ -709,6 +710,7 @@ module Analyser =
                   val_info = comment_opt ;
                   val_type = subst_typ;
                   val_recursive = false ;
+                  val_macro = Asttypes.Value ;
                   val_parameters = [] ;
                   val_code = None ;
                   val_loc = { loc_impl = None ; loc_inter = Some loc} ;
@@ -872,6 +874,7 @@ module Analyser =
                 val_info = comment_opt ;
                 val_type = subst_typ ;
                 val_recursive = false ;
+                val_macro = value_desc.Parsetree.pval_macro ;
                 val_parameters = Odoc_value.dummy_parameter_list subst_typ ;
                 val_code = None ;
                 val_loc = { loc_impl = None ; loc_inter = Some sig_item_loc } ;

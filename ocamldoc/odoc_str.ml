@@ -354,7 +354,7 @@ let string_of_exception e =
 
 let string_of_value v =
   let module M = Odoc_value in
-  "val "^(Name.simple v.M.val_name)^" : "^
+  M.keyword v^" "^(Name.simple v.M.val_name)^" : "^
   (Odoc_print.string_of_type_expr v.M.val_type)^"\n"^
   (match v.M.val_info with
     None -> ""

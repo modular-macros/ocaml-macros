@@ -1,0 +1,4 @@
+File "static_bindings_local.ml", line 11, characters 8-12:
+11 | let a = $let b = 1 in b
+             ^^^^
+Error: Syntax error
