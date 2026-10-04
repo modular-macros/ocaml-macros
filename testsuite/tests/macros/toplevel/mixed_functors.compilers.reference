@@ -1,0 +1,35 @@
+module F :
+  (X : sig val v : int end) ->
+    sig
+      $val[..] add : int expr -> int expr
+      $val scale : int
+      val run : int
+    end
+module A :
+  sig $val[..] add : int expr -> int expr $val scale : int val run : int end
+val a : int = 112
+module Outer :
+  sig
+    module G :
+      (X : sig val v : int end) ->
+        sig $val[..] mul : int expr -> int expr end
+    module B : sig $val[..] mul : int expr -> int expr end
+    val b : int
+  end
+module C : sig $val[..] mul : int expr -> int expr end
+val c : int = 30
+d = 9
+$val[..] add : int expr -> int expr = <fun>
+$val scale : int = 10
+val run : int = 120
+val e : int = 140
+$val[..] add : int expr -> int expr = <fun>
+$val scale : int = 10
+val run : int = 130
+val f : int = 170
+module G = Outer.G
+module B = Outer.B
+val b : int = 6
+module E : sig $val[..] mul : int expr -> int expr end
+val g : int = 42
+

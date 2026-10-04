@@ -150,10 +150,17 @@ let rec apply_coercion ~ctx loc strict restr arg =
                 loc)
         in
         wrap_id_pos_list ~ctx loc id_pos_list get_field lam)
-  | Tcoerce_functor(_, cc_arg, cc_res) ->
-      let param = Ident.create_local "funarg" in
-      let carg = apply_coercion ~ctx loc Alias cc_arg (Lvar param) in
-      apply_coercion_result ~ctx loc strict arg [param, Pgenval] [carg] cc_res
+  | Tcoerce_functor(face, cc_arg, cc_res) ->
+      (match face with
+       | Fcf_mixed when in_compile_world ctx ->
+           (* The compile-time value does not depend on the argument:
+              only the coercion of the result applies. *)
+           apply_coercion ~ctx loc strict cc_res arg
+       | _ ->
+           let param = Ident.create_local "funarg" in
+           let carg = apply_coercion ~ctx loc Alias cc_arg (Lvar param) in
+           apply_coercion_result ~ctx loc strict arg [param, Pgenval] [carg]
+             cc_res)
   | Tcoerce_primitive { pc_loc = _; pc_desc; pc_env; pc_type; } ->
       Translprim.transl_primitive loc pc_desc pc_env pc_type None
   | Tcoerce_alias (env, path, cc) ->
@@ -715,6 +722,44 @@ let transl_macro_group_functions ~ctx ~scopes rec_flag pat_expr_list =
     (id, add_macro_env_param me_param (Translquote.remove_events fn)))
     pat_expr_list
 
+(* A mixed functor is a functor whose result has compile-time
+   components.  Its arguments have none, so those of its result do not
+   depend on them: its compile-time value is the compile-time block of
+   its body, which all its applications share.  Its run-time value is
+   the functor, the run-time block of whose result holds, for each
+   generator, an environment that may capture the arguments. *)
+let is_mixed_module_type env mty = Mtype.has_macro_components env mty
+
+(* Whether a module expression binds something at compile time: a
+   value or a module that does, at any depth, whether or not its type
+   shows it.  The compile-time part translates an item if and only if
+   it binds something at compile time; otherwise the identifiers that
+   the item binds are placeholders there.  With [~expand_aliases:false]
+   an alias contributes nothing, and its target is not read. *)
+let binds_at_compile_time ?expand_aliases (me : Typedtree.module_expr) =
+  Mtype.has_macro_components ?expand_aliases me.mod_env me.mod_type
+  || Typemod.has_compile_time_bindings me
+
+let functor_result_coercion = function
+  | Tcoerce_functor (_, _, cc_res) -> cc_res
+  | cc -> cc
+
+let rec peel_functor_coercions = function
+  | Tcoerce_functor (_, _, cc_res) -> peel_functor_coercions cc_res
+  | cc -> cc
+
+let rec is_plain_functor me =
+  match me.Typedtree.mod_desc with
+  | Tmod_functor _ -> true
+  | Tmod_constraint (m, _, _, _) -> is_plain_functor m
+  | _ -> false
+
+let rec is_plain_application me =
+  match me.Typedtree.mod_desc with
+  | Tmod_apply _ | Tmod_apply_unit _ -> true
+  | Tmod_constraint (m, _, _, _) -> is_plain_application m
+  | _ -> false
+
 (* Bind each of [ids] to the field of [block] at its position, and
    continue with [next]. *)
 let rebind_fields ~scopes ~loc ~block ids fields next =
@@ -727,16 +772,6 @@ let rebind_fields ~scopes ~loc ~block ids fields next =
               go (pos + 1) (id :: fields) ids)
   in
   go 0 fields ids
-(* Whether a module expression binds something at compile time: a
-   value or a module that does, at any depth, whether or not its type
-   shows it.  The compile-time part translates an item if and only if
-   it binds something at compile time; otherwise the identifiers that
-   the item binds are placeholders there.  With [~expand_aliases:false]
-   an alias contributes nothing, and its target is not read. *)
-let binds_at_compile_time ?expand_aliases (me : Typedtree.module_expr) =
-  Mtype.has_macro_components ?expand_aliases me.mod_env me.mod_type
-  || Typemod.has_compile_time_bindings me
-
 (* Whether a structure item binds something at compile time; see
    [binds_at_compile_time].  An include binds the components of its
    module, whatever names it. *)
@@ -816,19 +851,22 @@ let rec compile_functor ~ctx ~scopes mexp coercion root_path loc =
 (* Compile a module expression *)
 
 and transl_module ~ctx ~scopes cc rootpath mexp =
-  begin match mexp.mod_desc with
-  | (Tmod_functor _ | Tmod_apply _ | Tmod_apply_unit _)
-    when in_compile_world ctx ->
-      Misc.fatal_error "mixed functors: not implemented"
-  | _ -> ()
-  end;
   let loc = of_location ~scopes mexp.mod_loc in
   match mexp.mod_desc with
   | Tmod_ident (path,_) ->
+      let cc =
+        match cc with
+        | Tcoerce_functor (Fcf_mixed, _, _) when in_compile_world ctx ->
+            peel_functor_coercions cc
+        | _ -> cc
+      in
       apply_coercion ~ctx loc Strict cc
         (transl_module_path ~ctx loc mexp.mod_env path)
   | Tmod_structure str ->
       transl_struct ~ctx ~scopes loc [] cc rootpath str
+  | (Tmod_functor _ | Tmod_apply _ | Tmod_apply_unit _)
+    when in_compile_world ctx && binds_at_compile_time mexp ->
+      transl_module_hoisted ~ctx ~scopes cc rootpath mexp Fun.id
   | Tmod_functor _ ->
       oo_wrap mexp.mod_env true (fun () ->
         compile_functor ~ctx ~scopes mexp cc rootpath loc) ()
@@ -940,9 +978,22 @@ and transl_module_hoisted ~ctx ~scopes cc rootpath me k =
   match me.mod_desc with
   | Tmod_structure str ->
       transl_struct ~cont:k ~ctx ~scopes Loc_unknown [] cc rootpath str
+  | Tmod_functor (_, fbody)
+    when in_compile_world ctx && binds_at_compile_time me ->
+      (* The compile-time block of the body, with [k] inside the scope
+         of its bindings. *)
+      transl_module_hoisted ~ctx ~scopes (functor_result_coercion cc)
+        rootpath fbody k
   | Tmod_constraint (me', _, _, ccarg) ->
       transl_module_hoisted ~ctx ~scopes (compose_coercions cc ccarg) rootpath
         me' k
+  | Tmod_apply (funct, arg, _) when in_compile_world ctx ->
+      compile_time_operand ~ctx ~scopes funct (fun funct_value ->
+        compile_time_operand ~ctx ~scopes arg (fun _ ->
+          k (compile_time_application ~ctx cc me funct funct_value)))
+  | Tmod_apply_unit funct when in_compile_world ctx ->
+      compile_time_operand ~ctx ~scopes funct (fun funct_value ->
+        k (compile_time_application ~ctx cc me funct funct_value))
   | _ -> k (transl_module ~ctx ~scopes cc rootpath me)
 
 (* The body of a recursive module in the compile-time part.  The code at
@@ -980,6 +1031,23 @@ and transl_recursive_body ~ctx ~scopes rootpath modl =
   Lambda.subst (fun _ _ env -> env) ~freshen_bound_variables:true
     Ident.Map.empty (fill stores),
   cells
+
+(* The functor and the argument of an application are translated in the
+   compile-time part for what they bind there, which their splices use.
+   The functor is not applied: the compile-time value of the
+   application of a mixed functor is that of the functor, coerced, and
+   the application of another functor has none. *)
+and compile_time_operand ~ctx ~scopes me k =
+  if binds_at_compile_time me
+  then transl_module_hoisted ~ctx ~scopes Tcoerce_none None me k
+  else k (Lconst const_unit)
+
+and compile_time_application ~ctx cc me funct funct_value =
+  if is_mixed_module_type funct.mod_env funct.mod_type
+  then
+    apply_coercion ~ctx (of_location ~scopes:empty_scopes me.mod_loc) Strict
+      cc funct_value
+  else Lconst const_unit
 
 and transl_struct_item ~ctx ~scopes fields rootpath item next =
   if in_compile_world ctx && not (item_binds_at_compile_time item) then
@@ -1056,7 +1124,11 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
       let body = next (id::fields) in
       Llet(Strict, Pgenval, id, lam, body)
   | Tstr_module ({mb_presence=Mp_present} as mb)
-    when in_compile_world ctx && is_literal_structure mb.mb_expr ->
+    when in_compile_world ctx
+         && (is_literal_structure mb.mb_expr
+             || ((is_plain_functor mb.mb_expr
+                  || is_plain_application mb.mb_expr)
+                 && binds_at_compile_time mb.mb_expr)) ->
       (* The rest of the part is in the scope of what the module binds;
          see [transl_module_hoisted]. *)
       let id = mb.mb_id in
