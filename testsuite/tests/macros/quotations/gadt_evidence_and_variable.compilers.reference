@@ -1,0 +1,12 @@
+File "gadt_evidence_and_variable.ml", lines 13-22, characters 4-55:
+13 | ....let stash : type a b. (a, b) eql expr -> b expr =
+14 |       fun r ->
+15 |         let cell : b expr option ref = ref None in
+16 |         let _ : (a -> unit) expr =
+17 |           << fun (x : a) ->
+18 |                match $r with
+19 |                | Refl -> $(cell := Some << (x : b) >>; << () >>) >> in
+20 |         Option.get !cell
+21 |     in
+22 |     stash (<< assert false >> : (int, string) eql expr).
+Error: The code built by this splice has a variable escaping a quotation's scope: x, and uses a type equation outside the match case where it holds.

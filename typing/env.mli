@@ -65,6 +65,21 @@ val same_type_declarations: t -> t -> bool
    path of the type it refines, and the declaration that gives it its
    manifest. *)
 val equations_above: int -> t -> (Path.t * type_declaration) list
+(* The evidence of GADT equations: a quotation's code uses an equation
+   where the content of the equation is read. *)
+val enter_quotation: unit -> unit
+val leave_quotation: unit -> Ident.t list
+(* Record, for the quotation being typed, that the content of the
+   declaration of [path] is read, if it is an equation usable in the
+   environment; done by [find_type_expansion] and
+   [find_type_expansion_opt], and by Ctype on a memoised expansion,
+   which skips them. *)
+val equation_read: Path.t -> t -> unit
+val attach_evidence: Ident.t -> outer:t -> t -> t option
+
+(* The name of the variables that hold evidence, which no program can
+   write *)
+val evidence_name: string
 
 (* The staging level and mode of the code being typed *)
 val get_env_level : t -> staging_level

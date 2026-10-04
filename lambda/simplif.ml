@@ -614,6 +614,7 @@ let simplify_lets lam =
       if count_var v > 0
       then Lsequence(simplif l1, simplif l2)
       else simplif l2
+  | Lsequence(Lvar _, l2) -> simplif l2
   | Lsequence(l1, l2) -> Lsequence(simplif l1, simplif l2)
   | Lwhile(l1, l2) -> Lwhile(simplif l1, simplif l2)
   | Lfor(v, l1, l2, dir, l3) ->

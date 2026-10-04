@@ -146,7 +146,7 @@ and expression_desc =
       body : value case;
       partial : partial;
     }
-  | Texp_quote of expression
+  | Texp_quote of expression * Ident.t list
   | Texp_splice of splice_desc
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
@@ -161,6 +161,7 @@ and 'k case =
     {
      c_lhs: 'k general_pattern;
      c_cont: Ident.t option;
+     c_evidence: Ident.t option;
      c_guard: expression option;
      c_rhs: expression;
     }
@@ -171,6 +172,7 @@ and function_param =
     fp_param: Ident.t;
     fp_partial: partial;
     fp_kind: function_param_kind;
+    fp_evidence: Ident.t option;
     fp_newtypes: string loc list;
     fp_loc : Location.t;
   }

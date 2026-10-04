@@ -767,6 +767,9 @@ val backtrack: cleanup_abbrev:(unit -> unit) -> snapshot -> unit
 val undo_first_change_after: snapshot -> unit
         (* Backtrack only the first change after a snapshot.
            Does not update the list of changes *)
+val log_undo: (unit -> unit) -> unit
+        (* Log an action that undoes a change made outside the types:
+           backtracking runs it. *)
 val undo_compress: snapshot -> unit
         (* Backtrack only path compression. Only meaningful if you have
            not already backtracked to a previous snapshot.

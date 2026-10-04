@@ -569,6 +569,9 @@ type t = {
      usable at that level and above.  One with no level is usable
      everywhere. *)
   local_constraint_levels: int Path.Map.t;
+  (* The evidence of each equation that a match in quoted code learned:
+     the variable that the generated program binds in the arm. *)
+  local_constraint_evidence: Ident.t Path.Map.t;
   id_pairs: (Ident.Unscoped.t * Ident.Unscoped.t) list;
   flags: int;
   env_staging_level: staging_level;
@@ -793,6 +796,7 @@ let empty = {
   classes = IdTbl.empty; cltypes = IdTbl.empty;
   summary = Env_empty; local_constraints = Path.Map.empty;
   local_constraint_levels = Path.Map.empty;
+  local_constraint_evidence = Path.Map.empty;
   id_pairs = [];
   flags = 0;
   not_aliasable = Ident.empty;
@@ -811,6 +815,24 @@ let is_in_signature env = env.flags land in_signature_flag <> 0
 
 let has_local_constraints env =
   not (Path.Map.is_empty env.local_constraints)
+
+(* The quotation being typed: the evidence of the equations its code
+   consults, and the evidence of the matches inside it, whose binders
+   its own code contains.  A use is recorded where the content of an
+   equation is read: see [equation_read]. *)
+type quotation = { mutable uses : Ident.Set.t; mutable minted : Ident.Set.t }
+let quotations : quotation list ref = Local_store.s_ref []
+
+let enter_quotation () =
+  quotations :=
+    { uses = Ident.Set.empty; minted = Ident.Set.empty } :: !quotations
+
+let leave_quotation () =
+  match !quotations with
+  | q :: rest ->
+      quotations := rest;
+      Ident.Set.elements (Ident.Set.diff q.uses q.minted)
+  | [] -> assert false
 
 let is_ext cda =
   match cda.cda_description with
@@ -1240,11 +1262,24 @@ let type_of_cstr path = function
       end
   | _ -> assert false
 
-(* An equation is usable at its level and above. *)
+(* An equation is usable at its level and above.  A use in quoted code
+   is attributed to the quotation being typed, through the evidence, by
+   [equation_read] below. *)
 let equation_usable path env =
   match Path.Map.find_opt path env.local_constraint_levels with
   | Some level -> level <= env.env_staging_level
   | None -> true
+
+let equation_used path env =
+  match !quotations with
+  | [] -> ()
+  | q :: _ ->
+      match Path.Map.find_opt path env.local_constraint_evidence with
+      | Some ev when not (Ident.Set.mem ev q.uses) ->
+          q.uses <- Ident.Set.add ev q.uses;
+          (* An expansion that the type checker undoes is no use. *)
+          Types.log_undo (fun () -> q.uses <- Ident.Set.remove ev q.uses)
+      | Some _ | None -> ()
 
 let rec find_type_data path env =
   match Path.Map.find_opt path env.local_constraints with
@@ -1566,12 +1601,20 @@ let find_uid (namespace: Shape.Sig_component_kind.t) path env =
 (* Find the manifest type associated to a type when appropriate:
    - the type should be public or should have a private row,
    - the type should have an associated manifest type. *)
+(* The content of an equation is read only by the two functions that
+   follow, and by [Ctype]'s memoised expansions: a use is recorded
+   there. *)
+let equation_read path env =
+  if Path.Map.mem path env.local_constraints && equation_usable path env
+  then equation_used path env
+
 let find_type_expansion path env =
   let decl = find_type path env in
   match decl.type_manifest with
   | Some body when decl.type_private = Public
               || not (Btype.type_kind_is_abstract decl)
               || Btype.has_constr_row body ->
+      equation_read path env;
       (decl.type_params, body, decl.type_expansion_scope)
   (* The manifest type of Private abstract data types without
      private row are still considered unknown to the type system.
@@ -1589,6 +1632,7 @@ let find_type_expansion_opt path env =
   (* The manifest type of Private abstract data types can still get
      an approximation using their manifest type. *)
   | Some body ->
+      equation_read path env;
       (decl.type_params, body, decl.type_expansion_scope)
   | _ -> raise Not_found
 
@@ -2429,6 +2473,26 @@ let add_local_constraint path info env =
     local_constraints = Path.Map.add path info env.local_constraints;
     local_constraint_levels =
       Path.Map.add path env.env_staging_level env.local_constraint_levels }
+
+let evidence_name = "*evidence*"
+
+(* Give [ev] to the equations of [env] that [outer] lacks: those the
+   arm's pattern learned.  [None] when there are none. *)
+let attach_evidence ev ~outer env =
+  let learned =
+    Path.Map.filter (fun p _ -> not (Path.Map.mem p outer.local_constraints))
+      env.local_constraints
+  in
+  if Path.Map.is_empty learned then None
+  else begin
+    (match !quotations with
+     | q :: _ -> q.minted <- Ident.Set.add ev q.minted
+     | [] -> ());
+    Some { env with
+           local_constraint_evidence =
+             Path.Map.fold (fun p _ m -> Path.Map.add p ev m)
+               learned env.local_constraint_evidence }
+  end
 
 (* Non-lazy version of scrape_alias *)
 let scrape_alias t mty =
@@ -3822,6 +3886,7 @@ let keep_only_summary env =
        summary = env.summary;
        local_constraints = env.local_constraints;
        local_constraint_levels = env.local_constraint_levels;
+       local_constraint_evidence = env.local_constraint_evidence;
        flags = env.flags;
       }
     in
@@ -3836,6 +3901,7 @@ let env_of_only_summary env_from_summary env =
   { new_env with
     local_constraints = env.local_constraints;
     local_constraint_levels = env.local_constraint_levels;
+    local_constraint_evidence = env.local_constraint_evidence;
     flags = env.flags;
   }
 

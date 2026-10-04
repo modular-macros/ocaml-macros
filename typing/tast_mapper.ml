@@ -334,6 +334,7 @@ let function_param sub fp =
   let fp_loc = sub.location sub fp.fp_loc in
   { fp_kind;
     fp_param = fp.fp_param;
+    fp_evidence = fp.fp_evidence;
     fp_arg_label = fp.fp_arg_label;
     fp_partial = fp.fp_partial;
     fp_newtypes = fp.fp_newtypes;
@@ -495,8 +496,8 @@ let expr sub x =
           body = sub.case sub body;
           partial;
         }
-    | Texp_quote exp ->
-        Texp_quote (sub.expr sub exp)
+    | Texp_quote (exp, evidence) ->
+        Texp_quote (sub.expr sub exp, evidence)
     | Texp_splice ({ spl_exp = exp } as desc) ->
         Texp_splice { desc with spl_exp = (sub.expr sub exp) }
     | Texp_unreachable ->
@@ -861,12 +862,13 @@ let value_bindings sub (rec_flag, list) =
 
 let case
   : type k . mapper -> k case -> k case
-  = fun sub {c_lhs; c_guard; c_rhs; c_cont} ->
+  = fun sub {c_lhs; c_guard; c_rhs; c_cont; c_evidence} ->
   {
     c_lhs = sub.pat sub c_lhs;
     c_guard = Option.map (sub.expr sub) c_guard;
     c_rhs = sub.expr sub c_rhs;
-    c_cont
+    c_cont;
+    c_evidence
   }
 
 let value_binding sub x =

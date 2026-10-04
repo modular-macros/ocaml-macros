@@ -307,7 +307,7 @@ type recarg =
 let mk_expected ?explanation ty = { ty; explanation; }
 
 let case lhs rhs =
-  {c_lhs = lhs; c_cont = None; c_guard = None; c_rhs = rhs}
+  {c_lhs = lhs; c_cont = None; c_guard = None; c_rhs = rhs; c_evidence = None}
 
 let not_implemented_in_staged_code env feature =
   if Env.get_env_level env <> 0 then
@@ -3385,7 +3385,7 @@ let rec is_nonexpansive exp =
      See GPR#1142 *)
   | Texp_assert (exp, _) ->
       is_nonexpansive exp
-  | Texp_quote e | Texp_splice { spl_exp = e } -> is_nonexpansive e
+  | Texp_quote (e, _) | Texp_splice { spl_exp = e } -> is_nonexpansive e
   | Texp_apply ({ exp_desc = Texp_ident (_, _, {val_kind = Val_prim p}) },
                 args) ->
     begin match p, args with
@@ -5355,12 +5355,18 @@ and type_expect_
       let to_unify = Predef.type_expr ty in
       with_explanation (fun () ->
         unify_exp_types loc env to_unify (generic_instance ty_expected));
+      Env.enter_quotation ();
       let body =
-        type_expect (Env.with_mode M_Q (Env.with_level_up env))
-          e (mk_expected ty)
+        match
+          type_expect (Env.with_mode M_Q (Env.with_level_up env))
+            e (mk_expected ty)
+        with
+        | body -> body
+        | exception exn -> ignore (Env.leave_quotation ()); raise exn
       in
+      let evidence = Env.leave_quotation () in
       re {
-        exp_desc = Texp_quote body;
+        exp_desc = Texp_quote (body, evidence);
         exp_loc = loc; exp_extra = [];
         exp_type = instance ty_expected;
         exp_attributes = sexp.pexp_attributes;
@@ -5804,7 +5810,7 @@ and type_function
             let default = type_expect env default (mk_expected ty_default) in
             ty_default, Some default
       in
-      let (pat, params, body, newtypes, contains_gadt), partial =
+      let (pat, params, body, newtypes, contains_gadt, evidence), partial =
         (* Check everything else in the scope of the parameter. *)
         map_half_typed_cases Value env ty_arg_internal ty_ret pat.ppat_loc
           ~check_if_total:true
@@ -5812,7 +5818,7 @@ and type_function
           [ { pattern = pat; has_guard = false; needs_refute = false }, () ]
           ~type_body:begin
             fun () pat ~when_env:_ ~ext_env ~cont:_ ~ty_expected ~ty_infer:_
-              ~contains_gadt:param_contains_gadt ->
+              ~contains_gadt:param_contains_gadt ~evidence ->
               let _, params, body, newtypes, suffix_contains_gadt =
                 type_function ext_env rest body_constraint body
                   ty_expected ~first:false ~in_function
@@ -5823,7 +5829,7 @@ and type_function
                 else
                   suffix_contains_gadt
               in
-              (pat, params, body, newtypes, contains_gadt)
+              (pat, params, body, newtypes, contains_gadt, evidence)
           end
         |> function
           (* The result must be a singleton because we passed a singleton
@@ -5870,6 +5876,7 @@ and type_function
             { fp_kind;
               fp_arg_label = arg_label;
               fp_param;
+              fp_evidence = evidence;
               fp_partial = partial;
               fp_newtypes = newtypes;
               fp_loc = pparam_loc;
@@ -6047,6 +6054,7 @@ and type_moddep_fun ~env ~name ~pack_param ~rest ~arg_label ~first
     { fp_kind;
       fp_arg_label = arg_label;
       fp_param = s_ident;
+      fp_evidence = None;
       fp_partial = Total;
       fp_newtypes = newtypes;
       fp_loc = pparam_loc;
@@ -6788,6 +6796,7 @@ and map_half_typed_cases
         -> ty_expected:_ (* type to check body in scope of *)
         -> ty_infer:_ (* type to infer for body *)
         -> contains_gadt:_ (* whether the pattern contains a GADT *)
+        -> evidence:_ (* the arm's evidence binder, in quoted code *)
         -> ret)
     -> check_if_total:bool (* if false, assume Partial right away *)
     -> ret list * partial
@@ -6936,6 +6945,16 @@ and map_half_typed_cases
         in
         let when_env = add_pattern_vars ext_env pvs in
         let when_env = add_module_variables when_env mvs in
+        (* In quoted code, an arm whose pattern learned equations binds
+           evidence for them in the generated program. *)
+        let when_env, evidence =
+          if Env.get_env_mode env <> M_Q then when_env, None
+          else
+            let ev = Ident.create_local Env.evidence_name in
+            match Env.attach_evidence ev ~outer:env when_env with
+            | Some when_env -> when_env, Some ev
+            | None -> when_env, None
+        in
         let ext_env = add_pattern_vars when_env cont_vars in
         let ty_expected =
           if contains_gadt && not !Clflags.principal then
@@ -6944,7 +6963,7 @@ and map_half_typed_cases
             duplicate_type ty_res
           else ty_res in
         type_body case_data pat ~when_env ~ext_env ~cont ~ty_expected
-          ~ty_infer:ty_res' ~contains_gadt)
+          ~ty_infer:ty_res' ~contains_gadt ~evidence)
     conts half_typed_cases
   end in
   let do_init = may_contain_gadts || needs_exhaust_check in
@@ -7033,7 +7052,7 @@ and type_cases
     ~check_if_total
     ~type_body:begin
       fun { pc_guard; pc_rhs } pat ~when_env ~ext_env ~cont ~ty_expected
-        ~ty_infer ~contains_gadt:_ ->
+        ~ty_infer ~contains_gadt:_ ~evidence ->
         let cont = Option.map (fun (id,_) -> id) cont in
         let guard =
           match pc_guard with
@@ -7055,6 +7074,7 @@ and type_cases
         {
           c_lhs = pat;
           c_cont = cont;
+          c_evidence = evidence;
           c_guard = guard;
           c_rhs = {exp with exp_type = ty_infer}
         }

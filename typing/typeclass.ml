@@ -1188,7 +1188,8 @@ and class_expr_aux cl_num val_env met_env virt self_scope scl =
       let partial =
         let dummy = type_exp val_env (Ast_helper.Exp.unreachable ()) in
         Typecore.check_partial val_env pat.pat_type pat.pat_loc
-          [{c_lhs = pat; c_cont = None; c_guard = None; c_rhs = dummy}]
+          [{c_lhs = pat; c_cont = None; c_guard = None; c_rhs = dummy;
+            c_evidence = None}]
       in
       let cl =
         Ctype.with_raised_nongen_level

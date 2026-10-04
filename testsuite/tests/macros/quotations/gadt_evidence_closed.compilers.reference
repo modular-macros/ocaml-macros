@@ -1,0 +1,11 @@
+File "gadt_evidence_closed.ml", lines 14-22, characters 4-55:
+14 | ....let stash : type b. (int, b) eql expr -> b expr =
+15 |       fun r ->
+16 |         let cell = ref None in
+17 |         let _ : unit expr =
+18 |           << match $r with
+19 |              | Refl -> $(cell := Some << (1 : b) >>; << () >>) >> in
+20 |         Option.get !cell
+21 |     in
+22 |     stash (<< assert false >> : (int, string) eql expr).
+Error: The code built by this splice uses a type equation outside the match case where it holds.

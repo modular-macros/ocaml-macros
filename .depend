@@ -2671,9 +2671,11 @@ bytecomp/static_holes.cmx : \
 bytecomp/static_holes.cmi :
 bytecomp/static_report.cmo : \
     parsing/location.cmi \
+    typing/env.cmi \
     bytecomp/static_report.cmi
 bytecomp/static_report.cmx : \
     parsing/location.cmx \
+    typing/env.cmx \
     bytecomp/static_report.cmi
 bytecomp/static_report.cmi : \
     parsing/location.cmi

@@ -1845,6 +1845,7 @@ let expand_abbrev_gen kind find_type_expansion env ty =
     match find_expans kind path !lookup_abbrev with
     | None -> None
     | Some ty' -> try
+        Env.equation_read path env;
         (* prerr_endline
            ("found a "^string_of_kind kind^" expansion for "^Path.name path);*)
         if level <> generic_level then update_level env level ty';

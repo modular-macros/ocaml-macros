@@ -496,6 +496,7 @@ type change =
   | Ccommu of [`var] commutable_gen
   | Cuniv of type_expr option ref * type_expr option
   | Cuident of Ident.Unscoped.change
+  | Cundo of (unit -> unit)
 
 type changes =
     Change of change * changes ref
@@ -511,6 +512,8 @@ let log_change ch =
 
 let () =
     Ident.Unscoped.change_log := (fun change -> log_change (Cuident change))
+
+let log_undo f = log_change (Cundo f)
 
 (* constructor and accessors for [field_kind] *)
 
@@ -804,6 +807,7 @@ let undo_change = function
   | Ccommu (Cvar r)  -> r.commu <- Cunknown
   | Cuniv  (r, v)    -> r := v
   | Cuident change    -> Ident.Unscoped.undo_change change
+  | Cundo f           -> f ()
 
 type snapshot = changes ref * int
 let last_snapshot = Local_store.s_ref 0

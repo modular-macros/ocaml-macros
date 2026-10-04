@@ -295,8 +295,9 @@ and expression_desc =
       body : value case;
       partial : partial;
     }
-  | Texp_quote of expression
-        (** [<< E >>] *)
+  | Texp_quote of expression * Ident.t list
+        (** [<< E >>], with the evidence of the GADT equations that [E]
+            uses. *)
   | Texp_splice of splice_desc
         (** [$(E)] *)
   | Texp_unreachable
@@ -312,6 +313,9 @@ and 'k case =
     {
      c_lhs: 'k general_pattern;
      c_cont: Ident.t option;
+     c_evidence: Ident.t option;
+       (** The binder the generated program gives the GADT equations
+           the pattern learned, when the match is in quoted code. *)
      c_guard: expression option;
      c_rhs: expression;
     }
@@ -330,6 +334,8 @@ and function_param =
        [Total] otherwise.
     *)
     fp_kind: function_param_kind;
+    fp_evidence: Ident.t option;
+      (** As [c_evidence], for the parameter's pattern. *)
     fp_newtypes: string loc list;
       (** [fp_newtypes] are the new type declarations that come *after* that
           parameter. The newtypes that come before the first parameter are

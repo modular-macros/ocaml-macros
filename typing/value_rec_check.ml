@@ -941,14 +941,14 @@ let rec expression : Typedtree.expression -> term_judg =
           list binding_op (let_ :: ands) <<< Dereference;
           case_env body <<< Delay
         ]
-    | Texp_quote e when staging_level exp = !definition_level ->
+    | Texp_quote (e, _) when staging_level exp = !definition_level ->
       (*
         G1 |- e1: m[Guard][Dereference] ... Gn |- en: m[Guard][Dereference]
         -------------------------------------------------------------------
         G1 + ... + Gn |- << ... $(e1) ... $(en) ... >>: m
       *)
       list expression (quotation_splices e) <<< Dereference <<< Guard
-    | Texp_quote e | Texp_splice { spl_exp = e } ->
+    | Texp_quote (e, _) | Texp_splice { spl_exp = e } ->
       (* A splice outside such a quotation generates code, and its
          quotations are checked as that code. *)
       expression e

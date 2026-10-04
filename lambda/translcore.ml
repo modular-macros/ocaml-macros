@@ -664,13 +664,18 @@ and transl_exp0 ~in_new_scope ~ctx ~scopes e =
       event_after ~scopes e
         (transl_letop ~ctx ~scopes e.exp_loc e.exp_env let_ ands param body
            partial)
-  | Texp_quote e ->
+  | Texp_quote (e, evidence) ->
     check_no_objects e;
     let body = transl_exp ~ctx ~scopes e in
     let body =
       match ctx.native_slot_layout with
       | Some nsl -> name_slots_through_block nsl body
       | None -> body
+    in
+    (* The evidence the quoted code uses, as variable occurrences: the
+       quoter makes them free variables of the code value. *)
+    let body =
+      List.fold_left (fun body ev -> Lsequence (Lvar ev, body)) body evidence
     in
     let body = Translquote.close_quoted ctx.closing body in
     Option.iter
@@ -726,18 +731,31 @@ and transl_cont cont c_cont body =
   | Some _, None -> body
   | None, Some _ -> assert false
 
-and transl_case ~ctx ~scopes ?cont {c_lhs; c_cont; c_guard; c_rhs} =
-  (c_lhs, transl_cont cont c_cont (transl_guard ~ctx ~scopes c_guard c_rhs))
+(* The evidence binder of an arm whose pattern learned equations in
+   quoted code: an alias the generated program never reads, which the
+   quoter scopes like any binder. *)
+and bind_evidence evidence body =
+  match evidence with
+  | None -> body
+  | Some ev ->
+      Llet (Alias, Pgenval, ev, Lconst (Const_int 0), body)
+
+and transl_case ~ctx ~scopes ?cont {c_lhs; c_cont; c_guard; c_rhs; c_evidence} =
+  (c_lhs,
+   transl_cont cont c_cont
+     (bind_evidence c_evidence (transl_guard ~ctx ~scopes c_guard c_rhs)))
 
 and transl_cases ~ctx ~scopes ?cont cases =
   let cases =
     List.filter (fun c -> c.c_rhs.exp_desc <> Texp_unreachable) cases in
   List.map (transl_case ~ctx ~scopes ?cont) cases
 
-and transl_case_try ~ctx ~scopes {c_lhs; c_guard; c_rhs} =
+and transl_case_try ~ctx ~scopes {c_lhs; c_guard; c_rhs; c_evidence} =
   iter_exn_names Translprim.add_exception_ident c_lhs;
   Misc.try_finally
-    (fun () -> c_lhs, transl_guard ~ctx ~scopes c_guard c_rhs)
+    (fun () ->
+       c_lhs,
+       bind_evidence c_evidence (transl_guard ~ctx ~scopes c_guard c_rhs))
     ~always:(fun () ->
         iter_exn_names Translprim.remove_exception_ident c_lhs)
 
@@ -748,10 +766,11 @@ and transl_cases_try ~ctx ~scopes cases =
 
 and transl_tupled_cases ~ctx ~scopes patl_expr_list =
   let patl_expr_list =
-    List.filter (fun (_,_,e) -> e.exp_desc <> Texp_unreachable)
+    List.filter (fun (_,_,e,_) -> e.exp_desc <> Texp_unreachable)
       patl_expr_list in
   List.map
-    (fun (patl, guard, expr) -> (patl, transl_guard ~ctx ~scopes guard expr))
+    (fun (patl, guard, expr, evidence) ->
+       (patl, bind_evidence evidence (transl_guard ~ctx ~scopes guard expr)))
     patl_expr_list
 
 and transl_apply ~ctx ~scopes
@@ -883,9 +902,11 @@ and transl_tupled_function ~ctx ~scopes loc return repr params body =
     match params, body with
     | [], Tfunction_cases { cases; partial } ->
         Some (cases, partial)
-    | [ { fp_kind = Tparam_pat pat; fp_partial } ], Tfunction_body body ->
+    | [ { fp_kind = Tparam_pat pat; fp_partial; fp_evidence } ],
+      Tfunction_body body ->
         let case =
-          { c_lhs = pat; c_cont = None; c_guard = None; c_rhs = body }
+          { c_lhs = pat; c_cont = None; c_guard = None; c_rhs = body;
+            c_evidence = fp_evidence }
         in
         Some ([ case ], fp_partial)
     | _ -> None
@@ -898,20 +919,21 @@ and transl_tupled_function ~ctx ~scopes loc return repr params body =
         let size = List.length pl in
         let pats_expr_list =
           List.map
-            (fun {c_lhs; c_guard; c_rhs} ->
-              (Matching.flatten_pattern size c_lhs, c_guard, c_rhs))
+            (fun {c_lhs; c_guard; c_rhs; c_evidence} ->
+              (Matching.flatten_pattern size c_lhs, c_guard, c_rhs,
+               c_evidence))
             cases in
         let kinds =
           (* All the patterns might not share the same types. We must take the
              union of the patterns types *)
           match pats_expr_list with
           | [] -> assert false
-          | (pats, _, _) :: cases ->
+          | (pats, _, _, _) :: cases ->
               let first_case_kinds =
                 List.map (fun pat -> value_kind pat.pat_env pat.pat_type) pats
               in
               List.fold_left
-                (fun kinds (pats, _, _) ->
+                (fun kinds (pats, _, _, _) ->
                   List.map2 (fun kind pat ->
                     value_kind_union kind
                       (value_kind pat.pat_env pat.pat_type))
@@ -964,7 +986,7 @@ and transl_curried_function ~ctx ~scopes loc return repr params body =
           let kind = value_kind pat.pat_env pat.pat_type in
           let body =
             Matching.for_function ~scopes param_loc None (Lvar param)
-              [ pat, body ]
+              [ pat, bind_evidence fp.fp_evidence body ]
               fp.fp_partial
           in
           body, (param, kind) :: params

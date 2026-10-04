@@ -388,7 +388,7 @@ let expr sub {exp_loc; exp_extra; exp_desc; exp_env; exp_attributes; _} =
       sub.binding_op sub l;
       List.iter (sub.binding_op sub) ands;
       sub.case sub body
-  | Texp_quote exp -> sub.expr sub exp
+  | Texp_quote (exp, _) -> sub.expr sub exp
   | Texp_splice { spl_exp = exp } -> sub.expr sub exp
   | Texp_unreachable -> ()
   | Texp_extension_constructor (lid, _) -> iter_loc_lid sub lid
