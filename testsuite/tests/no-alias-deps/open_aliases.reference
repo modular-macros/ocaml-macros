@@ -1,0 +1,9 @@
+File open_aliases.cmo
+Unit name: Open_aliases
+Interfaces imported:
+	00000000000000000000000000000000	Stdlib
+	00000000000000000000000000000000	Open_aliases
+	00000000000000000000000000000000	CamlinternalFormatBasics
+Required globals:
+Uses unsafe features: no
+Force link: no

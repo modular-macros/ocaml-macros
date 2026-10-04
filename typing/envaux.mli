@@ -14,7 +14,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Convert environment summaries to environments *)
+(* Convert environment summaries to environments.
+
+   A summary records no staging level: the environment rebuilt is at
+   level 0 throughout, in compile-time code and in quotations too, and
+   every open in it serves that level.  It is fit for lookups by path
+   and for printing, not for type checking staged code. *)
 
 val env_from_summary : Env.summary -> Subst.t -> Env.t
 

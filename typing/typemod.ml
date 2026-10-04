@@ -122,6 +122,7 @@ let type_open_ ?used_slot ?toplevel ovf env loc lid =
 
 let initial_env ~loc ~initially_opened_module
     ~open_implicit_modules =
+  Env.reset_stage_units ();
   let env = Env.initial in
   let open_module env m =
     let open Asttypes in
@@ -141,6 +142,12 @@ let initial_env ~loc ~initially_opened_module
   let units =
     List.map Env.persistent_structures_of_dir (Load_path.get_visible ())
   in
+  (* The units of the standard library, the directory of [Stdlib], serve
+     compile-time code as well, whether or not [Stdlib] is opened. *)
+  List.iter
+    (fun us ->
+       if String.Set.mem "Stdlib" us then Env.register_stage_units ~static:us)
+    units;
   let env, units =
     match initially_opened_module with
     | None -> (env, units)

@@ -2940,11 +2940,50 @@ type _ load =
   | Load : module_data load
   | Don't_load : unit load
 
+(* The persistent units that serve compile-time code as well as
+   run-time code. *)
+let static_stage_units = ref String.Set.empty
+
+let register_stage_units ~static =
+  static_stage_units := String.Set.union static !static_stage_units
+
+let reset_stage_units () =
+  static_stage_units := String.Set.empty
+
+let rec persistent_root = function
+  | Pident id -> if Ident.persistent id then Some (Ident.name id) else None
+  | Pdot (p, _) | Pextra_ty (p, _) -> persistent_root p
+  | Papply _ -> None
+
+(* The unit whose block the components of a module are read from: that
+   of its path, or that of the module that the path is an alias of, when
+   the alias has no block of its own.  A unit is known by its name, and
+   is not loaded. *)
+let served_unit env path =
+  let rec root = function
+    | Aident id -> if Ident.persistent id then Some (Ident.name id) else None
+    | Adot (a, _) -> root a
+  in
+  match path with
+  | Pident id when Ident.persistent id -> Some (Ident.name id)
+  | _ ->
+      match root (find_module_address path env) with
+      | unit -> unit
+      | exception Not_found -> persistent_root path
+
 (* The shifts under which the module [path] serves its components: a
    component recorded at the level [l] serves the levels [l + s].  A
-   module serves its components at the levels at which they are
-   recorded. *)
-let module_shifts _env _path = [0]
+   unit that serves compile-time code serves it as well as run-time
+   code; any other module serves at the level of the code around it.
+   An alias stands for the module that it names: the path, or the open,
+   that reaches a module only locates it. *)
+let module_shifts env path =
+  let path =
+    try normalize_module_path None env path with Not_found -> path
+  in
+  match served_unit env path with
+  | Some s when String.Set.mem s !static_stage_units -> [-1; 0]
+  | Some _ | None -> [0]
 
 (* The shift under which the module [path] serves a component recorded
    at the level [natural], where it is used, if it serves that level *)
