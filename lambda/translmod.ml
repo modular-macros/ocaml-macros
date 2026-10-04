@@ -120,15 +120,16 @@ let field_path path field =
 
 (* Compile type extensions *)
 
-(* An extension constructor is allocated in the run-time part. *)
+(* An extension constructor is allocated in the compile-time part if
+   it is declared [$A], and in the run-time part otherwise.  In the
+   other part its slot holds a placeholder. *)
 let transl_extension ~ctx ~scopes env rootpath ext =
-  if ext.ext_type.ext_static then
-    Misc.fatal_error "compile-time constructors: not implemented";
-  if in_run_world ctx then
+  if ext.ext_type.ext_static = in_compile_world ctx
+  then
     transl_extension_constructor ~scopes env
       (field_path rootpath ext.ext_id) ext
   else begin
-    record_compile_world_dummy ctx ext.ext_id;
+    if in_compile_world ctx then record_compile_world_dummy ctx ext.ext_id;
     Lconst const_unit
   end
 
@@ -742,11 +743,12 @@ let transl_macro_group_functions ~ctx ~scopes rec_flag pat_expr_list =
 let is_mixed_module_type env mty = Mtype.has_macro_components env mty
 
 (* Whether a module expression binds something at compile time: a
-   value or a module that does, at any depth, whether or not its type
-   shows it.  The compile-time part translates an item if and only if
-   it binds something at compile time; otherwise the identifiers that
-   the item binds are placeholders there.  With [~expand_aliases:false]
-   an alias contributes nothing, and its target is not read. *)
+   value, a constructor or a module that does, at any depth, whether or
+   not its type shows it.  The compile-time part translates an item if
+   and only if it binds something at compile time; otherwise the
+   identifiers that the item binds are placeholders there.  With
+   [~expand_aliases:false] an alias contributes nothing, and its target
+   is not read. *)
 let binds_at_compile_time ?expand_aliases (me : Typedtree.module_expr) =
   Mtype.has_macro_components ?expand_aliases me.mod_env me.mod_type
   || Typemod.has_compile_time_bindings me
@@ -791,13 +793,15 @@ let item_binds_at_compile_time ?expand_aliases (item : Typedtree.structure_item)
   let binds me = binds_at_compile_time ?expand_aliases me in
   match item.str_desc with
   | Tstr_value (_, (Macro | Static), _) -> true
+  | Tstr_typext tyext ->
+      List.exists (fun ext -> ext.ext_type.ext_static) tyext.tyext_constructors
+  | Tstr_exception ext -> ext.tyexn_constructor.ext_type.ext_static
   | Tstr_module mb -> binds mb.mb_expr
   | Tstr_recmodule mbs -> List.exists (fun mb -> binds mb.mb_expr) mbs
   | Tstr_include incl -> binds_at_compile_time incl.incl_mod
   | Tstr_open od -> binds od.open_expr
   | Tstr_value (_, Value, _) | Tstr_eval _ | Tstr_primitive _ | Tstr_type _
-  | Tstr_typext _ | Tstr_exception _ | Tstr_modtype _ | Tstr_class _
-  | Tstr_class_type _ | Tstr_attribute _ ->
+  | Tstr_modtype _ | Tstr_class _ | Tstr_class_type _ | Tstr_attribute _ ->
       false
 
 (* The identifiers that a structure item binds, which have slots in the
@@ -1640,13 +1644,10 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
                         (add_idents false ids subst) cont rem)
         | Tstr_exception ext ->
             let id = ext.tyexn_constructor.ext_id in
-            let path = field_path rootpath id in
             let loc = of_location ~scopes ext.tyexn_constructor.ext_loc in
             let lam =
-              transl_extension_constructor ~scopes
-                                           item.str_env
-                                           path
-                                           ext.tyexn_constructor
+              transl_extension ~ctx ~scopes item.str_env rootpath
+                ext.tyexn_constructor
             in
             Lsequence(Llet(Strict, Pgenval, id,
                            Lambda.subst no_env_update subst lam,
@@ -2420,9 +2421,10 @@ let transl_toplevel_phrase str =
                    id :: run, id :: compile
                  end else id :: run, compile
              end
-         | Sig_typext (id, _, _, _) ->
+         | Sig_typext (id, ext, _, _) ->
              set_toplevel_unique_name id;
-             id :: run, compile
+             if ext.ext_static then run, id :: compile
+             else id :: run, compile
          | Sig_module (id, Mp_present, md, _, _) ->
              set_toplevel_unique_name id;
              id :: run,

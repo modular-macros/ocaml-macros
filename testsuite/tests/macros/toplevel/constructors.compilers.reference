@@ -1,0 +1,21 @@
+exception $Stop of int
+$val found : int = 1
+Line 1, characters 0-4:
+1 | Stop 2;;
+    ^^^^
+Error: The constructor Stop is declared in compile-time code,
+       but this use is at run time.
+type t = ..
+type t += $A | B
+$val a : int = 3
+val b : int = 4
+exception $Halt of int
+$val rebound : int = 5
+module M : sig exception $Inner end
+$val inner : int = 6
+val spliced : int = 7
+Line 1, characters 2-16:
+1 | $(raise (Stop 8));;
+      ^^^^^^^^^^^^^^
+Error: Compile-time evaluation of this splice raised Stop(8).
+
