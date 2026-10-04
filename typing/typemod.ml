@@ -146,15 +146,22 @@ let initial_env ~loc ~initially_opened_module
       units
       env
   in
-  let units =
-    List.map Env.persistent_structures_of_dir (Load_path.get_visible ())
-  in
-  (* The units of the standard library, the directory of [Stdlib], serve
-     compile-time code as well, whether or not [Stdlib] is opened. *)
-  List.iter
-    (fun us ->
-       if String.Set.mem "Stdlib" us then Env.register_stage_units ~static:us)
-    units;
+  let dirs = Load_path.get_visible () in
+  let units = List.map Env.persistent_structures_of_dir dirs in
+  List.iter2
+    (fun d us ->
+       let path = Load_path.Dir.path d in
+       let none = Misc.Stdlib.String.Set.empty in
+       (* The units of the standard library, the directory of [Stdlib],
+          serve compile-time code as well, whether or not [Stdlib] is
+          opened. *)
+       if String.Set.mem "Stdlib" us then
+         Env.register_stage_units ~static:us ~run:us;
+       if Load_path.is_static_path path then
+         Env.register_stage_units ~static:us ~run:none;
+       if Load_path.is_run_path path then
+         Env.register_stage_units ~static:none ~run:us)
+    dirs units;
   let env, units =
     match initially_opened_module with
     | None -> (env, units)
@@ -1525,6 +1532,13 @@ end
 let transl_modtype_longident loc env lid =
   Env.lookup_modtype_path ~loc lid env
 
+(* Run-time code cannot name a module of a unit that is available to
+   compile-time code only, as a module expression or as an alias: the
+   unit is not linked with it. *)
+let check_run_time_module loc env path =
+  if Env.get_env_level env >= 0 then
+    Env.check_compile_time_only_unit ~loc env path ~own_level:0
+
 let transl_module_alias loc env lid =
   Env.lookup_module_path ~load:false ~loc lid env
 
@@ -1563,6 +1577,7 @@ and transl_modtype_aux env smty =
         smty.pmty_attributes
   | Pmty_alias lid ->
       let path = transl_module_alias loc env lid.txt in
+      check_run_time_module loc env path;
       mkmty (Tmty_alias (path, lid)) (Mty_alias path) env loc
         smty.pmty_attributes
   | Pmty_signature ssg ->
@@ -2470,6 +2485,7 @@ and type_module_aux ~alias ~strengthen ~funct_body anchor env smod =
       let path =
         Env.lookup_module_path ~load:(not alias) ~loc:smod.pmod_loc lid.txt env
       in
+      check_run_time_module smod.pmod_loc env path;
       let md = { mod_desc = Tmod_ident (path, lid);
                  mod_type = Mty_alias path;
                  mod_env = env;

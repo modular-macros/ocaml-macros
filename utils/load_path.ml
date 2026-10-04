@@ -73,6 +73,16 @@ let hidden_dirs = s_ref []
 let no_auto_include _ _ = raise Not_found
 let auto_include_callback = ref no_auto_include
 
+let static_paths = ref Misc.Stdlib.String.Set.empty
+let run_paths = ref Misc.Stdlib.String.Set.empty
+
+let set_stage_paths ~static ~run =
+  static_paths := Misc.Stdlib.String.Set.of_list static;
+  run_paths := Misc.Stdlib.String.Set.of_list run
+
+let is_static_path p = Misc.Stdlib.String.Set.mem p !static_paths
+let is_run_path p = Misc.Stdlib.String.Set.mem p !run_paths
+
 let reset () =
   assert (not Config.merlin || Local_store.is_bound ());
   STbl.clear !hidden_files;

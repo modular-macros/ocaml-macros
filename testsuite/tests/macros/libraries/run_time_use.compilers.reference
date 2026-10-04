@@ -1,0 +1,5 @@
+File "run_time_use.ml", line 17, characters 8-20:
+17 | let n = Counter.next ()
+             ^^^^^^^^^^^^
+Error: Counter.next cannot be used at run time:
+       the unit Counter is available to compile-time code only.

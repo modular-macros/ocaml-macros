@@ -231,6 +231,7 @@ type unbound_value_hint =
 type lookup_error =
   | Unbound_value of Longident.t * unbound_value_hint
   | Level_mismatch of Longident.t * int * int * bool
+  | Compile_time_only_unit of Path.t * string * int * bool
   | Unbound_type of Longident.t
   | Unbound_constructor of Longident.t
   | Unbound_label of Longident.t
@@ -404,11 +405,24 @@ val add_persistent_structure : Ident.t -> t -> t
    directory. *)
 val persistent_structures_of_dir : Load_path.Dir.t -> Misc.Stdlib.String.Set.t
 
-(* The persistent units registered [static] serve compile-time code as
-   well as run-time code, their level-0 names viewed at level -1. *)
-val register_stage_units : static:Misc.Stdlib.String.Set.t -> unit
+(* [register_stage_units ~static ~run] makes the run-time components of
+   the units [static] available to compile-time code, and those of the
+   units [run] to run-time code.  A unit that is registered in neither
+   way is available to run-time code. *)
+val register_stage_units :
+  static:Misc.Stdlib.String.Set.t -> run:Misc.Stdlib.String.Set.t -> unit
 val reset_stage_units : unit -> unit
+
+(* Whether the run-time components of a unit are available to
+   compile-time code *)
 val is_static_stage_unit : string -> bool
+
+(* Refuse a component, with code, of a unit that is available to
+   compile-time code only, unless it is used in compile-time code and is
+   not itself a compile-time component of the unit ([own_level], the
+   level it serves in its unit, is 0) *)
+val check_compile_time_only_unit :
+  ?errors:bool -> loc:Location.t -> t -> Path.t -> own_level:int -> unit
 
 (* [filter_non_loaded_persistent f env] removes all the persistent
    structures that are not yet loaded and for which [f] returns

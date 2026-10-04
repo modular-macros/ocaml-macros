@@ -1,0 +1,5 @@
+$val a : int
+$val[..] b : Counter.t -> string expr
+$val c : int
+$val d : int
+val e : int

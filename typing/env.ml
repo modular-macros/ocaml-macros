@@ -704,6 +704,10 @@ type lookup_error =
   | Level_mismatch of Longident.t * int * int * bool
       (* value or class, level it serves, level of the use, whether the
          use is in a quotation *)
+  | Compile_time_only_unit of Path.t * string * int * bool
+      (* component, unit that is available to compile-time code only,
+         level of the use, whether the component is a compile-time one
+         of its unit *)
   | Unbound_type of Longident.t
   | Unbound_constructor of Longident.t
   | Unbound_label of Longident.t
@@ -3048,17 +3052,26 @@ type _ load =
   | Load : module_data load
   | Don't_load : unit load
 
-(* The persistent units that serve compile-time code as well as
-   run-time code. *)
+(* The persistent units whose run-time components are available to
+   compile-time code, and those whose run-time components are available
+   to run-time code.  A unit in neither set is available to run-time
+   code. *)
 let static_stage_units = ref String.Set.empty
+let run_stage_units = ref String.Set.empty
 
-let register_stage_units ~static =
-  static_stage_units := String.Set.union static !static_stage_units
+let register_stage_units ~static ~run =
+  static_stage_units := String.Set.union static !static_stage_units;
+  run_stage_units := String.Set.union run !run_stage_units
 
 let reset_stage_units () =
-  static_stage_units := String.Set.empty
+  static_stage_units := String.Set.empty;
+  run_stage_units := String.Set.empty
 
 let is_static_stage_unit s = String.Set.mem s !static_stage_units
+
+let is_compile_time_only_unit s =
+  String.Set.mem s !static_stage_units
+  && not (String.Set.mem s !run_stage_units)
 
 let rec persistent_root = function
   | Pident id -> if Ident.persistent id then Some (Ident.name id) else None
@@ -3083,16 +3096,18 @@ let served_unit env path =
 
 (* The shifts under which the module [path] serves its components: a
    component recorded at the level [l] serves the levels [l + s].  A
-   unit that serves compile-time code serves it as well as run-time
-   code; any other module serves at the level of the code around it.
-   An alias stands for the module that it names: the path, or the open,
-   that reaches a module only locates it. *)
+   unit serves at the levels for which it is available, both for a unit
+   that is available to compile-time code and to run-time code; any
+   other module at the level of the code around it.  An alias stands for
+   the module that it names: the path, or the open, that reaches a
+   module only locates it. *)
 let module_shifts env path =
   let path =
     try normalize_module_path None env path with Not_found -> path
   in
   match served_unit env path with
-  | Some s when String.Set.mem s !static_stage_units -> [-1; 0]
+  | Some s when String.Set.mem s !static_stage_units ->
+      if String.Set.mem s !run_stage_units then [-1; 0] else [-1]
   | Some _ | None -> [0]
 
 (* The shift under which the module [path] serves a component recorded
@@ -3179,6 +3194,35 @@ let shift_vda shift vda =
           val_staging_level =
             vda.vda_description.val_staging_level + shift } }
 
+(* The compile-time components of a unit that is available to
+   compile-time code only cannot be used: the unit of a compile-time
+   value that is the result. *)
+let compile_time_only_unit path =
+  match persistent_root path with
+  | Some s when is_compile_time_only_unit s -> Some s
+  | Some _ | None -> None
+
+(* A unit that is available to compile-time code only serves that code
+   with its run-time components, and nothing else: a component of it
+   that has code may be used only in compile-time code, and only if it
+   is not itself a compile-time component of the unit ([own_level], the
+   level it serves in its unit, is 0). *)
+let check_compile_time_only_unit ?(errors = true) ~loc env path ~own_level =
+  match compile_time_only_unit path with
+  | Some unit when own_level <> 0 || get_env_level env <> -1 ->
+      may_lookup_error errors loc env
+        (Compile_time_only_unit
+           (path, unit, get_env_level env, own_level < 0))
+  | Some _ | None -> ()
+
+(* A primitive has no code in its unit. *)
+let check_value_unit ~errors ~loc env path vda =
+  match vda.vda_description.val_kind with
+  | Val_prim _ -> ()
+  | _ ->
+      check_compile_time_only_unit ~errors ~loc env path
+        ~own_level:(val_serving_level vda.vda_description)
+
 let value_entry_level = function
   | Val_bound vda ->
       (match vda.vda_description.val_kind with
@@ -3209,6 +3253,7 @@ let lookup_ident_value ~errors ~use ~loc name env =
          it. *)
       match IdTbl.find_name wrap_value ~mark:false name env.values with
       | (path, Val_bound vda) ->
+          check_value_unit ~errors ~loc env path vda;
           let shift =
             match component_module path with
             | Some p ->
@@ -3403,6 +3448,7 @@ let lookup_dot_value ~errors ~use ~loc l s env =
   in
   match NameMap.find s.txt comps.comp_values with
   | vda ->
+      check_value_unit ~errors ~loc env (Pdot(path, s.txt)) vda;
       let shift =
         component_shift env path (val_serving_level vda.vda_description)
       in
@@ -3657,7 +3703,9 @@ let lookup_modtype_path ?(use=true) ~loc lid env =
   fst (lookup_modtype_lazy ~errors:true ~use ~loc lid env)
 
 let lookup_class ?(use=true) ~loc lid env =
-  lookup_class ~errors:true ~use ~loc lid env
+  let (path, _) as res = lookup_class ~errors:true ~use ~loc lid env in
+  check_compile_time_only_unit ~loc env path ~own_level:0;
+  res
 
 let lookup_cltype ?(use=true) ~loc lid env =
   lookup_cltype ~errors:true ~use ~loc lid env
@@ -4005,6 +4053,16 @@ let extract_instance_variables env =
        | _ -> acc) None env []
 
 let report_lookup_error_doc loc env = function
+  | Compile_time_only_unit (path, unit, used, compile_time) ->
+      let without ppf =
+        if compile_time then
+          Format_doc.fprintf ppf ",@ without its compile-time components"
+      in
+      Location.errorf ~loc
+        "%a cannot be used %s:@ \
+         the unit %a is available to compile-time code only%t."
+        Style.inline_code (Path.name path) (describe_level used)
+        Style.inline_code unit without
   | Level_mismatch (lid, bound, used, in_quotation) ->
       (* The hint is given only where the fix is the same whatever the
          program: a compile-time value reaches the code a quotation builds
