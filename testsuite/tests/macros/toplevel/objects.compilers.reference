@@ -1,0 +1,19 @@
+Line 9, characters 9-32:
+9 | $let o = object method m = 1 end;;
+             ^^^^^^^^^^^^^^^^^^^^^^^
+Error: Objects and classes are not yet supported in quotations,
+       or in compile-time code.
+Line 1, characters 24-47:
+1 | $let[..] g () = let p = object method m = 2 end in Expr.int p#m;;
+                            ^^^^^^^^^^^^^^^^^^^^^^^
+Error: Objects and classes are not yet supported in quotations,
+       or in compile-time code.
+Line 1, characters 18-41:
+1 | let z = $(let q = object method m = 3 end in Expr.int q#m);;
+                      ^^^^^^^^^^^^^^^^^^^^^^^
+Error: Objects and classes are not yet supported in quotations,
+       or in compile-time code.
+$val k : int = 4
+val r : < m : int > = <obj>
+- : int = 4
+

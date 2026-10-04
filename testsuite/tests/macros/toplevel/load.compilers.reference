@@ -1,0 +1,8 @@
+val a : int = 1101
+$val[..] twice : int expr -> int expr = <fun>
+val b : int = 200
+val base : int = 100
+$val[..] add : int expr -> int expr = <fun>
+$val shift : int = 1000
+val c : int = 200
+

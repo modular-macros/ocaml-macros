@@ -220,3 +220,18 @@ Error: A locally bound module cannot have compile-time components
        (generators and static bindings).
        Bind it at the top level of a structure instead.
 |}]
+
+(* A static binding that an open brings into scope is reported at the
+   level at which it serves. *)
+
+module Opened = struct $let s = 1 end
+open Opened
+let d = s
+;;
+[%%expect{|
+module Opened : sig $val s : int end
+Line 3, characters 8-9:
+3 | let d = s
+            ^
+Error: "s" is bound in compile-time code, but this use is at run time.
+|}]

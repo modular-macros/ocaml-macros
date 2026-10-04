@@ -1,0 +1,31 @@
+val scale : int = 3
+$val[..] scaled : int expr -> int expr = <fun>
+val a : int = 6
+val scale : int = 100
+val b : int = 6
+$val[..] twice : int expr -> int expr = <fun>
+val c : int = 9
+$val[..] scaled : int expr -> int expr = <fun>
+val d : int = 11
+$val[..] power : int -> int expr -> int expr = <fun>
+val e : int = 8
+$val[..] pick : bool -> int expr -> int expr = <fun>
+val f : int = 11
+Line 4, characters 8-14:
+4 | let g = scaled;;
+            ^^^^^^
+Error: scaled is bound in compile-time code, but this use is at run time.
+module M :
+  sig val unit : int $val[..] succ : int expr -> int expr val two : int end
+val h : int = 3
+module A = M
+module B : sig $val[..] succ : int expr -> int expr end
+module C :
+  sig val unit : int $val[..] succ : int expr -> int expr val two : int end
+val unit : int = 1
+$val[..] succ : int expr -> int expr = <fun>
+val two : int = 2
+val i : int = 4
+module rec R : sig $val[..] r : unit -> int expr val v : int end
+- : int = 84
+

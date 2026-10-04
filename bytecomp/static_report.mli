@@ -29,6 +29,4 @@ val run : string -> Location.t -> string -> (unit -> Obj.t) -> Obj.t
 (** [run err_file loc what f] is [f ()].  If [f] raises, the failure is
     written to [err_file] as a marshalled [failure], and the process
     exits with a nonzero status.  The failure is an error at [loc] whose
-    message names [what]: a variable escaping the scope of its quotation
-    is reported by name, any other exception as [Printexc.to_string]
-    gives it. *)
+    message is [Compile_time_failure.message what exn]. *)

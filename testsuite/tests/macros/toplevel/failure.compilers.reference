@@ -1,0 +1,16 @@
+$val x : string = "before"
+val y : string = "before"
+Line 3, characters 28-54:
+3 | $let x = 1  let a : int = $(failwith "at compile time");;
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Compile-time evaluation of this splice raised Failure("at compile time").
+val b : string = "before"
+Exception: Failure "at run time".
+val d : string = "beforebefore"
+$val[..] g : unit -> int expr = <fun>
+Line 1, characters 10-14:
+1 | let e = $(g ());;
+              ^^^^
+Error: Compile-time evaluation of this splice raised Not_found.
+val f : int = 4
+

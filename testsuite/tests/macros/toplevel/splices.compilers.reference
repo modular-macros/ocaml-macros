@@ -1,0 +1,26 @@
+val a : int = 3
+- : int = 7
+- : string = "printed"
+val b : int = 4
+val c : int = 7
+val d : int = 10
+val e : int = 11
+val f : int -> int = <fun>
+- : int = 11
+val d : string = "rebound"
+- : int = 11
+module F : (X : sig val n : int end) -> sig val m : int end
+module A : sig val m : int end
+- : int = 6
+val g : unit -> int = <fun>
+- : int = 6
+class k : object method m : int end
+- : int = 9
+module rec R : sig val r : int end
+and S : sig val s : int end
+- : int = 4
+at compile time
+at run time
+val h : int = 1
+- : int expr = <code (+ 1 2)>
+

@@ -129,6 +129,7 @@ tools/opam/process.sh    typo.non-ascii
 testsuite/tests/**                                      typo.missing-header typo.long-line=may
 testsuite/tests/lib-bigarray-2/bigarrf.f                typo.tab linguist-language=Fortran
 testsuite/tests/lib-unix/win-stat/fakeclock.c           typo.missing-header=false
+testsuite/tests/macros/quotations/splices_shorthand_utf8.ml typo.non-ascii
 testsuite/tests/misc-unsafe/almabench.ml                typo.long-line
 testsuite/tests/parsing/latin9.ml                       typo.non-ascii typo.very-long-line
 testsuite/tests/parsing/comments.ml                     typo.non-ascii

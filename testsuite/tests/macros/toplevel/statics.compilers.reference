@@ -1,0 +1,34 @@
+x is evaluated
+$val x : int = 10
+val a : int = 11
+$val y : int = 20
+val b : int = 30
+$val fact : int -> int = <fun>
+val c : int = 120
+val d : int = 1
+$val z : int = 2
+val e : int = 2
+$val z : string = "three"
+val f : string = "three"
+Line 4, characters 8-9:
+4 | let g = x;;
+            ^
+Error: x is bound in compile-time code, but this use is at run time.
+Line 1, characters 11-12:
+1 | let h = << x >>;;
+               ^
+Error: x is bound in compile-time code, but this use is inside a quotation.
+       A compile-time value reaches the code a quotation builds only
+       through a splice ($x) or a lift (Expr.int).
+module M : sig $val s : int val v : int module N : sig $val t : int end end
+val i : int = 16
+module A = M
+val j : int = 6
+$val s : int = 5
+val v : int = 5
+module N = M.N
+val k : int = 5
+$val counter : int ref = {contents = 0}
+val l : int = 1
+val m : int = 2
+

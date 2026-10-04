@@ -2544,6 +2544,13 @@ bytecomp/bytesections.cmx : \
     utils/config.cmx \
     bytecomp/bytesections.cmi
 bytecomp/bytesections.cmi :
+bytecomp/compile_time_failure.cmo : \
+    typing/env.cmi \
+    bytecomp/compile_time_failure.cmi
+bytecomp/compile_time_failure.cmx : \
+    typing/env.cmx \
+    bytecomp/compile_time_failure.cmi
+bytecomp/compile_time_failure.cmi :
 bytecomp/dll.cmo : \
     utils/misc.cmi \
     utils/config.cmi \
@@ -2675,11 +2682,11 @@ bytecomp/static_holes.cmx : \
 bytecomp/static_holes.cmi :
 bytecomp/static_report.cmo : \
     parsing/location.cmi \
-    typing/env.cmi \
+    bytecomp/compile_time_failure.cmi \
     bytecomp/static_report.cmi
 bytecomp/static_report.cmx : \
     parsing/location.cmx \
-    typing/env.cmx \
+    bytecomp/compile_time_failure.cmx \
     bytecomp/static_report.cmi
 bytecomp/static_report.cmi : \
     parsing/location.cmi
@@ -7807,9 +7814,11 @@ toplevel/byte/topeval.cmo : \
     bytecomp/dll.cmi \
     utils/config.cmi \
     driver/compmisc.cmi \
+    bytecomp/compile_time_failure.cmi \
     file_formats/cmo_format.cmi \
     utils/clflags.cmi \
     bytecomp/bytegen.cmi \
+    parsing/asttypes.cmi \
     toplevel/byte/topeval.cmi
 toplevel/byte/topeval.cmx : \
     utils/warnings.cmx \
@@ -7838,9 +7847,11 @@ toplevel/byte/topeval.cmx : \
     bytecomp/dll.cmx \
     utils/config.cmx \
     driver/compmisc.cmx \
+    bytecomp/compile_time_failure.cmx \
     file_formats/cmo_format.cmi \
     utils/clflags.cmx \
     bytecomp/bytegen.cmx \
+    parsing/asttypes.cmx \
     toplevel/byte/topeval.cmi
 toplevel/byte/topeval.cmi : \
     toplevel/topcommon.cmi \

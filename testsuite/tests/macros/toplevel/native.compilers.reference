@@ -1,0 +1,11 @@
+val a : int = 1
+Line 1:
+Error: Compile-time evaluation is not supported by the native toplevel.
+Line 1:
+Error: Compile-time evaluation is not supported by the native toplevel.
+Line 1:
+Error: Compile-time evaluation is not supported by the native toplevel.
+Line 1:
+Error: Compile-time evaluation is not supported by the native toplevel.
+val g : int = 2
+

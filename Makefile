@@ -220,6 +220,7 @@ ocamlbytecomp_SOURCES = \
   bytecomp/bytepackager.mli bytecomp/bytepackager.ml \
   bytecomp/emit_cmo.mli bytecomp/emit_cmo.ml \
   bytecomp/static_holes.mli bytecomp/static_holes.ml \
+  bytecomp/compile_time_failure.mli bytecomp/compile_time_failure.ml \
   bytecomp/static_report.mli bytecomp/static_report.ml \
   driver/errors.mli driver/errors.ml \
   driver/static_link.mli driver/static_link.ml \

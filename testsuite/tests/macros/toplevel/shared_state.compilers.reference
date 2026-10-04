@@ -1,0 +1,14 @@
+val x : int = 445835
+Line 5, characters 10-16:
+5 | let y = $(exit 3);;
+              ^^^^^^
+Error: Compile-time evaluation of this splice called exit.
+Line 1:
+Error: Compile-time evaluation of this phrase called exit.
+val z : int = 1
+Line 1:
+Error: Compile-time evaluation of this phrase called exit.
+Line 1:
+Error: Compile-time evaluation of this phrase called exit.
+val v : int = 2
+

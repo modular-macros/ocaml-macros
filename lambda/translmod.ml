@@ -1957,6 +1957,56 @@ let call_static_support m args =
            ap_inlined = Default_inline;
            ap_specialised = Default_specialise }
 
+(* The code of each top-level splice is a function, which the hole of
+   the splice applies to the variables of the run-time term that the
+   splice quotes: a splice is evaluated when the term around it is
+   built.  [translate] gives the run-time term.  The second result binds
+   the functions around the code that builds the term. *)
+let with_splice_thunks ~ctx ~scopes ?(report = fun _ code -> code)
+      translate =
+  let pending_splices = ref [] in
+  let splice_thunk ctx spl_exp =
+    (* Compile-time code is bytecode, whichever compiler builds it. *)
+    protect_refs [R (Clflags.native_code, false)] @@ fun () ->
+    in_world ctx Compile_world @@ fun ctx ->
+    Translcore.check_no_objects spl_exp;
+    (* A variable that is a field of the block of the unit is quoted as
+       that field, and is not closed over. *)
+    let roots = Translcore.quoted_variables ~ctx ~scopes spl_exp in
+    let originals, fresh_vars, code =
+      Translquote.transl_close_function Location.none roots
+        (fun closing ->
+           Translcore.transl_exp ~ctx:{ ctx with closing } ~scopes spl_exp)
+    in
+    let code = report spl_exp.exp_loc code in
+    let h = Ident.create_local "*splice*" in
+    (* Without variables, the function is a thunk, which the hole
+       applies: the splice is evaluated there all the same. *)
+    let params, sp_code =
+      match fresh_vars with
+      | [] ->
+          [ (Ident.create_local "*unit*", Pgenval) ],
+          Lapply { ap_func = Lvar h; ap_args = [ lambda_unit ];
+                   ap_loc = Loc_unknown; ap_tailcall = Default_tailcall;
+                   ap_inlined = Default_inline;
+                   ap_specialised = Default_specialise }
+      | _ -> List.map (fun v -> (v, Pgenval)) fresh_vars, Lvar h
+    in
+    let fn =
+      lfunction ~kind:Curried ~params ~return:Pgenval ~body:code
+        ~attr:default_function_attribute ~loc:Loc_unknown
+    in
+    pending_splices := (h, fn) :: !pending_splices;
+    { sp_code; sp_args = originals }
+  in
+  let run_time = translate { ctx with splice_source = Some splice_thunk } in
+  let bind_thunks body =
+    List.fold_right
+      (fun (h, code) body -> Llet (Strict, Pgenval, h, code, body))
+      (List.rev !pending_splices) body
+  in
+  run_time, bind_thunks
+
 (* The static program of a unit with top-level splices, and the run-time
    term of the unit, with a hole for each top-level splice.
 
@@ -1988,50 +2038,14 @@ let transl_static_program ?(native = false) module_name (str, cc)
   in
   let ctx = { (initial_context ()) with native_slot_layout = slot_layout } in
   without_typing_required_globals @@ fun () ->
-  (* The code of each splice is a function, bound around the call that
-     writes the code of the holes, which the hole applies: a splice is
-     evaluated when the term around it is built. *)
-  let pending_splices = ref [] in
-  let splice_thunk ctx spl_exp =
-    (* The static program is bytecode, whichever compiler builds it. *)
-    protect_refs [R (Clflags.native_code, false)] @@ fun () ->
-    in_world ctx Compile_world @@ fun ctx ->
-    Translcore.check_no_objects spl_exp;
-    (* A variable that is a field of the block of the unit is quoted as
-       that field, and is not closed over. *)
-    let roots = Translcore.quoted_variables ~ctx ~scopes spl_exp in
-    let originals, fresh_vars, code =
-      Translquote.transl_close_function Location.none roots
-        (fun closing ->
-           Translcore.transl_exp ~ctx:{ ctx with closing } ~scopes spl_exp)
-    in
-    let code = static_report spl_exp.exp_loc "this splice" code in
-    let h = Ident.create_local "*splice*" in
-    (* Without variables, the function is a thunk, which the hole
-       applies: the splice is evaluated there all the same. *)
-    let params, sp_code =
-      match fresh_vars with
-      | [] ->
-          [ (Ident.create_local "*unit*", Pgenval) ],
-          Lapply { ap_func = Lvar h; ap_args = [ lambda_unit ];
-                   ap_loc = Loc_unknown; ap_tailcall = Default_tailcall;
-                   ap_inlined = Default_inline;
-                   ap_specialised = Default_specialise }
-      | _ -> List.map (fun v -> (v, Pgenval)) fresh_vars, Lvar h
-    in
-    let fn =
-      lfunction ~kind:Curried ~params ~return:Pgenval ~body:code
-        ~attr:default_function_attribute ~loc:Loc_unknown
-    in
-    pending_splices := (h, fn) :: !pending_splices;
-    { sp_code; sp_args = originals }
-  in
-  let run_time =
-    let ctx = { ctx with splice_source = Some splice_thunk } in
-    if not native then transl_implementation ~ctx module_name (str, cc)
-    else if Config.flambda then
-      transl_implementation_flambda ~ctx module_name (str, cc)
-    else transl_store_implementation ~ctx module_name (str, cc)
+  let run_time, bind_splice_thunks =
+    with_splice_thunks ~ctx ~scopes
+      ~report:(fun loc code -> static_report loc "this splice" code)
+      (fun ctx ->
+         if not native then transl_implementation ~ctx module_name (str, cc)
+         else if Config.flambda then
+           transl_implementation_flambda ~ctx module_name (str, cc)
+         else transl_store_implementation ~ctx module_name (str, cc))
   in
   (* The globals that the object requires are those of the term with
      its holes empty: the globals of a splice's code belong to the
@@ -2045,9 +2059,7 @@ let transl_static_program ?(native = false) module_name (str, cc)
     required_globals ~flambda:false (blank run_time.code)
   in
   let emit =
-    List.fold_right
-      (fun (h, code) body -> Llet (Strict, Pgenval, h, code, body))
-      (List.rev !pending_splices)
+    bind_splice_thunks
       (call_static_support "Static_holes"
          [Translquote.const (prefix ^ "$static.holes");
           Translquote.quote_module_holes run_time.code])
@@ -2099,31 +2111,33 @@ let toplevel_name id =
   try Ident.find_same id !aliased_idents
   with Not_found -> Ident.name id
 
-let toploop_getvalue id =
+let toploop_getvalue_key key =
   Lapply{
     ap_loc=Loc_unknown;
     ap_func=Lprim(Pfield (toploop_getvalue_pos, Pointer, Mutable),
                   [Lprim(Pgetglobal toploop_ident, [], Loc_unknown)],
                   Loc_unknown);
-    ap_args=[Lconst(Const_immstring (toplevel_name id))];
+    ap_args=[Lconst(Const_immstring key)];
     ap_tailcall=Default_tailcall;
     ap_inlined=Default_inline;
     ap_specialised=Default_specialise;
   }
 
-let toploop_setvalue id lam =
+let toploop_getvalue id = toploop_getvalue_key (toplevel_name id)
+
+let toploop_setvalue_key key lam =
   Lapply{
     ap_loc=Loc_unknown;
     ap_func=Lprim(Pfield (toploop_setvalue_pos, Pointer, Mutable),
                   [Lprim(Pgetglobal toploop_ident, [], Loc_unknown)],
                   Loc_unknown);
-    ap_args=
-      [Lconst(Const_immstring (toplevel_name id));
-       lam];
+    ap_args=[Lconst(Const_immstring key); lam];
     ap_tailcall=Default_tailcall;
     ap_inlined=Default_inline;
     ap_specialised=Default_specialise;
   }
+
+let toploop_setvalue id lam = toploop_setvalue_key (toplevel_name id) lam
 
 let toploop_setvalue_id id = toploop_setvalue id (Lvar id)
 
@@ -2142,10 +2156,10 @@ let transl_toplevel_item ~ctx ~scopes item =
          Otherwise, the normal compilation would result
          in a Lsequence returning unit. *)
       transl_exp ~ctx ~scopes expr
-  | Tstr_value(_, Macro, _) ->
-      Misc.fatal_error "generators in the toplevel: not implemented"
-  | Tstr_value(_, Static, _) ->
-      Misc.fatal_error "static bindings in the toplevel: not implemented"
+  | Tstr_value(_, (Macro | Static), _) ->
+      (* A phrase with compile-time components is translated as a unit
+         is; see [transl_toplevel_phrase]. *)
+      Misc.fatal_error "Translmod.transl_toplevel_item"
   | Tstr_value(rec_flag, Value, pat_expr_list) ->
       let idents = let_bound_idents pat_expr_list in
       transl_let ~ctx ~scopes ~in_structure:true rec_flag pat_expr_list
@@ -2247,14 +2261,154 @@ let transl_toplevel_item_and_close ~ctx ~scopes itm =
   close_toplevel_term
     (transl_label_init (fun () -> transl_toplevel_item ~ctx ~scopes itm))
 
+(* The identifiers that the compile-time parts of the phrases bind to
+   placeholders *)
+let toplevel_compile_world_dummies = ref Ident.Set.empty
+
 let transl_toplevel_definition ~ctx str =
   reset_labels ();
   Translprim.clear_used_primitives ();
+  (* What the phrase binds has no compile-time value; see
+     [transl_toplevel_phrase]. *)
+  toplevel_compile_world_dummies :=
+    Ident.Set.union !toplevel_compile_world_dummies
+      (Ident.Set.of_list (bound_value_identifiers str.str_type));
   make_sequence
     (transl_toplevel_item_and_close ~ctx ~scopes:empty_scopes)
     str.str_items
 
 (* Compile the initialization code for a packed library *)
+
+(* A phrase of the toplevel that has compile-time components or
+   top-level splices is translated as a unit is: into its run-time term,
+   with a hole for each splice, and a compile-time part that ends by
+   building that term.  Where a unit builds a block, the two parts of a
+   phrase store what the phrase binds in the value table: the run-time
+   value of an identifier under its name, and its compile-time value
+   under a second key.  An identifier that an earlier phrase bound is
+   read from the table.  One that has no compile-time value is, in the
+   compile-time part, the placeholder that it is in the compile-time
+   part of a unit. *)
+
+let toplevel_macros_name id = Ident.unique_toplevel_name id ^ "$macros"
+
+let toplevel_splice_failed_key = "*splice-failed*"
+
+(* The identifiers whose compile-time values the table holds *)
+let toplevel_compile_time_idents = ref Ident.Set.empty
+
+let toplevel_phrase_has_compile_time_part str =
+  Env.get_unit_has_top_level_splice ()
+  || exports_macros str
+  || Mtype.has_macro_components ~expand_aliases:false str.str_final_env
+       (Mty_signature str.str_type)
+
+let transl_toplevel_phrase str =
+  reset_labels ();
+  Translprim.clear_used_primitives ();
+  let scopes = empty_scopes in
+  let env = str.str_final_env in
+  let ctx = initial_context () in
+  ctx.unit_state.compile_world_dummies <- !toplevel_compile_world_dummies;
+  (* What the phrase binds, and in which part *)
+  let run_time_idents, compile_time_idents =
+    List.fold_right
+      (fun item (run, compile) ->
+         match item with
+         | Sig_value (id, vd, _) ->
+             begin match vd.val_kind with
+             | Val_prim _ -> run, compile
+             | _ ->
+                 if vd.val_macro = Static then run, id :: compile
+                 else if vd.val_staging_level < 0 then begin
+                   set_toplevel_unique_name id;
+                   id :: run, id :: compile
+                 end else id :: run, compile
+             end
+         | Sig_typext (id, _, _, _) ->
+             set_toplevel_unique_name id;
+             id :: run, compile
+         | Sig_module (id, Mp_present, md, _, _) ->
+             set_toplevel_unique_name id;
+             id :: run,
+             (if Mtype.has_macro_components env md.md_type
+              then id :: compile else compile)
+         | Sig_class (id, _, _, _) ->
+             set_toplevel_unique_name id;
+             id :: run, compile
+         | Sig_module (_, Mp_absent, _, _, _)
+         | Sig_type _ | Sig_modtype _ | Sig_class_type _ -> run, compile)
+      str.str_type ([], [])
+  in
+  (* The code of a splice that raises gives the location of the splice
+     to the toplevel. *)
+  let report loc code =
+    let exn = Ident.create_local "exn" in
+    Ltrywith
+      (code, exn,
+       Lsequence
+         (Lapply { ap_func = toploop_getvalue_key toplevel_splice_failed_key;
+                   ap_args = [Translquote.const (loc : Location.t)];
+                   ap_loc = Loc_unknown; ap_tailcall = Default_tailcall;
+                   ap_inlined = Default_inline;
+                   ap_specialised = Default_specialise },
+          Lprim (Praise Raise_reraise, [Lvar exn], Loc_unknown)))
+  in
+  let run_term, bind_splice_thunks =
+    with_splice_thunks ~ctx ~scopes ~report
+      (fun ctx ->
+         Translobj.transl_label_init (fun () ->
+           match str.str_items with
+           | [ { str_desc =
+                   ( Tstr_eval (expr, _)
+                   | Tstr_value (Nonrecursive, Value,
+                                 [ { vb_pat = { pat_desc = Tpat_any };
+                                     vb_expr = expr } ]) ) } ] ->
+               (* The value of the phrase, which the toplevel prints *)
+               transl_exp ~ctx ~scopes expr
+           | _ ->
+               transl_struct ~ctx ~scopes Loc_unknown [] Tcoerce_none None str
+                 ~cont:(fun _ ->
+                   make_sequence toploop_setvalue_id run_time_idents)))
+  in
+  let build = bind_splice_thunks (Translquote.quote_module_lambda run_term) in
+  let static =
+    let ctx = { ctx with innermost_free_variables = free_variables build } in
+    in_world ctx Compile_world @@ fun ctx ->
+      transl_struct ~ctx ~scopes Loc_unknown [] Tcoerce_none None str
+        ~cont:(fun _ ->
+          Lsequence
+            (make_sequence
+               (fun id ->
+                  toploop_setvalue_key (toplevel_macros_name id) (Lvar id))
+               compile_time_idents,
+             build))
+  in
+  let static =
+    Ident.Set.fold
+      (fun id lam ->
+         let value =
+           if Ident.Set.mem id !toplevel_compile_time_idents
+           then toploop_getvalue_key (toplevel_macros_name id)
+           else if Ident.Set.mem id ctx.unit_state.compile_world_dummies
+           then Lconst const_unit
+           else
+             Misc.fatal_errorf "Translmod.transl_toplevel_phrase: %a"
+               Ident.print id
+         in
+         Llet (Strict, Pgenval, id, value, lam))
+      (free_variables static) static
+  in
+  List.iter
+    (fun id ->
+       if not (List.exists (Ident.same id) compile_time_idents)
+       then record_compile_world_dummy ctx id)
+    run_time_idents;
+  toplevel_compile_world_dummies := ctx.unit_state.compile_world_dummies;
+  toplevel_compile_time_idents :=
+    List.fold_left (fun s id -> Ident.Set.add id s)
+      !toplevel_compile_time_idents compile_time_idents;
+  static
 
 let get_component = function
     None -> Lconst const_unit
@@ -2450,5 +2604,7 @@ let reset () =
   primitive_declarations := [];
   transl_store_subst := Ident.Map.empty;
   aliased_idents := Ident.empty;
+  toplevel_compile_time_idents := Ident.Set.empty;
+  toplevel_compile_world_dummies := Ident.Set.empty;
   Env.reset_required_globals ();
   Translprim.clear_used_primitives ()

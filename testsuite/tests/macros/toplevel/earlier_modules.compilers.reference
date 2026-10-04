@@ -1,0 +1,17 @@
+module M : sig val v : int val w : int module Sub : sig val z : int end end
+module N :
+  sig module Q : sig val w : int end $val[..] g : unit -> int expr end
+- : int = 7
+module M2 : sig module Q = M $val j : int end
+module N2 : sig module Q : sig val w : int end $val j : int end
+- : int = 7
+module N3 : sig module Q : sig val z : int end $val j : int end
+- : int = 9
+module L : sig module Q = M end
+module N4 :
+  sig module L : sig module Q : sig val w : int end end $val j : int end
+- : int = 9
+module Q : sig val w : int end
+$val k : int = 4
+- : int = 10
+

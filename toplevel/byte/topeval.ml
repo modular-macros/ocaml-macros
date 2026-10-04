@@ -111,11 +111,89 @@ let load_lambda ppf lam =
 let pr_item =
   Out_type.print_items
     (fun env -> function
-      | Sig_value(id, {val_kind = Val_reg; val_type}, _) ->
-          Some (outval_of_value env (getvalue (Translmod.toplevel_name id))
-                  val_type)
+      | Sig_value(id, ({val_kind = Val_reg; val_type} as vd), _) ->
+          let name =
+            match vd.val_macro with
+            | Asttypes.Static -> Translmod.toplevel_macros_name id
+            | Asttypes.Value | Asttypes.Macro -> Translmod.toplevel_name id
+          in
+          Some (outval_of_value env (getvalue name) val_type)
       | _ -> None
     )
+
+(* The compile-time part of a phrase raised an exception, in the code of
+   the splice at the location if any. *)
+exception Compile_time_eval_raised of Location.t option * exn
+
+(* The compile-time part of a phrase called [exit], in the code of the
+   splice at the location if any. *)
+exception Compile_time_eval_exited of Location.t option
+
+let () =
+  let at_phrase = function
+    | Some loc -> loc
+    | None -> Location.in_file !Location.input_name
+  in
+  Location.register_error_of_exn
+    (function
+      | Compile_time_eval_raised (splice, exn) ->
+          Some
+            (Location.errorf ~loc:(at_phrase splice) "%s"
+               (Compile_time_failure.message
+                  (if splice = None then "this phrase" else "this splice")
+                  exn))
+      | Compile_time_eval_exited splice ->
+          Some
+            (Location.errorf ~loc:(at_phrase splice)
+               "Compile-time evaluation of %s called %a."
+               (if splice = None then "this phrase" else "this splice")
+               Style.inline_code "exit")
+      | _ -> None)
+
+(* In batch compilation, [exit] in compile-time code ends the static
+   program, and the compilation fails; in the toplevel it would end the
+   session.  While [f] runs, the function that [at_exit] registered last
+   turns the call into an exception, before the others run, and arms
+   itself again for a later call.  Whether [exit] was called is the
+   second result: code that handles the exception does not hide it. *)
+exception Exit_called
+
+let catching_exit f =
+  let armed = ref true and called = ref false in
+  let rec arm () =
+    at_exit (fun () ->
+      if !armed then begin
+        called := true;
+        arm ();
+        raise Exit_called
+      end)
+  in
+  arm ();
+  let result = Fun.protect ~finally:(fun () -> armed := false) f in
+  result, !called
+
+(* Run the compile-time part of a phrase, which gives the run-time term
+   of the phrase.  It is loaded as the run-time part is, so a failure
+   leaves the value table and the symbol table as they were. *)
+let run_static_lambda ppf slam =
+  let splice = ref None in
+  setvalue Translmod.toplevel_splice_failed_key
+    (Obj.repr (fun (loc : Location.t) -> splice := Some loc));
+  match catching_exit (fun () -> load_lambda ppf slam) with
+  | _, true -> raise (Compile_time_eval_exited !splice)
+  | Result term, false -> (Obj.obj term : Lambda.lambda)
+  | Exception Sys.Break, false -> raise Sys.Break
+  | Exception exn, false -> raise (Compile_time_eval_raised (!splice, exn))
+
+(* A phrase that has compile-time components or top-level splices is
+   run in two steps: its compile-time part, which builds its run-time
+   term, and then that term. *)
+let translate_phrase ppf str =
+  if not (Translmod.toplevel_phrase_has_compile_time_part str) then
+    Translmod.transl_toplevel_definition str
+  else
+    Translmod.close_toplevel_term
+      (run_static_lambda ppf (Translmod.transl_toplevel_phrase str))
 
 (* Execute a toplevel phrase *)
 
@@ -123,12 +201,21 @@ let execute_phrase print_outcome ppf phr =
   match phr with
   | Ptop_def sstr ->
       let oldenv = !toplevel_env in
+      (* Whether the phrase has a top-level splice *)
+      Env.set_unit_has_top_level_splice false;
       let (str, sg', newenv) = typecheck_phrase ppf oldenv sstr in
-      let lam = Translmod.transl_toplevel_definition str in
+      (* The compile-time part of the phrase has stored its values when
+         the run-time part is loaded: if that fails, they go too. *)
+      let initial_bindings = !toplevel_value_bindings in
+      let lam = translate_phrase ppf str in
       Warnings.check_fatal ();
       begin try
         toplevel_env := newenv;
         let res = load_lambda ppf lam in
+        begin match res with
+        | Result _ -> ()
+        | Exception _ -> toplevel_value_bindings := initial_bindings
+        end;
         let out_phr =
           match res with
           | Result v ->
@@ -240,6 +327,15 @@ let load_compunit ic filename ppf compunit =
     raise Load_failed
   end
 
+(* A file that cannot be read as an object, such as an interrupted build
+   leaves.  [End_of_file] in particular must not reach the loop of the
+   toplevel, which takes it for the end of the input. *)
+let report_corrupt ppf name =
+  fprintf ppf
+    "File %s is corrupt or truncated: it is not a readable bytecode \
+     object file.@." name;
+  false
+
 let rec load_file recursive ppf name =
   let filename =
     try Some (Load_path.find name) with Not_found -> None
@@ -252,9 +348,23 @@ let rec load_file recursive ppf name =
         ~always:(fun () -> close_in ic)
         (fun () -> really_load_file recursive ppf name filename ic)
 
+(* The compile-time part of a unit is loaded with the unit, if the unit
+   has one, with what it requires in turn. *)
+and load_macros_twin ppf compunit_name =
+  let name = Symtable.Compunit.name compunit_name in
+  if not (Filename.check_suffix name "$macros")
+     && not (Symtable.is_global_defined
+               (Symtable.Global.Glob_compunit (Compunit (name ^ "$macros"))))
+  then
+    match Load_path.find_normalized (name ^ "$macros.cmo") with
+    | exception Not_found -> ()
+    | file -> if not (load_file true ppf file) then raise Load_failed
+
 and really_load_file recursive ppf name filename ic =
-  let buffer = really_input_string ic (String.length Config.cmo_magic_number) in
   try
+    let buffer =
+      really_input_string ic (String.length Config.cmo_magic_number)
+    in
     if buffer = Config.cmo_magic_number then begin
       let compunit_pos = input_binary_int ic in  (* Go to descriptor *)
       seek_in ic compunit_pos;
@@ -277,6 +387,7 @@ and really_load_file recursive ppf name filename ic =
           )
           cu.cu_reloc;
       load_compunit ic filename ppf cu;
+      load_macros_twin ppf cu.cu_name;
       true
     end else
       if buffer = Config.cma_magic_number then begin
@@ -294,12 +405,18 @@ and really_load_file recursive ppf name filename ic =
               raise Load_failed)
           lib.lib_dllibs;
         List.iter (load_compunit ic filename ppf) lib.lib_units;
+        (* The compile-time parts come after all the units of the
+           archive, to which they may refer. *)
+        List.iter (fun cu -> load_macros_twin ppf cu.cu_name)
+          lib.lib_units;
         true
       end else begin
         fprintf ppf "File %s is not a bytecode object file.@." name;
         false
       end
-  with Load_failed -> false
+  with
+  | Load_failed -> false
+  | End_of_file | Failure _ | Sys_error _ -> report_corrupt ppf name
 
 let init () =
   let crc_intfs = Symtable.init_toplevel() in

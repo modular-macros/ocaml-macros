@@ -47,6 +47,22 @@ val transl_implementation_flambda:
   string -> structure * module_coercion -> Lambda.program
 
 val transl_toplevel_definition: structure -> lambda
+
+(* Whether a phrase of the toplevel has compile-time components or
+   top-level splices.  If so it is translated by
+   [transl_toplevel_phrase], and otherwise by
+   [transl_toplevel_definition]. *)
+val toplevel_phrase_has_compile_time_part: structure -> bool
+
+(* The compile-time part of a phrase of the toplevel.  It stores the
+   compile-time values that the phrase binds, and its value is the
+   run-time term of the phrase, a [Lambda.lambda], to be closed with
+   [close_toplevel_term] and run. *)
+val transl_toplevel_phrase: structure -> lambda
+
+(* Bind the free variables of a term to their values in the value table
+   of the toplevel. *)
+val close_toplevel_term: lambda -> lambda
 val transl_package:
       Ident.t option list -> Ident.t -> module_coercion -> lambda
 val transl_store_package:
@@ -56,6 +72,15 @@ val transl_package_flambda:
       Ident.t option list -> module_coercion -> int * lambda
 
 val toplevel_name: Ident.t -> string
+
+(* The key of the compile-time value of an identifier in the value
+   table of the toplevel *)
+val toplevel_macros_name: Ident.t -> string
+
+(* The key of a function of type [Location.t -> unit] in the value table
+   of the toplevel, which the compile-time part of a phrase calls with
+   the location of a splice whose code raises *)
+val toplevel_splice_failed_key: string
 val nat_toplevel_name: Ident.t -> Ident.t * int
 
 val primitive_declarations: Primitive.description list ref

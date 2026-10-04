@@ -115,6 +115,20 @@ let pr_item =
 
 (* Execute a toplevel phrase *)
 
+(* The native toplevel does not evaluate compile-time code. *)
+exception Macros_not_supported
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Macros_not_supported ->
+          let loc = Location.in_file !Location.input_name in
+          Some
+            (Location.errorf ~loc
+               "Compile-time evaluation is not supported by the native \
+                toplevel.")
+      | _ -> None)
+
 let phrase_seqid = ref 0
 
 let name_expression ~loc ~attrs exp =
@@ -165,7 +179,11 @@ let execute_phrase print_outcome ppf phr =
       incr phrase_seqid;
       let phrase_name = "TOP" ^ string_of_int !phrase_seqid in
       Compilenv.reset ?packname:None phrase_name;
+      (* Whether the phrase has a top-level splice *)
+      Env.set_unit_has_top_level_splice false;
       let (str, sg', newenv) = typecheck_phrase ppf oldenv sstr in
+      if Translmod.toplevel_phrase_has_compile_time_part str
+      then raise Macros_not_supported;
       (* `let _ = <expression>` or even just `<expression>` require special
          handling in toplevels, or nothing is displayed. In bytecode, the
          lambda for <expression> is directly executed and the result _is_ the
