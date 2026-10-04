@@ -1,0 +1,5 @@
+File "applicative_sealed.ml", line 22, characters 31-32:
+22 | let distinct (x : A.s) : C.s = x
+                                    ^
+Error: The value x has type A.s = G$(M).s
+       but an expression was expected of type C.s = G'$(M).s

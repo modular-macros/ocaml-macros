@@ -303,6 +303,37 @@ let rec quote_access lam =
   | _ ->
       Misc.fatal_error "Translquote.quote_access: not a run-time access"
 
+(* The close binds fresh variables, each holding the original
+   identifier as a constant, and renames the body's occurrences to
+   them: the same identifiers are bound in the scope of the
+   compile-time part, and Simplif assumes unique binders.  The built
+   code carries the original identifier. *)
+let close_freshened params body_of =
+  (* Persistent roots need no closing: a reference through one is quoted
+     as a [Pgetglobal]-rooted primitive, never a variable, so nothing
+     registers or renames -- and [Ident.rename] is fatal on them. *)
+  let params = Ident.Set.filter (fun r -> not (Ident.global r)) params in
+  let subst =
+    Ident.Set.fold (fun r m -> Ident.Map.add r (Ident.rename r) m)
+      params Ident.Map.empty
+  in
+  let fresh r = Ident.Map.find r subst in
+  let bind r body = Llet (Strict, Pgenval, fresh r, const r, body) in
+  (Ident.Set.fold bind params) @@
+    body_of (fun lam -> Lambda.rename subst lam)
+      (List.map fresh (Ident.Set.elements params))
+
+(* The quotation-shaped close: the result keeps the (code,
+   free-variable-set) pair shape that a quotation evaluates to, where the
+   splice-shaped close ([transl_close_function]) projects the code out
+   for the splice machinery.  The two shapes must not be mixed: closing a
+   quotation with the splice-shaped close makes every consumer of the
+   quotation read a field of the code block as its free-variable set. *)
+let transl_close_quotation _loc params body =
+  close_freshened params @@ fun rename fresh_vars ->
+  new_scope fresh_vars
+    (rename body %>> fun c fvs -> seq (check fvs) (pair c fvs))
+
 (* Closing the code of a top-level splice over the run-time variables
    that it quotes.  The variables are renamed in each term that the
    splice quotes, but not in the rest of its code: [closing] maps each
@@ -341,6 +372,7 @@ let transl_close_function _loc params body =
            (body %>> fun c fvs -> seq (check fvs) (pair c fvs)))
   in
   (originals, fresh_vars, code)
+
 
 (* Rebuilding the lambda term of a unit.
 
@@ -584,3 +616,36 @@ let fill_holes lam (contents : lambda array) =
   Array.iter reserve contents;
   let lam, _ = map_holes (fun i _ -> contents.(i)) lam in
   lam
+
+(* Code that builds a fresh instance of a module term, every binder
+   renamed at each evaluation: a template's fragment, built at each
+   application.  A hole's variable is bound where the builder runs and
+   yields the splice's term; the quoter's splice case consumes (code,
+   free-set) pairs, so the hole code is wrapped first. *)
+let module_builder lam =
+  let rec wrap_holes lam =
+    match lam with
+    | Lsplice { sp_code; sp_args = [] } ->
+        lsplice (pair sp_code (empty ()))
+    | Lsplice ({ sp_args; _ } as sp) ->
+        let params = List.map Ident.rename sp_args in
+        Lsplice
+          { sp_code =
+              lfunction ~kind:Curried
+                ~params:(List.map (fun p -> p, Pgenval) params)
+                ~return:Pgenval ~attr:default_function_attribute
+                ~loc:Loc_unknown
+                ~body:(pair (splice_contents { sp with sp_args = params })
+                         (empty ()));
+            sp_args }
+    | _ -> shallow_map wrap_holes lam
+  in
+  (* The term's binders are freshened first: the quoter binds them as
+     variables of the building code, which is embedded in the static
+     program, where the same identifiers are bound. *)
+  let lam =
+    Lambda.subst (fun _ _ env -> env) ~freshen_bound_variables:true
+      Ident.Map.empty lam
+  in
+  let lam = wrap_holes (remove_events lam) in
+  quote_lambda lam %>> fun c fvs -> seq (check fvs) c

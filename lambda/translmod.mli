@@ -21,10 +21,11 @@ open Lambda
 
 val transl_implementation:
       string -> structure * module_coercion -> Lambda.program
-(* The static program of a unit with top-level splices, and the
-   run-time term of the unit, with a hole for each top-level splice.
-   The static program evaluates the splices and writes, to
-   [prefix ^ "$static.holes"], the block of the terms that fill the
+
+(* The static program of a module with top-level splices, and the
+   run-time term of the module, with a hole for each top-level splice.
+   The static program runs the module's compile-time part and writes,
+   to [prefix ^ "$static.holes"], the block of the terms that fill the
    holes ([Translquote.fill_holes]). *)
 val transl_static_program:
       ?native:bool ->
@@ -35,10 +36,16 @@ val transl_static_program:
 (* Whether the structure defines anything at compile time *)
 val exports_macros: structure -> bool
 
+(* Whether the structure contains a template application: the
+   driver must then build a static program, which evaluates the
+   applications' dynamic components.  (The macro object never depends
+   on that evaluation -- its application entries are record calls --
+   so the driver always emits it.) *)
+val has_template_applications: structure -> bool
+
 (* The compile-time part of a unit, as a bytecode unit of its own *)
 val transl_macros_object:
       string -> structure * module_coercion -> Lambda.program
-
 val transl_store_phrases: string -> structure -> int * lambda
 val transl_store_implementation:
       string -> structure * module_coercion -> Lambda.program
@@ -108,6 +115,7 @@ type unsafe_info =
 type error =
   Circular_dependency of (Ident.t * unsafe_info) list
 | Conflicting_inline_attributes
+| Template_restriction of string
 | Static_quotes_local of Ident.t
 
 exception Error of Location.t * error

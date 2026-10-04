@@ -1,0 +1,57 @@
+module type S = sig end
+module type A = sig end
+module type B = sig end
+module type C = sig end
+module F : (X : S) -> sig end
+module G : $() -> sig end
+Line 3, characters 14-15:
+3 | module M = F$(F$(struct end))
+                  ^
+Error: This is a functor. It must be applied as F(M).
+Line 3, characters 11-12:
+3 | module M = F$(struct end)$(struct end)
+               ^
+Error: This is a functor. It must be applied as F(M).
+module type T = $($A -> B) -> C
+module type T = $(X : A) -> (Y : B) -> $() -> C
+Line 3, characters 11-12:
+3 | module M = F $(struct end)
+               ^
+Error: This is a functor. It must be applied as F(M).
+Line 3, characters 16-17:
+3 | module type T = $ (X : A) -> B
+                    ^
+Error: Syntax error
+Line 3, characters 14-16:
+3 | module type T =$(X : A) -> B
+                  ^^
+Error: Syntax error
+Line 1, characters 24-27:
+1 | module type T = (Y : A) ->$(X : A) -> B
+                            ^^^
+Error: Syntax error
+module type T = $A -> $B -> C
+Line 1, characters 16-17:
+1 | module type T = $ A -> B
+                    ^
+Error: Syntax error
+Line 1, characters 14-16:
+1 | module type T =$A -> B
+                  ^^
+Error: Syntax error
+module type s = sig end
+module N : sig module type s = sig end end
+module type T = $s -> $N.s -> C
+Line 1, characters 16-20:
+1 | module type T = $let -> C
+                    ^^^^
+Error: Syntax error
+Line 3, characters 12-13:
+3 | module M = F[struct end]
+                ^
+Error: Syntax error
+Line 1, characters 16-17:
+1 | module type T = [X : A] B
+                    ^
+Error: Syntax error
+

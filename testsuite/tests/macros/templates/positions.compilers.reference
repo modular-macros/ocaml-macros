@@ -1,0 +1,4 @@
+File "positions.ml", line 13, characters 37-51:
+13 | module rec A : sig val v : int end = F$(struct end)
+                                          ^^^^^^^^^^^^^^
+Error: A template application is not supported in this position.

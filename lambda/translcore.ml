@@ -90,12 +90,57 @@ type native_slot_layout =
   { nsl_module : Ident.t;
     nsl_pos : Ident.t -> int option }
 
+(* Where template applications are compiled, and how: among the
+   items of a static program; under a functor body, whose applications
+   are hoisted to the functor's definition item; under a template
+   body, whose applications have their own routing
+   ([template_body_apps]). *)
+type template_apps_mode =
+  | Tapps_inactive       (* no static program at all *)
+  | Tapps_items          (* the static program's own structure items *)
+  | Tapps_plain_body     (* under a functor's body, within a
+                            static program's translation *)
+  | Tapps_template_body  (* under a template's body *)
+  | Tapps_template_plain_body
+                         (* under a functor's body that is
+                            itself under a template's body *)
+
+(* The identifiers of an application, [module M = F$(V)], which the
+   passes of the unit share; see [Translmod]. *)
+type template_application_idents =
+  { ta_mcode : Ident.t;   (* the fragment code: the static-body pass
+                             binds it, the run-time term's hole reads it *)
+    ta_arg : Ident.t;     (* in-item binder for a non-path argument *)
+    ta_funct : Ident.t }  (* in-item binder for a non-path functor *)
+
+(* An application inside a template body is coordinated between the
+   body's two passes within one [transl_template_body]: the run-world
+   pass leaves a marker hole at M0's position and collects the
+   application with the run-world term of its environment pair; the
+   compile-world pass binds the component call's pair, M0's record its
+   first field, and a thunk applies the pair's dynamic half at the
+   marker, once per outer application. *)
+type template_body_app =
+  { tba_m_id : Ident.t;               (* M0 *)
+    tba_hole : Ident.t;               (* the fragment's marker hole *)
+    tba_pair : Ident.t;               (* the chain's (record, dyn) pair *)
+    tba_pair_term : lambda;           (* run-world (G slot, coerced A block) *)
+    tba_lit_funct : Ident.t option;   (* in-item binder, literal functor *)
+    tba_lit_arg : Ident.t option }    (* in-item binder, literal argument *)
+
 (* What the passes of the translation of a unit record, and read *)
 type unit_state =
   { mutable compile_world_dummies : Ident.Set.t;
     (* The identifiers that the compile-time part binds to
        placeholders: the run-time components, which keep only their
-       positions in the compile-time block. *) }
+       positions in the compile-time block. *)
+    mutable hidden_application_binders : Ident.Set.t;
+    (* The binders of the hidden application items that template
+       applications inside module expressions compile as *)
+    mutable template_applications :
+      template_application_idents Ident.Map.t;
+    (* The identifiers of each application, by the identifier of its
+       module *) }
 
 type context =
   { world : world;
@@ -117,6 +162,11 @@ type context =
     native_slot_layout : native_slot_layout option;
     (* The fields of the unit's block, in the compile-time part of a
        native static program *)
+    template_slot_index : (Ident.t * Ident.t) list option;
+    (* The environment slots of a template body's generators, called
+       from the body's splices, are fragment binders, freshened at each
+       instantiation: an access is routed through a code parameter that
+       the thunk binds from the identity delivered at its hole. *)
     splice_source : (context -> expression -> lambda_splice) option;
     (* How the hole of a top-level splice is filled when the run-time
        term is translated: the function gives the contents of the hole,
@@ -133,6 +183,22 @@ type context =
     (* The global of a unit that compile-time code names: in the
        toplevel, a unit loaded for compile-time code has a name of its
        own *)
+    template_apps_mode : template_apps_mode;
+    translating_macros_object : bool;
+    (* Whether the compile-time object's term is being translated,
+       rather than the static program's body: an application's M is a
+       record call in the former, the evaluated fragment in the
+       latter. *)
+    template_body_apps : template_body_app list ref option;
+    (* The applications of the template body being translated *)
+    template_body_pending_chain : (lambda -> lambda) list ref option;
+    (* The pair bindings of applications inside a functor body nested
+       under a template body: a let cannot span the functor's lambda and
+       the dynamic component, so each is bound outside both, at the
+       plain body's definition item (or at the top of the component
+       function for a body that is a bare functor), once per
+       instantiation, in declaration order.  Each entry wraps the term
+       downstream of it. *)
     innermost_free_variables : Ident.Set.t;
     (* The free variables of the code at the innermost point of the
        compile-time part, which fills the holes of the run-time term:
@@ -145,13 +211,20 @@ let initial_context () =
     quotation_depth = 0;
     macro_env = None;
     native_slot_layout = None;
+    template_slot_index = None;
     splice_source = None;
     closing = Ident.Map.empty;
     quoted_variables = None;
     unit_globals = Fun.id;
+    template_apps_mode = Tapps_inactive;
+    translating_macros_object = false;
+    template_body_apps = None;
+    template_body_pending_chain = None;
     innermost_free_variables = Ident.Set.empty;
     unit_state =
-      { compile_world_dummies = Ident.Set.empty } }
+      { compile_world_dummies = Ident.Set.empty;
+        hidden_application_binders = Ident.Set.empty;
+        template_applications = Ident.Map.empty } }
 
 let in_quotation ctx = ctx.quotation_depth > 0
 
@@ -200,6 +273,18 @@ let rec project_captured me lam =
       end
   | Lsplice _ -> lam
   | _ -> Lambda.shallow_map (project_captured me) lam
+
+let rec route_template_slots idx lam =
+  match lam with
+  | Lvar r ->
+      (match
+         List.find_map
+           (fun (r', c) -> if Ident.same r r' then Some c else None) idx
+       with
+       | Some code_param -> lsplice (Lvar code_param)
+       | None -> lam)
+  | Lsplice _ -> lam
+  | _ -> Lambda.shallow_map (route_template_slots idx) lam
 
 (* Forward declaration -- to be filled in by Translmod.transl_module *)
 let transl_module =
@@ -386,6 +471,11 @@ let transl_ident ~ctx loc env ty path desc =
             let access =
               match ctx.macro_env with
               | Some me -> project_captured me access
+              | None -> access
+            in
+            let access =
+              match ctx.template_slot_index with
+              | Some idx -> route_template_slots idx access
               | None -> access
             in
             let access =
@@ -825,7 +915,7 @@ and transl_exp0 ~in_new_scope ~ctx ~scopes e =
       (fun vars -> vars := Ident.Set.union !vars (free_variables body))
       ctx.quoted_variables;
     Translquote.quote_expression body
-  | Texp_splice { spl_top_level = false; spl_exp = e } ->
+  | Texp_splice { spl_top_level = false; spl_exp = e } -> (* Internal splice *)
      let ctx =
        if in_quotation ctx
        then { ctx with quotation_depth = ctx.quotation_depth - 1 }
@@ -836,11 +926,11 @@ and transl_exp0 ~in_new_scope ~ctx ~scopes e =
        transl_exp ~ctx:{ ctx with quoted_variables = Some vars } ~scopes e
      in
      Lsplice (close_splice (of_location ~scopes e.exp_loc) !vars body)
-  | Texp_splice { spl_exp; spl_top_level = true } ->
+  | Texp_splice { spl_exp; spl_top_level = true } -> (* Top-level splice *)
     begin
       match ctx.splice_source with
       | Some hole -> Lsplice (hole ctx spl_exp)
-      | None -> Misc.fatal_error "top-level splices: not implemented"
+      | None -> Misc.fatal_error "Translcore: splice source is not initialized"
     end
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))

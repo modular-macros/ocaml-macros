@@ -1,0 +1,4 @@
+File "body_class.ml", line 18, characters 2-37:
+18 |   class c = object method m = X.v end
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Classes are not yet supported in a template body.

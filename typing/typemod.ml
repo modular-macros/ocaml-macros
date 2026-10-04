@@ -250,6 +250,12 @@ let has_compile_time_bindings (me : Typedtree.module_expr) =
   let module_expr iter (me : Typedtree.module_expr) =
     match me.mod_desc with
     | Tmod_functor (Template, _, _) -> raise Found
+    | Tmod_apply (Template_application _, _, _, _)
+    | Tmod_apply_unit (Template_application _, _)
+      when Mtype.has_macro_components me.mod_env me.mod_type ->
+        (* A template, or a module with compile-time components,
+           made by an application. *)
+        raise Found
     | _ -> Tast_iterator.default_iterator.module_expr iter me
   in
   let iter =

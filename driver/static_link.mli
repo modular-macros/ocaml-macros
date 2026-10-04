@@ -13,14 +13,16 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Compiling a unit that has top-level splices.
+(** Static programs and macro objects: the machinery shared between the
+    bytecode and native drivers.
 
-    The driver writes the static program of the unit, [M$static.cmo],
-    and has [staticrun] load it in another process.  The static program
-    evaluates the splices and writes the terms that fill the holes of
-    the unit's run-time term, which the driver compiles as that of any
-    unit, in bytecode or in native code.  The static program is bytecode
-    in both cases. *)
+    A module with top-level splices is compiled by emitting [M$static.cmo]
+    and running it under the prebuilt RUNNER (staticrun: stdlib,
+    compiler-libs and Dynlink, linked once with the compiler), which
+    Dynlinks the unit's tail; the static object's initialisation evaluates
+    the module's compile-time part and writes the terms that fill the holes
+    of the module's run-time term, which the compiler compiles as that of
+    any module.  The static program is always bytecode. *)
 
 val emit_macros_object :
   Compile_common.info -> Typedtree.implementation -> unit
@@ -31,10 +33,10 @@ val emit_macros_object :
 val build_static_program :
   native:bool -> Compile_common.info -> Typedtree.implementation ->
   Lambda.program
-(** Build the static program of the unit and run it, and give the
-    unit's run-time term with its holes filled by the program.  If the
-    run succeeds, or reports its own failure, the static program is
-    removed; otherwise it is kept for inspection. *)
+(** Build the module's static program and run it under the prebuilt
+    runner, and give the module's run-time term with its holes filled by
+    the program.  On success the static object and its object list are
+    removed; a failed run keeps both for inspection. *)
 
 val implementation :
   native:bool ->
@@ -44,9 +46,10 @@ val implementation :
   finish:(Lambda.program -> unit) ->
   unit
 (** Write the compile-time part of the unit if it has one.  Then, if the
-    unit has a top-level splice, build its run-time term through its
-    static program and pass it to [finish], the driver's code generation
-    from a term; otherwise run [fallback], the driver's ordinary code
+    unit has compile-time evaluation to do (a top-level splice, or a
+    template application), build its run-time term through its static
+    program and pass it to [finish], the driver's code generation from a
+    term; otherwise run [fallback], the driver's ordinary code
     generation. *)
 
 (** {2 Error report} *)

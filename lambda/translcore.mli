@@ -46,8 +46,31 @@ type native_slot_layout =
   { nsl_module : Ident.t;
     nsl_pos : Ident.t -> int option }
 
+type template_apps_mode =
+  | Tapps_inactive
+  | Tapps_items
+  | Tapps_plain_body
+  | Tapps_template_body
+  | Tapps_template_plain_body
+
+type template_application_idents =
+  { ta_mcode : Ident.t;
+    ta_arg : Ident.t;
+    ta_funct : Ident.t }
+
+type template_body_app =
+  { tba_m_id : Ident.t;
+    tba_hole : Ident.t;
+    tba_pair : Ident.t;
+    tba_pair_term : lambda;
+    tba_lit_funct : Ident.t option;
+    tba_lit_arg : Ident.t option }
+
 type unit_state =
-  { mutable compile_world_dummies : Ident.Set.t }
+  { mutable compile_world_dummies : Ident.Set.t;
+    mutable hidden_application_binders : Ident.Set.t;
+    mutable template_applications :
+      template_application_idents Ident.Map.t }
 
 type context =
   { world : world;
@@ -55,10 +78,15 @@ type context =
     quotation_depth : int;
     macro_env : macro_env option;
     native_slot_layout : native_slot_layout option;
+    template_slot_index : (Ident.t * Ident.t) list option;
     splice_source : (context -> expression -> lambda_splice) option;
     closing : Ident.t Ident.Map.t;
     quoted_variables : Ident.Set.t ref option;
     unit_globals : Ident.t -> Ident.t;
+    template_apps_mode : template_apps_mode;
+    translating_macros_object : bool;
+    template_body_apps : template_body_app list ref option;
+    template_body_pending_chain : (lambda -> lambda) list ref option;
     innermost_free_variables : Ident.Set.t;
     unit_state : unit_state }
 
@@ -72,6 +100,9 @@ val in_quotation: context -> bool
 (* The globals of the units that a term of compile-time code names, as
    [unit_globals] gives them *)
 val rename_unit_globals: context -> lambda -> lambda
+
+val name_slots_through_block: native_slot_layout -> Lambda.lambda -> Lambda.lambda
+
 
 val pure_module : module_expr -> let_kind
 

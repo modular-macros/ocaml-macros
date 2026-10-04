@@ -30,3 +30,18 @@ and D : sig val g : unit -> int end = struct
   let g () = 7
 end
 let () = Printf.printf "%d %d\n" (C.f ()) (C.r ())
+
+(* A template applied to a module of the group, and a later item
+   quoting the group. *)
+
+module T $(X : sig val v : int end) = struct let w = X.v + 1 end
+
+module rec E : sig val p : int end = struct
+  module M = T$(F)
+  let p = M.w
+end
+and F : sig val v : int end = struct
+  let v = 10
+end
+module G = struct let s = $(<< E.p + F.v >>) end
+let () = Printf.printf "%d %d\n" E.p G.s

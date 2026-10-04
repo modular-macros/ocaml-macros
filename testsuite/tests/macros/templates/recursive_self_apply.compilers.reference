@@ -1,0 +1,14 @@
+File "recursive_self_apply.ml", lines 18-23, characters 6-3:
+18 | ......struct
+19 |   module F $(X : S) = struct
+20 |     module Inner = M.F$(X)
+21 |     let w = Inner.w
+22 |   end
+23 | end
+Error: Cannot safely evaluate the definition of the following cycle
+       of recursively-defined modules: M -> M.
+       There are no safe modules in this cycle (see manual section 12.2).
+File "recursive_self_apply.ml", line 17, characters 2-44:
+17 |   module F : $(X : S) -> sig val w : int end
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  Module M defines an unsafe functor, F .

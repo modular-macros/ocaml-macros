@@ -763,6 +763,10 @@ let transl_path find loc env path =
 let transl_module_path loc env path =
   transl_path Env.find_module_address loc env path
 
+(* A module's compile-time block -- M$macros for a persistent M.  Used by
+   Translmod for module references at the compile-time stage, which must
+   never reach a run-time global: a dependent's static program links the
+   macro objects only, so the run-time global is not there to reach. *)
 let transl_module_macros_path loc env path =
   transl_path Env.find_module_macros_address loc env path
 

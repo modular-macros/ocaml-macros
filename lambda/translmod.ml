@@ -44,9 +44,11 @@ type unsafe_info =
 type error =
   Circular_dependency of (Ident.t * unsafe_info) list
 | Conflicting_inline_attributes
+| Template_restriction of string
 | Static_quotes_local of Ident.t
 
 exception Error of Location.t * error
+
 
 (* The translation of a module expression or of an item builds the part
    of the unit that [ctx.world] gives.  A module that is the value of an
@@ -117,6 +119,11 @@ let transl_module_path ~ctx loc env path =
   let compile_world =
     true_compile_world ctx && not (Translcore.in_quotation ctx)
   in
+  match path with
+  | Path.Pident id
+    when Ident.Set.mem id ctx.unit_state.hidden_application_binders ->
+      Lvar id
+  | _ ->
   if compile_world
      && (match Env.find_module path env with
          | md -> Mtype.has_macro_components env md.md_type
@@ -195,6 +202,22 @@ let rec apply_coercion ~ctx loc strict restr arg =
            (* The compile-time value does not depend on the argument:
               only the coercion of the result applies. *)
            apply_coercion ~ctx loc strict cc_res arg
+       | Fcf_template cc_record when in_compile_world ctx ->
+           (* The compile-time value is the component function, which
+              returns a pair (record, dynamic component): both halves
+              are coerced, not the pair as a result block. *)
+           coerce_template_component ~ctx loc strict cc_arg cc_res cc_record arg
+       | Fcf_template _ ->
+           (* The run-time slot is the captured-environment tuple, an
+              internal representation the signature coercion does not
+              reshape.  The coercion's own run-time names are put
+              beside it, for the coerced fragment to reach through the
+              environment an application delivers. *)
+           (match template_coercion_roots ~ctx loc cc_res with
+            | [] -> arg
+            | roots ->
+                Lprim (Pmakeblock (0, Immutable, None),
+                       arg :: List.map (fun r -> Lvar r) roots, loc))
        | _ ->
            let param = Ident.create_local "funarg" in
            let carg = apply_coercion ~ctx loc Alias cc_arg (Lvar param) in
@@ -209,6 +232,146 @@ let rec apply_coercion ~ctx loc strict restr arg =
 
 and apply_coercion_field ~ctx loc get_field (pos, cc) =
   apply_coercion ~ctx loc Alias cc (get_field pos)
+
+(* The run-time names the coercion of a template's result mentions: the
+   roots of the paths its alias members are coerced from, [K] for a
+   member [module M = K] given a signature.  The fragment of an
+   application is coerced as code, and that code may run in another
+   unit, so it reaches these names as a generator's code reaches the
+   names it quotes, through the environment: the coerced template's
+   run-time slot holds them after the original slot, in this order. *)
+and template_coercion_roots ~ctx loc cc_res =
+  match cc_res with
+  | Tcoerce_functor (Fcf_template _, _, cc_res) ->
+      (* A curried template: every level's slot holds the roots of the
+         final result's coercion. *)
+      template_coercion_roots ~ctx loc cc_res
+  | Tcoerce_none -> []
+  | _ ->
+      let hole = Ident.create_local "*frag*" in
+      let coerced =
+        in_world ctx Run_world @@ fun ctx ->
+        apply_coercion ~ctx loc Strict cc_res (Lvar hole)
+      in
+      Ident.Set.elements
+        (Ident.Set.filter (fun r -> not (Ident.global r))
+           (Ident.Set.remove hole (free_variables coerced)))
+
+(* A narrowing coercion on a template's compile-time value.  The
+   component function returns (record, dynamic component).  The record
+   is coerced by [cc_record], the coercion that the template's face
+   holds (recursing through this function for nested template members),
+   and the fragment that the dynamic component builds is coerced as code
+   by [cc_res], quoted around the fragment through the splice route:
+   the two worlds share one position map.  For a curried narrowing
+   ([cc_res] again a template's coercion) the pair's second component
+   is the internal context builder, not a signature-shaped block: it
+   passes through, gaining only the names the coercion mentions, and
+   the record half (the inner component function) recurses.  A result
+   that is a functor is a block like any other, a closure, and its
+   fragment is coerced as code. *)
+and coerce_template_component ~ctx loc strict cc_arg cc_res cc_record arg =
+  name_lambda strict arg (fun id ->
+    let xm = Ident.create_local "*xm*" in
+    let pr = Ident.create_local "*tcpair*" in
+    let field n = Lprim (Pfield (n, Pointer, Immutable), [Lvar pr], loc) in
+    let record = apply_coercion ~ctx loc Strict cc_record (field 0) in
+    let roots =
+      List.map (fun r -> r, Ident.create_local "*root*")
+        (template_coercion_roots ~ctx loc cc_res)
+    in
+    let dyn =
+      match cc_res, roots with
+      | (Tcoerce_none | Tcoerce_functor (Fcf_template _, _, _)), [] ->
+          field 1
+      | _ ->
+          let envc = Ident.create_local "*envcode*" in
+          let frag = Ident.create_local "*frag*" in
+          (* The environment delivered is the pair of the coerced slot
+             and the argument.  With roots, the coerced slot holds the
+             original one first: the original dynamic component is
+             given the pair it expects, and each root is the code of
+             its field of the coerced slot. *)
+          let env = lsplice (Lvar envc) in
+          let proj n lam =
+            Lprim (Pfield (n, Pointer, Immutable), [lam], Loc_unknown)
+          in
+          let original_env =
+            match roots with
+            | [] -> Lvar envc
+            | _ ->
+                Translquote.quote_expression
+                  (Lprim (Pmakeblock (0, Immutable, None),
+                          [ proj 0 (proj 0 env); proj 1 env ],
+                          Loc_unknown))
+          in
+          let rec through_environment lam =
+            match lam with
+            | Lvar r ->
+                (match List.find_opt (fun (r', _) -> Ident.same r r') roots
+                 with
+                 | Some (_, code) -> lsplice (Lvar code)
+                 | None -> lam)
+            | Lsplice _ -> lam
+            | _ -> Lambda.shallow_map through_environment lam
+          in
+          let bind_roots body =
+            fst
+              (List.fold_left
+                 (fun (body, n) (_, code) ->
+                    Llet (Strict, Pgenval, code,
+                          proj 0
+                            (Translquote.quote_expression
+                               (proj n (proj 0 env))),
+                          body),
+                    n + 1)
+                 (body, 1) roots)
+          in
+          (* The fragment is RUN-TIME code: the coercion around it must
+             take the run world's readings -- a nested template member's slot
+             is its captured-environment tuple and passes through
+             untouched -- not this call site's compile-time stage, which
+             would wrap the tuple as a component function.  The
+             instantiated block would then hold a closure where the
+             fragment's prologue projects a tuple, and reading it
+             crashes when the chain completes. *)
+          let coerced_frag =
+            match cc_res with
+            | Tcoerce_none | Tcoerce_functor (Fcf_template _, _, _) ->
+                (* An outer level of a curried template: what it yields
+                   is the slot of the next level, which holds the roots
+                   as this level's does. *)
+                Lprim (Pmakeblock (0, Immutable, None),
+                       lsplice (Lvar frag)
+                       :: List.map (fun (_, code) -> lsplice (Lvar code))
+                            roots,
+                       Loc_unknown)
+            | _ ->
+                in_world ctx Run_world @@ fun ctx ->
+                through_environment
+                  (apply_coercion ~ctx loc Strict cc_res (lsplice (Lvar frag)))
+          in
+          lfunction ~kind:Curried ~params:[envc, Pgenval] ~return:Pgenval
+            ~attr:default_function_attribute ~loc
+            ~body:(Llet (Strict, Pgenval, frag,
+                     Lapply { ap_func = field 1; ap_args = [original_env];
+                              ap_loc = loc;
+                              ap_tailcall = Default_tailcall;
+                              ap_inlined = Default_inline;
+                              ap_specialised = Default_specialise },
+                     bind_roots (Translquote.module_builder coerced_frag)))
+    in
+    lfunction ~kind:Curried ~params:[xm, Pgenval] ~return:Pgenval
+      ~attr:default_function_attribute ~loc
+      ~body:(Llet (Strict, Pgenval, pr,
+               Lapply { ap_func = Lvar id;
+                        ap_args =
+                          [ apply_coercion ~ctx loc Strict cc_arg (Lvar xm) ];
+                        ap_loc = loc; ap_tailcall = Default_tailcall;
+                        ap_inlined = Default_inline;
+                        ap_specialised = Default_specialise },
+               Lprim (Pmakeblock (0, Immutable, None), [record; dyn],
+                      loc))))
 
 and apply_coercion_result ~ctx loc strict funct params args cc_res =
   match cc_res with
@@ -465,9 +628,11 @@ let reorder_rec_bindings bindings =
   done;
   List.rev !res
 
-(* Generate lambda-code for a reordered list of bindings *)
+(* Generate lambda-code for a reordered list of bindings.  [bound id
+   body] is [body] with whatever must follow the binding of [id] put
+   before it. *)
 
-let eval_rec_bindings bindings cont =
+let eval_rec_bindings ?(bound = fun _ body -> body) bindings cont =
   let rec bind_inits = function
     [] ->
       bind_strict bindings
@@ -484,14 +649,14 @@ let eval_rec_bindings bindings cont =
              ap_inlined=Default_inline;
              ap_specialised=Default_specialise;
            },
-           bind_inits rem)
+           bound id (bind_inits rem))
   and bind_strict = function
     [] ->
       patch_forwards bindings
   | (Ignore_loc loc, None, rhs) :: rem ->
       Lsequence(Lprim(Pignore, [rhs], loc), bind_strict rem)
   | (Id id, None, rhs) :: rem ->
-      Llet(Strict, Pgenval, id, rhs, bind_strict rem)
+      Llet(Strict, Pgenval, id, rhs, bound id (bind_strict rem))
   | (_id, Some _, _rhs) :: rem ->
       bind_strict rem
   and patch_forwards = function
@@ -532,8 +697,8 @@ let bind_from_cells exported lam =
     lam exported
 
 (* A recursive group, each binding with its translation *)
-let compile_recmodule_translated ~scopes translated cont =
-  eval_rec_bindings
+let compile_recmodule_translated ?bound ~scopes translated cont =
+  eval_rec_bindings ?bound
     (reorder_rec_bindings
        (List.map
           (fun ({mb_id=id; mb_name; mb_expr=modl; _}, lam) ->
@@ -548,8 +713,8 @@ let compile_recmodule_translated ~scopes translated cont =
           translated))
     cont
 
-let compile_recmodule ~scopes compile_rhs bindings cont =
-  compile_recmodule_translated ~scopes
+let compile_recmodule ?bound ~scopes compile_rhs bindings cont =
+  compile_recmodule_translated ?bound ~scopes
     (List.map (fun mb -> mb, compile_rhs mb.mb_id mb.mb_expr) bindings)
     cont
 
@@ -579,8 +744,6 @@ let merge_functors ~scopes mexp coercion root_path =
   let rec merge ~scopes mexp coercion path acc inline_attribute =
     let finished = acc, mexp, path, coercion, inline_attribute in
     match mexp.mod_desc with
-    | Tmod_functor (Template, _, _) ->
-        Misc.fatal_error "templates: not implemented"
     | Tmod_functor (Plain, param, body) ->
       let inline_attribute' =
         Translattribute.get_inline_attribute mexp.mod_attributes
@@ -763,6 +926,208 @@ let transl_macro_group_functions ~ctx ~scopes rec_flag pat_expr_list =
     (id, add_macro_env_param me_param (Translquote.remove_events fn)))
     pat_expr_list
 
+(* A template definition, [module F = functor $(X : S) -> ME], is
+   closure-converted as a generator is: F's slot in the run-time block
+   holds its environment, a tuple of the enclosing run-time bindings
+   the body mentions, and its slot in the compile-time block holds the
+   component function
+
+       F_fn = fun x_macros ->
+                (record, fun env_code -> <run-time fragment builder>)
+
+   where [record] is the compile-time block of the body, [env_code]
+   evaluates at the application to the pair of F's slot and the coerced
+   argument block, and the builder is [Translquote.module_builder] of
+   the body's run-time translation, each top-level splice of the body a
+   thunk run once per application.  The fragment binds the pair once
+   in its prologue and projects every enclosing reference through it. *)
+
+let template_functor_parts me =
+  match me.Typedtree.mod_desc with
+  | Tmod_functor (Template, param, body) -> Some (param, body)
+  | _ -> None
+
+(* A template definition, seen through the constraints around it. *)
+let rec template_definition me =
+  match me.Typedtree.mod_desc with
+  | Tmod_functor (Template, _, _) -> Some (me, Tcoerce_none)
+  | Tmod_constraint (inner, _, _, cc) ->
+      Option.map (fun (t, cc') -> (t, compose_coercions cc cc'))
+        (template_definition inner)
+  | _ -> None
+
+(* Every identifier the body binds, to classify a splice's free names:
+   a body-bound name is a term binder at the hole, any other a root of
+   F's environment. *)
+let template_bound_idents (body : Typedtree.module_expr) =
+  let bound = ref Ident.Set.empty in
+  let add x = bound := Ident.Set.add x !bound in
+  let pat : type k . _ -> k Typedtree.general_pattern -> unit =
+    fun iter p ->
+      List.iter add (Typedtree.pat_bound_idents p);
+      Tast_iterator.default_iterator.pat iter p
+  in
+  let expr iter (e : Typedtree.expression) =
+    (match e.exp_desc with
+     | Texp_for (x, _, _, _, _, _) -> add x
+     | Texp_letop { param; _ } -> add param
+     | Texp_function (params, fbody) ->
+         List.iter (fun fp ->
+             add fp.Typedtree.fp_param;
+             Option.iter add fp.Typedtree.fp_evidence) params;
+         (match fbody with
+          | Tfunction_cases { param; _ } -> add param
+          | Tfunction_body _ -> ())
+     | _ -> ());
+    Tast_iterator.default_iterator.expr iter e
+  in
+  let structure_item iter (it : Typedtree.structure_item) =
+    (match it.str_desc with
+     | Tstr_module { mb_id = Some id; _ } -> add id
+     | Tstr_recmodule mbs ->
+         List.iter (fun mb -> Option.iter add mb.Typedtree.mb_id) mbs
+     | Tstr_exception ext -> add ext.tyexn_constructor.ext_id
+     | Tstr_typext tyext ->
+         List.iter (fun ext -> add ext.Typedtree.ext_id)
+           tyext.tyext_constructors
+     | Tstr_include incl ->
+         (* The rebound components of an include and an open are body
+                     binders too. *)
+         List.iter add (bound_value_identifiers incl.incl_type)
+     | Tstr_open od ->
+         List.iter add (bound_value_identifiers od.open_bound_items)
+     | _ -> ());
+    Tast_iterator.default_iterator.structure_item iter it
+  in
+  let module_expr iter (me : Typedtree.module_expr) =
+    (match me.mod_desc with
+     | Tmod_functor (_, Named (Some x, _, _), _) -> add x
+     | _ -> ());
+    Tast_iterator.default_iterator.module_expr iter me
+  in
+  let iter =
+    { Tast_iterator.default_iterator with pat; expr; structure_item;
+      module_expr }
+  in
+  iter.module_expr iter body;
+  !bound
+
+(* A template body may not contain classes, nor objects, as staged
+   code may not.  A static binding in the body is an ordinary binding
+   of the component function's body, evaluated at each application;
+   its slot in the record is real, and the fragment holds a dummy at
+   the same position. *)
+let check_template_body (body : Typedtree.module_expr) =
+  let expr _iter (e : Typedtree.expression) =
+    Translcore.check_no_objects ~anywhere:true e
+  in
+  let structure_item iter (it : Typedtree.structure_item) =
+    (match it.str_desc with
+     | Tstr_class _ ->
+         raise (Error (it.str_loc, Template_restriction
+           "Classes are not yet supported in a template body."))
+     | _ -> ());
+    Tast_iterator.default_iterator.structure_item iter it
+  in
+  let iter =
+    { Tast_iterator.default_iterator with expr; structure_item }
+  in
+  iter.module_expr iter body
+
+type template_translation =
+  { tt_roots : Ident.t list;    (* the captured environment, in slot order *)
+    tt_function : lambda }      (* F_fn *)
+
+(* An application, [module M = F$(V)]: the compile-time block's M-entry
+   is the record of the component call, ordinary code re-evaluated at
+   each load of the object; the static program, at the application's
+   position, destructures the same call: the record is M's compile-time
+   meaning and the dynamic component runs once, its fragment code bound
+   for the hole at M's position in the run-time term.  The registry
+   below keys that binding's identifier by M's.  A functor or argument
+   that is not a path is bound to a hidden name inside the application
+   item, in each pass, the identifier likewise shared through the
+   registry. *)
+
+let template_application_idents ctx m_id =
+  let st = ctx.unit_state in
+  match Ident.Map.find_opt m_id st.template_applications with
+  | Some p -> p
+  | None ->
+      let p = { ta_mcode = Ident.create_local "*tapp*";
+                ta_arg = Ident.create_local "*targ*";
+                ta_funct = Ident.create_local "*tfunct*" } in
+      st.template_applications <-
+        Ident.Map.add m_id p st.template_applications;
+      p
+
+let template_application_slot ctx m_id =
+  (template_application_idents ctx m_id).ta_mcode
+
+(* The context of the applications of templates; see
+   [Translcore.context].  The pair chain of a functor body nested under
+   a template body is installed by [transl_template_body] and the
+   nested plain body arm of [transl_struct_item], and consumed by
+   [transl_body_application]. *)
+let with_template_apps ctx template_apps_mode f =
+  f { ctx with template_apps_mode }
+
+let with_template_body_apps ctx template_body_apps f =
+  f { ctx with template_body_apps }
+
+let with_template_body_pending_chain ctx template_body_pending_chain f =
+  f { ctx with template_body_pending_chain }
+
+let rec template_application_parts me =
+  match me.Typedtree.mod_desc with
+  | Tmod_apply (Template_application _, funct, arg, ccarg) ->
+      Some (funct, Some (arg, ccarg))
+  | Tmod_apply_unit (Template_application _, funct) -> Some (funct, None)
+  | Tmod_constraint (inner, _, _, _) -> template_application_parts inner
+  | _ -> None
+
+(* The result coercion of a constrained application, [module M =
+   (F$(V) : S)], which is [Id$(F$(V))] for [module Id$(X : S) = X]: the
+   coercion applies to the fragment and to the record. *)
+let rec template_application_rescc me =
+  match me.Typedtree.mod_desc with
+  | Tmod_constraint (inner, _, _, cc) ->
+      compose_coercions cc (template_application_rescc inner)
+  | _ -> Tcoerce_none
+
+(* [include F$(V)] and [open F$(V)]: the application and the items it
+   binds.  Both compile as a hidden application item followed by the
+   rebinding of the result's fields. *)
+(* The binding [module id = F$(V)] that an include, an open or a nested
+   application compiles as. *)
+let application_binding ?id ~loc mexp : Typedtree.module_binding =
+  { mb_id = id;
+    mb_name = { txt = None; loc };
+    mb_uid = Shape.Uid.internal_not_actually_unique;
+    mb_presence = Mp_present;
+    mb_expr = mexp;
+    mb_attributes = [];
+    mb_loc = loc }
+
+let template_application_items (item : Typedtree.structure_item) =
+  match item.str_desc with
+  | Tstr_include incl when template_application_parts incl.incl_mod <> None ->
+      Some (incl.incl_loc, incl.incl_mod, incl.incl_type)
+  | Tstr_open od when template_application_parts od.open_expr <> None ->
+      Some (od.open_loc, od.open_expr, od.open_bound_items)
+  | _ -> None
+
+(* The path a module expression denotes, seen through constraints: an
+   alias or an alias application wraps its path in a Tmod_constraint.
+   [None] for anything that is not a path. *)
+let rec module_expr_path me =
+  match me.Typedtree.mod_desc with
+  | Tmod_ident (p, _) -> Some p
+  | Tmod_constraint (m, _, _, _) -> module_expr_path m
+  | _ -> None
+
+let is_module_path me = module_expr_path me <> None
+
 (* A mixed functor is a functor whose result has compile-time
    components.  Its arguments have none, so those of its result do not
    depend on them: its compile-time value is the compile-time block of
@@ -772,10 +1137,12 @@ let transl_macro_group_functions ~ctx ~scopes rec_flag pat_expr_list =
 let is_mixed_module_type env mty = Mtype.has_macro_components env mty
 
 (* Whether a module expression binds something at compile time: a
-   value, a constructor or a module that does, at any depth, whether or
-   not its type shows it.  The compile-time part translates an item if
-   and only if it binds something at compile time; otherwise the
-   identifiers that the item binds are placeholders there.  With
+   value, a constructor, a template or a module that does, at any depth,
+   whether or not its type shows it.  The compile-time part translates
+   an item if and only if it binds something at compile time; otherwise
+   the identifiers that the item binds are placeholders there.  The
+   applications of templates are the exception: the compile-time part
+   makes their fragments (see [module_has_template_application]).  With
    [~expand_aliases:false] an alias contributes nothing, and its target
    is not read. *)
 let binds_at_compile_time ?expand_aliases (me : Typedtree.module_expr) =
@@ -792,15 +1159,256 @@ let rec peel_functor_coercions = function
 
 let rec is_plain_functor me =
   match me.Typedtree.mod_desc with
-  | Tmod_functor _ -> true
+  | Tmod_functor (Plain, _, _) -> true
   | Tmod_constraint (m, _, _, _) -> is_plain_functor m
   | _ -> false
 
 let rec is_plain_application me =
   match me.Typedtree.mod_desc with
-  | Tmod_apply _ | Tmod_apply_unit _ -> true
+  | Tmod_apply (Plain_application, _, _, _)
+  | Tmod_apply_unit (Plain_application, _) -> true
   | Tmod_constraint (m, _, _, _) -> is_plain_application m
   | _ -> false
+
+(* Whether the structure contains a template application: the driver
+   then compiles the unit through its static program, which evaluates
+   the applications' dynamic components.  Functor bodies are descended
+   into: an application under a plain body is hoisted to the
+   definition item. *)
+let rec has_template_applications str =
+  List.exists item_has_template_application str.str_items
+
+and item_has_template_application item =
+  match item.Typedtree.str_desc with
+  | Tstr_module mb -> module_has_template_application mb.mb_expr
+  | Tstr_recmodule mbs ->
+      List.exists (fun mb -> module_has_template_application mb.mb_expr) mbs
+  | Tstr_include incl -> module_has_template_application incl.incl_mod
+  | Tstr_open od -> module_has_template_application od.open_expr
+  | _ -> false
+
+and module_has_template_application mexp =
+  match mexp.Typedtree.mod_desc with
+  | Tmod_apply (Template_application _, _, _, _)
+  | Tmod_apply_unit (Template_application _, _) -> true
+  | Tmod_structure str -> has_template_applications str
+  | Tmod_constraint (m, _, _, _) -> module_has_template_application m
+  | Tmod_functor (_, _, body) -> module_has_template_application body
+  | Tmod_apply (Plain_application, funct, arg, _) ->
+      module_has_template_application funct
+      || module_has_template_application arg
+  | Tmod_apply_unit (Plain_application, funct) ->
+      module_has_template_application funct
+  | _ -> false
+
+(* The chain of template parameters of a curried definition. *)
+let peel_template_params me =
+  let param_id p =
+    match p with
+    | Typedtree.Named (Some x, _, _) -> x
+    | Named (None, _, _) | Unit -> Ident.create_local "*X*"
+  in
+  let rec peel acc me =
+    match template_functor_parts me with
+    | Some (p, fbody) -> peel (param_id p :: acc) fbody
+    | None -> (List.rev acc, me)
+  in
+  peel [] me
+
+(* Whether a literal argument contains top-level splices or template
+   applications: its compile-time translation then has bindings of its
+   own, so the compile-world pass walks it even when it has no
+   compile-time components. *)
+let literal_argument_compile_parts (arg : Typedtree.module_expr) =
+  let found = ref false in
+  let expr iter (e : Typedtree.expression) =
+    (match e.exp_desc with
+     | Texp_splice { spl_top_level = true; _ } -> found := true
+     | _ -> ());
+    if not !found then Tast_iterator.default_iterator.expr iter e
+  in
+  let module_expr iter (me : Typedtree.module_expr) =
+    (match me.mod_desc with
+     | Tmod_apply (Template_application _, _, _, _)
+     | Tmod_apply_unit (Template_application _, _) ->
+         found := true
+     | _ -> ());
+    if not !found then Tast_iterator.default_iterator.module_expr iter me
+  in
+  let iter = { Tast_iterator.default_iterator with expr; module_expr } in
+  iter.module_expr iter arg;
+  !found
+
+(* The application under the constraints around it: the generic
+   translator reaches the application with the constraints peeled. *)
+let rec application_node (me : Typedtree.module_expr) =
+  match me.mod_desc with
+  | Tmod_constraint (m, _, _, _) when template_application_parts m <> None ->
+      application_node m
+  | _ -> me
+
+(* The identifier of a template application.  It binds the application
+   where nothing else names it: [module _ = F$(V)], [include F$(V)], and
+   an application inside a module expression. *)
+let application_id me =
+  match (application_node me).mod_desc with
+  | Tmod_apply (Template_application id, _, _, _)
+  | Tmod_apply_unit (Template_application id, _) -> id
+  | _ -> fatal_error "Translmod.application_id"
+
+let template_application_shape mb =
+  let funct, argopt =
+    Option.get (template_application_parts mb.Typedtree.mb_expr)
+  in
+  let m_id =
+    match mb.mb_id with
+    | Some id -> id
+    | None -> application_id mb.Typedtree.mb_expr
+  in
+  (m_id, funct, argopt)
+
+(* The template applications inside a module expression, through
+   plain applications and constraints -- not inside functor bodies or
+   structures, whose items have arms of their own -- in evaluation
+   order, each replaced by a reference to the hidden application item
+   it compiles as, bound by its identifier. *)
+let rec hoisted_applications ~ctx (me : Typedtree.module_expr) =
+  if template_application_parts me <> None then begin
+    let id = application_id me in
+    let st = ctx.unit_state in
+    st.hidden_application_binders <-
+      Ident.Set.add id st.hidden_application_binders;
+    let lid = Location.mknoloc (Longident.Lident (Ident.name id)) in
+    [ (me.mod_loc, me) ],
+    { me with mod_desc = Tmod_ident (Path.Pident id, lid) }
+  end else
+    match me.mod_desc with
+    | Tmod_apply (Plain_application, funct, arg, cc) ->
+        let apps_f, funct = hoisted_applications ~ctx funct in
+        let apps_a, arg = hoisted_applications ~ctx arg in
+        apps_f @ apps_a,
+        { me with mod_desc = Tmod_apply (Plain_application, funct, arg, cc) }
+    | Tmod_apply_unit (Plain_application, funct) ->
+        let apps, funct = hoisted_applications ~ctx funct in
+        apps, { me with mod_desc = Tmod_apply_unit (Plain_application, funct) }
+    | Tmod_constraint (m, mty, c, cc) ->
+        let apps, m = hoisted_applications ~ctx m in
+        apps, { me with mod_desc = Tmod_constraint (m, mty, c, cc) }
+    | _ -> [], me
+
+(* An item whose module expression contains template applications,
+   with the applications and the item rewritten to refer to their
+   hidden binders. *)
+let hoistable_item ~ctx (item : Typedtree.structure_item) =
+  let hoist me k =
+    if template_application_parts me <> None then None
+    else
+      match hoisted_applications ~ctx me with
+      | [], _ -> None
+      | apps, me -> Some (apps, { item with str_desc = k me })
+  in
+  match item.str_desc with
+  | Tstr_module mb ->
+      hoist mb.mb_expr (fun me -> Tstr_module { mb with mb_expr = me })
+  | Tstr_include incl ->
+      hoist incl.incl_mod
+        (fun me -> Tstr_include { incl with incl_mod = me })
+  | Tstr_open od ->
+      hoist od.open_expr (fun me -> Tstr_open { od with open_expr = me })
+  | _ -> None
+
+(* Where an application item may be compiled. *)
+let template_application_mode_check ~ctx ~loc =
+  match ctx.template_apps_mode with
+  | Tapps_items | Tapps_plain_body -> ()
+  | Tapps_template_body | Tapps_template_plain_body ->
+      raise (Error (loc, Template_restriction
+        "A template cannot be applied at this point inside \
+         another template's body."))
+  | Tapps_inactive ->
+      (* The compile-time object is emitted without a static program:
+               its application entries are record calls, no evaluation. *)
+      if not ctx.translating_macros_object then
+        raise (Error (loc, Template_restriction
+          "A template can only be applied where the compiler \
+           evaluates compile-time code: at the top level of a module, or \
+           inside another template's body."))
+
+let template_application_checks ~ctx mb =
+  template_application_mode_check ~ctx ~loc:mb.Typedtree.mb_loc;
+  template_application_shape mb
+
+(* The template applications under the functor bodies of a module
+   expression, in declaration order, for hoisting: the body's items,
+   nested literal structures, applications and functors, the items of
+   an included or opened literal structure.  A template definition
+   belongs to the template machinery: the scan does not descend
+   templates. *)
+type plain_body_template_application =
+  { pba_loc : Location.t;
+    pba_m_id : Ident.t;
+    pba_funct : Typedtree.module_expr;
+    pba_argopt : (Typedtree.module_expr * Typedtree.module_coercion) option }
+
+let functor_body_template_applications me =
+  let apps = ref [] in
+  let add ~loc m_id funct argopt =
+    apps := { pba_loc = loc; pba_m_id = m_id;
+              pba_funct = funct; pba_argopt = argopt } :: !apps
+  in
+  (* [under]: under a functor body.  An application there is an
+     entry; elsewhere its own arms compile it, and its functor and
+     argument are scanned for functors. *)
+  let rec scan_module ~under me =
+    match template_application_parts me with
+    | Some (funct, argopt) ->
+        if under then
+          (* Inside a module expression: a hidden item. *)
+          let loc = (application_node me).mod_loc in
+          add ~loc (application_id me) funct argopt
+        else begin
+          scan_module ~under funct;
+          Option.iter (fun (arg, _) -> scan_module ~under arg) argopt
+        end
+    | None ->
+    match me.Typedtree.mod_desc with
+    | Tmod_structure str -> List.iter (scan_item ~under) str.str_items
+    | Tmod_constraint (m, _, _, _) -> scan_module ~under m
+    | Tmod_functor (Plain, _, body) -> scan_module ~under:true body
+    | Tmod_apply (Plain_application, funct, arg, _) ->
+        scan_module ~under funct; scan_module ~under arg
+    | Tmod_apply_unit (Plain_application, funct) -> scan_module ~under funct
+    | _ -> ()
+  and scan_item ~under item =
+    match item.Typedtree.str_desc with
+    | Tstr_module mb when template_application_parts mb.mb_expr <> None ->
+        if under then
+          let m_id, funct, argopt = template_application_shape mb in
+          add ~loc:mb.mb_loc m_id funct argopt
+        else scan_module ~under mb.mb_expr
+    | Tstr_module mb -> scan_module ~under mb.mb_expr
+    | Tstr_include _ | Tstr_open _ ->
+        (match template_application_items item with
+         | Some (loc, mexp, _) ->
+             if under then
+               let funct, argopt =
+                 Option.get (template_application_parts mexp)
+               in
+               add ~loc (application_id mexp) funct argopt
+             else scan_module ~under mexp
+         | None ->
+             (* A literal structure's applications are items one level
+                down. *)
+             let mexp = match item.str_desc with
+               | Tstr_include incl -> incl.incl_mod
+               | Tstr_open od -> od.open_expr
+               | _ -> assert false
+             in
+             scan_module ~under mexp)
+    | _ -> ()
+  in
+  scan_module ~under:false me;
+  List.rev !apps
 
 (* Bind each of [ids] to the field of [block] at its position, and
    continue with [next]. *)
@@ -814,6 +1422,7 @@ let rebind_fields ~scopes ~loc ~block ids fields next =
               go (pos + 1) (id :: fields) ids)
   in
   go 0 fields ids
+
 (* Whether a structure item binds something at compile time; see
    [binds_at_compile_time].  An include binds the components of its
    module, whatever names it. *)
@@ -918,19 +1527,66 @@ and transl_module ~ctx ~scopes cc rootpath mexp =
         (transl_module_path ~ctx loc mexp.mod_env path)
   | Tmod_structure str ->
       transl_struct ~ctx ~scopes loc [] cc rootpath str
-  | (Tmod_functor _ | Tmod_apply _ | Tmod_apply_unit _)
+  | Tmod_functor (Template, _, _) ->
+      (* A template in a position other than a definition's right-hand
+         side: the result of a functor, above all. *)
+      apply_coercion ~ctx loc Strict cc
+        (transl_template_definition ~ctx ~scopes ~loc:mexp.mod_loc None mexp)
+  | Tmod_apply (Template_application _, _, _, _)
+  | Tmod_apply_unit (Template_application _, _)
+    when Option.is_none ctx.template_body_apps
+         && (ctx.template_apps_mode = Tapps_plain_body
+             || ctx.translating_macros_object) ->
+      (* The body of a functor: a hidden application item whose call is
+         hoisted to the definition item, as a body item's is. *)
+      let m_id = application_id mexp in
+      let funct, argopt = Option.get (template_application_parts mexp) in
+      transl_application_binding ~ctx ~scopes ~loc:mexp.mod_loc ~rescc:cc
+        ~mixed_result:(Mtype.has_macro_components mexp.mod_env mexp.mod_type)
+        m_id funct argopt ~dummies:[] []
+        (fun _ -> Lconst const_unit) (fun () -> Lvar m_id)
+  | Tmod_apply (Template_application _, _, _, _)
+  | Tmod_apply_unit (Template_application _, _) ->
+      (* Application items are compiled by [transl_struct_item] and
+         [transl_store], and applications inside module expressions as
+         hidden items; an application reaching here is in another
+         position: the body of a functor inside a template body, a
+         recursive module binding. *)
+      raise (Error (mexp.mod_loc, Template_restriction
+        "A template application is not supported in this position."))
+  | (Tmod_functor (Plain, _, _) | Tmod_apply (Plain_application, _, _, _)
+    | Tmod_apply_unit (Plain_application, _))
     when in_compile_world ctx && binds_at_compile_time mexp ->
       transl_module_hoisted ~ctx ~scopes cc rootpath mexp Fun.id
   | Tmod_functor _ ->
+      (* Entering a functor body: within a static program,
+         applications there compile by hoisting (mode
+         [Tapps_plain_body]); the in-body collector is cleared, so a
+         plain body nested under a template body stays restricted.
+         The body's own module bindings are recorded for the hoisted
+         call's path checks. *)
+      let mode =
+        match ctx.template_apps_mode with
+        | Tapps_items | Tapps_plain_body -> Tapps_plain_body
+        | Tapps_template_body | Tapps_template_plain_body ->
+            Tapps_template_plain_body
+        | Tapps_inactive as m -> m
+      in
+      with_template_apps ctx mode @@ fun ctx ->
+      (* Under a template body the collector stays: a nested
+         application routes through it, its pair bound at the plain
+         body's definition item.  Elsewhere the collector is cleared:
+         plain bodies outside template bodies hoist. *)
+      let ctx =
+        if mode = Tapps_template_plain_body then ctx
+        else { ctx with template_body_apps = None }
+      in
       oo_wrap mexp.mod_env true (fun () ->
         compile_functor ~ctx ~scopes mexp cc rootpath loc) ()
-  | Tmod_apply (Template_application _, _, _, _)
-  | Tmod_apply_unit (Template_application _, _) ->
-      Misc.fatal_error "templates: not implemented"
-  | Tmod_apply(Plain_application, funct, arg, ccarg) ->
+  | Tmod_apply(_, funct, arg, ccarg) ->
       let translated_arg = transl_module ~ctx ~scopes ccarg None arg in
       transl_apply ~ctx ~scopes ~loc ~cc mexp.mod_env funct translated_arg
-  | Tmod_apply_unit (Plain_application, funct) ->
+  | Tmod_apply_unit (_, funct) ->
       transl_apply ~ctx ~scopes ~loc ~cc mexp.mod_env funct lambda_unit
   | Tmod_constraint(arg, _, _, ccarg) ->
       transl_module ~ctx ~scopes (compose_coercions cc ccarg) rootpath arg
@@ -950,14 +1606,6 @@ and transl_apply ~ctx ~scopes ~loc ~cc mod_env funct translated_arg =
        ap_tailcall=Default_tailcall;
        ap_inlined=inlined_attribute;
        ap_specialised=Default_specialise})
-
-(* Whether a module expression is, through constraints, a literal
-   structure. *)
-and is_literal_structure me =
-  match me.mod_desc with
-  | Tmod_structure _ -> true
-  | Tmod_constraint (me, _, _, _) -> is_literal_structure me
-  | _ -> false
 
 and transl_struct ?cont ~ctx ~scopes loc fields cc rootpath
       {str_final_env; str_items; _} =
@@ -1028,6 +1676,14 @@ and transl_structure ?cont ~ctx ~scopes loc fields cc rootpath final_env =
            transl_structure ?cont ~ctx ~scopes loc fields cc rootpath final_env
              rem)
 
+(* Whether a module expression is, through constraints, a literal
+   structure. *)
+and is_literal_structure me =
+  match me.mod_desc with
+  | Tmod_structure _ -> true
+  | Tmod_constraint (me, _, _, _) -> is_literal_structure me
+  | _ -> false
+
 (* A literal structure of the compile-time part, with the rest of the
    part, [k], inside the scope of its bindings: the code of a splice
    runs at the innermost point, and may use any of them. *)
@@ -1035,10 +1691,12 @@ and transl_module_hoisted ~ctx ~scopes cc rootpath me k =
   match me.mod_desc with
   | Tmod_structure str ->
       transl_struct ~cont:k ~ctx ~scopes Loc_unknown [] cc rootpath str
-  | Tmod_functor (_, _, fbody)
+  | Tmod_functor (Plain, _, fbody)
     when in_compile_world ctx && binds_at_compile_time me ->
       (* The compile-time block of the body, with [k] inside the scope
-         of its bindings. *)
+         of its bindings.  The applications of templates in the body are
+         those of a functor body. *)
+      with_template_apps ctx Tapps_plain_body @@ fun ctx ->
       transl_module_hoisted ~ctx ~scopes (functor_result_coercion cc)
         rootpath fbody k
   | Tmod_constraint (me', _, _, ccarg) ->
@@ -1106,10 +1764,838 @@ and compile_time_application ~ctx cc me funct funct_value =
       cc funct_value
   else Lconst const_unit
 
+and transl_template_body ~ctx ~scopes ~loc params body =
+  (* [params] is the chain of template parameters, outermost first;
+       the environment pairs nest, one per level. *)
+  check_template_body body;
+  let depth = List.length params in
+  let term_bound = template_bound_idents body in
+  (* The run-time fragment, each top-level splice left as a hole. *)
+  let splices = ref [] in
+  let collector _ctx spl_exp =
+    Translcore.check_no_objects spl_exp;
+    let h = Ident.create_local "*tsplice*" in
+    splices := (h, spl_exp) :: !splices;
+    (* [Texp_splice] wraps this into the hole. *)
+    { sp_code = Lvar h; sp_args = [] }
+  in
+  (* The body's applications, collected by the same pass. *)
+  let apps_acc = ref ([] : template_body_app list) in
+  let frag0 =
+    in_world ctx Run_world @@ fun ctx ->
+    with_template_apps ctx Tapps_template_body @@ fun ctx ->
+    with_template_body_apps ctx (Some apps_acc) @@ fun ctx ->
+    transl_module ~ctx:{ ctx with splice_source = Some collector } ~scopes
+      Tcoerce_none None body
+  in
+  let splices = List.rev !splices in
+  let apps = List.rev !apps_acc in
+  (* A splice's free names: body-bound names are term binders at the
+       hole; the rest, with everything the fragment itself mentions, are
+       roots of F's environment.  The hidden binders of the body's
+       applications are body binders. *)
+  let term_bound =
+    List.fold_left
+      (fun s a ->
+         let add o s = Option.fold ~none:s ~some:(fun x ->
+             Ident.Set.add x s) o in
+         add a.tba_lit_funct (add a.tba_lit_arg (Ident.Set.add a.tba_m_id s)))
+      term_bound apps
+  in
+  let body_bound =
+    List.fold_left (fun s x -> Ident.Set.add x s) term_bound params in
+  let splice_parts =
+    List.map (fun (h, spl_exp) ->
+        let fvs =
+          Ident.Set.union
+            (in_world ctx Run_world @@ fun ctx ->
+             Translcore.quoted_variables ~ctx ~scopes spl_exp)
+            (expr_macro_call_env_roots spl_exp)
+          |> Ident.Set.filter (fun r -> not (Ident.global r))
+        in
+        (* The parameter is never a hole argument: its references project
+                   through the pair. *)
+        (h, spl_exp,
+         Ident.Set.inter fvs term_bound,
+         Ident.Set.diff fvs body_bound))
+      splices
+  in
+  (* The environment pair of a body application, classified as a
+       splice's free names are. *)
+  let app_parts =
+    List.map (fun a ->
+        let fvs =
+          Ident.Set.filter (fun r -> not (Ident.global r))
+            (free_variables a.tba_pair_term)
+        in
+        (a, Ident.Set.inter fvs term_bound,
+         Ident.Set.diff fvs body_bound))
+      apps
+  in
+  let roots =
+    let free =
+      Ident.Set.filter (fun r -> not (Ident.global r))
+        (free_variables frag0)
+    in
+    List.fold_left (fun acc (_, _, _, rs) -> Ident.Set.union acc rs)
+      free splice_parts
+    |> (fun s ->
+          List.fold_left (fun acc (_, _, rs) -> Ident.Set.union acc rs)
+            s app_parts)
+    |> (fun s ->
+          List.fold_left (fun s x -> Ident.Set.remove x s) s params)
+    |> Ident.Set.elements
+  in
+  (* [eps] is the fragment's prologue binding of the environment pair;
+       every thunk receives its identity to rebuild the projections
+       against the instantiation's binder. *)
+  let eps = Ident.create_local "*tenv*" in
+  let env_param = Ident.create_local "*envcode*" in
+  let zeros n = List.init n (fun _ -> 0) in
+  let me_index =
+    (* The j-th parameter sits one pair per remaining level away from
+           the innermost prologue. *)
+    List.mapi (fun j x -> (x, 1 :: zeros (depth - j - 1))) params
+    @ List.mapi (fun i r -> (r, i :: zeros depth)) roots
+  in
+  let thunks =
+    List.map (fun (h, spl_exp, args, _) ->
+        (* The environment slots of the body generators the splice calls
+                   are fragment binders, so each access is routed through a code
+                   parameter bound from the identity delivered at the hole; the
+                   generators' functions are in scope lexically. *)
+        let called_slots =
+          Ident.Set.elements
+            (Ident.Set.inter (expr_macro_call_env_roots spl_exp)
+               term_bound)
+        in
+        let slot_route =
+          List.map (fun r -> (r, Ident.create_local "*tslotcode*"))
+            called_slots
+        in
+        let slot_id_params =
+          List.map (fun _ -> Ident.create_local "*tslotid*") called_slots
+        in
+        let args =
+          Ident.Set.diff args (Ident.Set.of_list called_slots)
+        in
+        let me_param = Ident.create_local "template_env" in
+        let raw closing =
+          in_world ctx Run_world @@ fun ctx ->
+          let ctx =
+            { ctx with
+              macro_env =
+                Some { Translcore.me_param; me_index;
+                       me_group = Ident.Set.empty };
+              template_slot_index = Some slot_route;
+              closing }
+          in
+          Translcore.transl_exp ~ctx ~scopes spl_exp
+        in
+        let originals, fresh_vars, code =
+          Translquote.transl_close_function Location.none args
+            (fun closing -> Translquote.remove_events (raw closing))
+        in
+        let eps_p = Ident.create_local "*tenvid*" in
+        let code =
+          List.fold_right2
+            (fun (_, code_param) id_param acc ->
+               Llet (Strict, Pgenval, code_param,
+                     Translquote.quote_expression (Lvar id_param), acc))
+            slot_route slot_id_params code
+        in
+        let code =
+          Llet (Strict, Pgenval, me_param,
+                Translquote.quote_expression (Lvar eps_p), code)
+        in
+        let fn =
+          lfunction ~kind:Curried
+            ~params:
+              (List.map (fun v -> (v, Pgenval)) fresh_vars
+               @ List.map (fun v -> (v, Pgenval)) slot_id_params
+               @ [ (eps_p, Pgenval) ])
+            ~return:Pgenval ~body:code ~attr:default_function_attribute
+            ~loc:Loc_unknown
+        in
+        let hole =
+          { sp_code = Lvar h; sp_args = originals @ called_slots @ [ eps ] }
+        in
+        (h, fn, hole))
+      splice_parts
+  in
+  (* One thunk per body application: at its hole, it calls the
+       application's dynamic component through the pair the compile-world
+       pass bound, so each outer application instantiates it afresh.  The
+       inner environment pair is built as code against the identities the
+       hole delivers. *)
+  let app_thunks =
+    List.map (fun (a, delivered, _) ->
+        let delivered = Ident.Set.elements delivered in
+        let id_params =
+          List.map (fun _ -> Ident.create_local "*tslotid*") delivered in
+        let code_params =
+          List.map (fun _ -> Ident.create_local "*tslotcode*") delivered in
+        let eps_p = Ident.create_local "*tenvid*" in
+        let me_param = Ident.create_local "template_env" in
+        let subst_map =
+          List.fold_left
+            (fun m (r, path) ->
+               Ident.Map.add r
+                 (List.fold_right
+                    (fun i acc ->
+                       Lprim (Pfield (i, Pointer, Immutable), [acc],
+                              Loc_unknown))
+                    path (lsplice (Lvar me_param)))
+                 m)
+            Ident.Map.empty me_index
+        in
+        let subst_map =
+          List.fold_left2
+            (fun m r cp -> Ident.Map.add r (lsplice (Lvar cp)) m)
+            subst_map delivered code_params
+        in
+        let inner_env =
+          Translquote.quote_expression
+            (Lambda.subst (fun _ _ env -> env) subst_map a.tba_pair_term)
+        in
+        let dyn_call =
+          Lapply { ap_func = Lprim (Pfield (1, Pointer, Immutable),
+                                    [Lvar a.tba_pair], Loc_unknown);
+                   ap_args = [ inner_env ];
+                   ap_loc = Loc_unknown; ap_tailcall = Default_tailcall;
+                   ap_inlined = Default_inline;
+                   ap_specialised = Default_specialise }
+        in
+        let body =
+          Llet (Strict, Pgenval, me_param,
+                Translquote.quote_expression (Lvar eps_p),
+                List.fold_right2
+                  (fun cp idp acc ->
+                     Llet (Strict, Pgenval, cp,
+                           Translquote.quote_expression (Lvar idp), acc))
+                  code_params id_params dyn_call)
+        in
+        let fn =
+          lfunction ~kind:Curried
+            ~params:
+              (List.map (fun v -> (v, Pgenval)) id_params
+               @ [ (eps_p, Pgenval) ])
+            ~return:Pgenval ~body ~attr:default_function_attribute
+            ~loc:Loc_unknown
+        in
+        let hole = { sp_code = Lvar a.tba_hole; sp_args = delivered @ [ eps ] }
+        in
+        (a.tba_hole, fn, hole))
+      app_parts
+  in
+  let thunks = thunks @ app_thunks in
+  let frag =
+    let rec fill lam =
+      match lam with
+      | Lsplice { sp_code = Lvar h; sp_args = [] } as l ->
+          (match
+             List.find_map (fun (h', _, hole) ->
+                 if Ident.same h h' then Some hole else None)
+               thunks
+           with
+           | Some hole -> Lsplice hole
+           | None -> l)
+      | Lsplice _ -> lam
+      | _ -> Lambda.shallow_map fill lam
+    in
+    fill frag0
+  in
+  let frag =
+    let project path =
+      List.fold_right
+        (fun i acc ->
+           Lprim (Pfield (i, Pointer, Immutable), [acc], Loc_unknown))
+        path (Lvar eps)
+    in
+    let subst_map =
+      List.fold_left (fun m (r, path) -> Ident.Map.add r (project path) m)
+        Ident.Map.empty me_index
+    in
+    Lambda.subst (fun _ _ env -> env) subst_map frag
+  in
+  let frag =
+    Llet (Strict, Pgenval, eps,
+          lsplice (Lprim (Pfield (0, Pointer, Immutable),
+                          [Lvar env_param], Loc_unknown)),
+          frag)
+  in
+  (* The component function abstracts the body's compile-time part
+       over the argument's compile-time block, and returns the record
+       with the dynamic component, under whose lambda the thunks and the
+       builder sit. *)
+  let dyn_fn =
+    lfunction ~kind:Curried
+      ~params:[ (env_param, Pgenval) ]
+      ~return:Pgenval
+      ~body:
+        (List.fold_right
+           (fun (h, fn, _) acc -> Llet (Strict, Pgenval, h, fn, acc))
+           thunks
+           (Translquote.module_builder frag))
+      ~attr:default_function_attribute ~loc:Loc_unknown
+  in
+  let assemble record_block =
+    let rec_id = Ident.create_local "*record*" in
+    let dyn_id = Ident.create_local "*dyn*" in
+    Llet (Strict, Pgenval, rec_id, record_block,
+          Llet (Strict, Pgenval, dyn_id, dyn_fn,
+                Lprim (Pmakeblock (0, Immutable, None),
+                       [Lvar rec_id; Lvar dyn_id], Loc_unknown)))
+  in
+  let pending_chain = ref ([] : (lambda -> lambda) list) in
+  let inner_pair =
+    (* What this pass builds executes at compile time, in bytecode, so it
+           is translated in bytecode mode whichever compiler translates the
+           unit, as the other compile-world translations are; the fragment
+           pass above stays under the ambient flag, its output being
+           run-world data. *)
+    protect_refs [R (Clflags.native_code, false)] @@ fun () ->
+    in_world ctx Compile_world @@ fun ctx ->
+    with_template_apps ctx Tapps_template_body @@ fun ctx ->
+    with_template_body_apps ctx (Some apps_acc) @@ fun ctx ->
+    with_template_body_pending_chain ctx (Some pending_chain) @@ fun ctx ->
+    (* An ascribed body: the coercion composes into the record, and
+           [assemble] stays the innermost continuation, so the pair bindings
+           of the body's applications scope over the dynamic component. *)
+    let rec chain_body cc body =
+      match body.Typedtree.mod_desc with
+      | Tmod_structure str ->
+          transl_struct ~cont:assemble ~ctx ~scopes Loc_unknown [] cc None str
+      | Tmod_constraint (b, _, _, ccarg) ->
+          chain_body (compose_coercions cc ccarg) b
+      | Tmod_functor (Plain, _, _) when binds_at_compile_time body ->
+          (* A functor with compile-time content: its shared block is built
+                       with the continuation inside. *)
+          transl_module_hoisted ~ctx ~scopes cc None body assemble
+      | _ ->
+          (* No structure: the record is the body's compile-time block. *)
+          assemble (transl_module ~ctx ~scopes cc None body)
+    in
+    chain_body Tcoerce_none body
+  in
+  (* The pair bindings of a body that is a bare functor: at the top of
+       the component function, in declaration order. *)
+  let inner_pair =
+    List.fold_left (fun acc wrap -> wrap acc) inner_pair !pending_chain
+  in
+  (* One component function per parameter, innermost first: an outer
+       level's record is the level below's component function, and its
+       dynamic component builds the partial application's run-time slot,
+       the environment pair itself. *)
+  let wrap_level ~xm inner =
+    let rec_id = Ident.create_local "*record*" in
+    let dyn_id = Ident.create_local "*dyn*" in
+    let outer_env = Ident.create_local "*envcode*" in
+    let context_dyn =
+      lfunction ~kind:Curried ~params:[ (outer_env, Pgenval) ]
+        ~return:Pgenval
+        ~body:
+          (Translquote.module_builder
+             (lsplice (Lprim (Pfield (0, Pointer, Immutable),
+                              [Lvar outer_env], Loc_unknown))))
+        ~attr:default_function_attribute ~loc:Loc_unknown
+    in
+    lfunction ~kind:Curried ~params:[ (xm, Pgenval) ]
+      ~return:Pgenval
+      ~body:
+        (Llet (Strict, Pgenval, rec_id, inner,
+               Llet (Strict, Pgenval, dyn_id, context_dyn,
+                     Lprim (Pmakeblock (0, Immutable, None),
+                            [Lvar rec_id; Lvar dyn_id], Loc_unknown))))
+      ~attr:default_function_attribute ~loc:(of_location ~scopes loc)
+  in
+  let xms = List.map (fun _ -> Ident.create_local "*xmacros*") params in
+  let outer_xms = List.filteri (fun j _ -> j < depth - 1) xms in
+  let innermost_fn =
+    let xm = List.nth xms (depth - 1) in
+    lfunction ~kind:Curried ~params:[ (xm, Pgenval) ]
+      ~return:Pgenval ~body:inner_pair ~attr:default_function_attribute
+      ~loc:(of_location ~scopes loc)
+  in
+  let f_fn =
+    List.fold_right (fun xm acc -> wrap_level ~xm acc)
+      outer_xms innermost_fn
+  in
+  (* Compile-time uses of the parameters read the value parameters. *)
+  let f_fn =
+    Lambda.subst (fun _ _ env -> env)
+      (List.fold_left2 (fun m x xm -> Ident.Map.add x (Lvar xm) m)
+         Ident.Map.empty params xms)
+      f_fn
+  in
+  { tt_roots = roots; tt_function = f_fn }
+
+(* The value a template definition binds: in the run world its
+   environment tuple (an empty one stays an immediate, as a
+   generator's does), in the compile world its component function,
+   under the coercion of the constraints around it.  The two passes
+   compute the same root order from the same typed tree, which is what
+   makes the tuple's layout and the function's projections agree. *)
+and transl_template_definition ~ctx ~scopes ~loc id me =
+  let template, cc = Option.get (template_definition me) in
+  let params, fbody = peel_template_params template in
+  let subscopes = match id with
+    | None -> scopes
+    | Some id -> enter_module_definition ~scopes id in
+  let tt = transl_template_body ~ctx ~scopes:subscopes ~loc params fbody in
+  apply_coercion ~ctx (of_location ~scopes loc) Strict cc
+    (if in_run_world ctx then macro_env_of_roots tt.tt_roots
+     else tt.tt_function)
+
+(* A nested application -- the functor or the argument of an
+   application is itself one, [F$(A)$(B)] or [F$(G$(V))] -- bound as a
+   hidden application item of its own, [inner] in its scope: at the
+   stage of the enclosing pass, through the enclosing item's binder
+   for the position. *)
+and nested_application_binding ~ctx ~scopes ~transform id mexp inner =
+  let funct, argopt = Option.get (template_application_parts mexp) in
+  let loc = mexp.Typedtree.mod_loc in
+  transl_application_binding ~ctx ~scopes ~transform ~loc
+    ~rescc:(template_application_rescc mexp)
+    ~mixed_result:(Mtype.has_macro_components mexp.mod_env mexp.mod_type)
+    id funct argopt ~dummies:[] [] (fun _ -> inner) (fun () -> inner)
+
+and template_argument_root ~ctx ~scopes ?lit m_id
+      (arg : Typedtree.module_expr) =
+  (* The argument's root: a body literal's binder, a path, or the
+       in-item binder of a top-level literal. *)
+  match lit with
+  | Some id -> Lvar id
+  | None ->
+      if is_module_path arg then
+        transl_module ~ctx ~scopes Tcoerce_none None arg
+      else Lvar (template_application_idents ctx m_id).ta_arg
+
+and template_functor_root ~ctx ~scopes ?lit m_id
+      (funct : Typedtree.module_expr) =
+  (* Likewise for the functor position. *)
+  match lit with
+  | Some id -> Lvar id
+  | None ->
+      if is_module_path funct then
+        transl_module ~ctx ~scopes Tcoerce_none None funct
+      else Lvar (template_application_idents ctx m_id).ta_funct
+
+and bind_literal_template_functor ~ctx ~scopes ?(transform = Fun.id) m_id
+      funct inner =
+  (* The in-item binding of an applied functor that is not a path: a
+     template, or a functor application returning one, translated at
+     this pass's stage; [transform] lets the store form rewrite the
+     tuple's roots to its global's fields. *)
+  if is_module_path funct then inner
+  else
+    let ta_funct = (template_application_idents ctx m_id).ta_funct in
+    if template_application_parts funct <> None then
+      nested_application_binding ~ctx ~scopes ~transform ta_funct funct inner
+    else
+      let scopes = enter_module_definition ~scopes m_id in
+      with_hoisted_applications ~ctx ~scopes ~transform funct @@ fun funct ->
+      if in_run_world ctx then
+        Llet (Strict, Pgenval, ta_funct,
+              transform (transl_module ~ctx ~scopes Tcoerce_none None funct),
+              inner)
+      else
+        let hoisted =
+          if hoisting_pass ctx then hoisted_chain ~ctx ~scopes funct
+          else Fun.id
+        in
+        transl_module_hoisted ~ctx ~scopes Tcoerce_none None funct
+          (fun fn ->
+             hoisted (Llet (Strict, Pgenval, ta_funct, transform fn, inner)))
+
+and bind_literal_template_argument ~ctx ~scopes ?(transform = Fun.id) m_id
+      argopt inner =
+  (* The in-item binding of a literal argument, enclosing [inner]: in
+       the run world the argument's block, uncoerced; in the compile world
+       its hoisted compile-time translation, when the record call reads it
+       or it has compile-time parts of its own. *)
+  match argopt with
+  | Some (arg, _) when template_application_parts arg <> None ->
+      nested_application_binding ~ctx ~scopes ~transform
+        (template_application_idents ctx m_id).ta_arg arg inner
+  | Some (arg, _) when not (is_module_path arg) ->
+      let ta_arg = (template_application_idents ctx m_id).ta_arg in
+      with_hoisted_applications ~ctx ~scopes ~transform arg @@ fun arg ->
+      if in_compile_world ctx then begin
+        let hoisted =
+          if hoisting_pass ctx then hoisted_chain ~ctx ~scopes arg
+          else Fun.id
+        in
+        if binds_at_compile_time arg || literal_argument_compile_parts arg
+        then
+          transl_module_hoisted ~ctx ~scopes Tcoerce_none None arg
+            (fun block ->
+               hoisted (Llet (Strict, Pgenval, ta_arg, transform block, inner)))
+        else hoisted inner
+      end
+      else
+        Llet (Strict, Pgenval, ta_arg,
+              transform
+                (transl_module ~ctx ~scopes Tcoerce_none None arg),
+              inner)
+  | _ -> inner
+
+and template_component_call ~ctx ~scopes ~loc ?lit_funct ?lit_arg m_id funct
+      argopt =
+  (* The component call, [F (coerce V_macros)]: an argument with no
+       compile-time block is passed unit. *)
+  let f_component =
+    template_functor_root ~ctx ~scopes ?lit:lit_funct m_id funct
+  in
+  let x_macros =
+    match argopt with
+    | Some (arg, ccarg)
+      when Mtype.has_macro_components arg.mod_env arg.mod_type ->
+        apply_coercion ~ctx (of_location ~scopes loc) Strict ccarg
+          (template_argument_root ~ctx ~scopes ?lit:lit_arg m_id arg)
+    | _ -> lambda_unit
+  in
+  Lapply { ap_func = f_component; ap_args = [ x_macros ];
+           ap_loc = of_location ~scopes loc;
+           ap_tailcall = Default_tailcall; ap_inlined = Default_inline;
+           ap_specialised = Default_specialise }
+
+and template_env_pair_term ~ctx ~scopes ~loc ?lit_funct ?lit_arg m_id funct
+      argopt =
+  (* The environment pair's run-world term: F's slot and the coerced
+       argument block. *)
+  let f_slot = template_functor_root ~ctx ~scopes ?lit:lit_funct m_id funct in
+  let arg_block =
+    match argopt with
+    | Some (arg, ccarg) ->
+        apply_coercion ~ctx (of_location ~scopes loc) Strict ccarg
+          (template_argument_root ~ctx ~scopes ?lit:lit_arg m_id arg)
+    | None -> lambda_unit
+  in
+  Lprim (Pmakeblock (0, Immutable, None), [f_slot; arg_block],
+         Loc_unknown)
+
+and template_env_code ~ctx ~scopes ~loc m_id funct argopt =
+  (* The environment pair as code, closed over its local roots, whose
+       binders the emitted term carries at the same stamps. *)
+  let pair_term =
+    in_world ctx Run_world @@ fun ctx ->
+    template_env_pair_term ~ctx ~scopes ~loc m_id funct argopt
+  in
+  (* Under the store form, a root of this unit is a field of its global
+       block. *)
+  let pair_term =
+    match ctx.native_slot_layout with
+    | Some nsl -> Translcore.name_slots_through_block nsl pair_term
+    | None -> pair_term
+  in
+  let roots =
+    Ident.Set.filter (fun r -> not (Ident.global r))
+      (free_variables pair_term)
+  in
+  Translquote.transl_close_quotation Location.none roots
+    (Translquote.quote_expression pair_term)
+
+(* An application item inside a template body; see
+   [template_body_apps].  A literal functor or argument is an anonymous
+   body module, bound in-item in each world under a hidden identifier
+   shared through the collector. *)
+and transl_body_application ~ctx ~scopes ?(hidden = false) acc mb fields next =
+  let m_id, funct, argopt = template_application_shape mb in
+  (* An anonymous application evaluates, but contributes no field. *)
+  let next fields' =
+    if mb.Typedtree.mb_id = None then next fields else next fields' in
+  (* A literal functor's binding around [k ()]: its translation at
+     this pass's stage. *)
+  let literal_functor lf k =
+    let scopes = enter_module_definition ~scopes m_id in
+    with_hoisted_applications ~ctx ~scopes funct @@ fun funct ->
+    if in_run_world ctx then
+      Llet (Strict, Pgenval, lf,
+            transl_module ~ctx ~scopes Tcoerce_none None funct, k ())
+    else
+      transl_module_hoisted ~ctx ~scopes Tcoerce_none None funct
+        (fun fn -> Llet (Strict, Pgenval, lf, fn, k ()))
+  in
+  (* The functor or the argument at [lit], an application itself:
+     bound as a hidden application item of this body around [k ()],
+     collected and chained like any other; a literal, by [literal]. *)
+  let arg_expr () = fst (Option.get argopt) in
+  let nested_or lit mexp literal k =
+    match lit with
+    | None -> k ()
+    | Some id ->
+        let mexp = mexp () in
+        if template_application_parts mexp <> None then
+          transl_body_application ~ctx ~scopes ~hidden:true acc
+            (application_binding ~id ~loc:mexp.Typedtree.mod_loc mexp)
+            fields (fun _ -> k ())
+        else literal id k
+  in
+  if in_run_world ctx then begin
+    let lit_funct =
+      if is_module_path funct then None
+      else Some (Ident.create_local "*tbfunct*")
+    in
+    let lit_arg =
+      match argopt with
+      | Some (arg, _) when not (is_module_path arg) ->
+          Some (Ident.create_local "*tbarg*")
+      | _ -> None
+    in
+    let hole = Ident.create_local "*tapphole*" in
+    let pair = Ident.create_local "*tapppair*" in
+    let pair_term =
+      template_env_pair_term ~ctx ~scopes ~loc:mb.Typedtree.mb_loc
+        ?lit_funct ?lit_arg m_id funct argopt
+    in
+    acc := { tba_m_id = m_id; tba_hole = hole; tba_pair = pair;
+             tba_pair_term = pair_term;
+             tba_lit_funct = lit_funct; tba_lit_arg = lit_arg } :: !acc;
+    nested_or lit_funct (fun () -> funct) literal_functor
+    @@ fun () ->
+    nested_or lit_arg arg_expr
+      (fun la k ->
+         with_hoisted_applications ~ctx ~scopes (arg_expr ()) @@ fun arg ->
+         Llet (Strict, Pgenval, la,
+               transl_module ~ctx ~scopes Tcoerce_none None arg, k ()))
+    @@ fun () ->
+    Llet (Strict, Pgenval, m_id,
+          apply_coercion ~ctx Loc_unknown Strict
+            (template_application_rescc mb.Typedtree.mb_expr)
+            (lsplice (Lvar hole)),
+          next (m_id :: fields))
+  end
+  else begin
+    let entry =
+      match
+        List.find_opt (fun a -> Ident.same a.tba_m_id m_id) !acc
+      with
+      | Some e -> e
+      | None ->
+          Misc.fatal_error
+            "Translmod.transl_body_application: uncollected application"
+    in
+    let call () =
+      template_component_call ~ctx ~scopes ~loc:mb.Typedtree.mb_loc
+        ?lit_funct:entry.tba_lit_funct ?lit_arg:entry.tba_lit_arg
+        m_id funct argopt
+    in
+    let record =
+      apply_coercion ~ctx Loc_unknown Strict
+        (template_application_rescc mb.Typedtree.mb_expr)
+        (Lprim (Pfield (0, Pointer, Immutable), [Lvar entry.tba_pair],
+                Loc_unknown))
+    in
+    let argument_compile_parts arg =
+      binds_at_compile_time arg || literal_argument_compile_parts arg
+    in
+    if ctx.template_apps_mode = Tapps_template_plain_body then begin
+      (* Inside a nested plain body, the bindings go to the installed
+               chain: a literal functor's component function, a literal
+               argument's hoisted compile-world walk (as a wrapper around a
+               placeholder), the pair, and a hidden item's record. *)
+      let pending =
+        match ctx.template_body_pending_chain with
+        | Some r -> r
+        | None ->
+            Misc.fatal_error
+              "Translmod.transl_body_application: no pending chain"
+      in
+      let push wrap = pending := wrap :: !pending in
+      nested_or entry.tba_lit_funct (fun () -> funct)
+        (fun lf k ->
+           let placeholder = Ident.create_local "*tlithole*" in
+           let wrapped =
+             literal_functor lf (fun () -> Lvar placeholder) in
+           push (fun inner ->
+               Lambda.subst (fun _ _ e -> e)
+                 (Ident.Map.singleton placeholder inner) wrapped);
+           k ())
+      @@ fun () ->
+      nested_or entry.tba_lit_arg arg_expr
+        (fun la k ->
+           with_hoisted_applications ~ctx ~scopes (arg_expr ()) @@ fun arg ->
+           if argument_compile_parts arg then begin
+             let placeholder = Ident.create_local "*tlithole*" in
+             let wrapped =
+               transl_module_hoisted ~ctx ~scopes Tcoerce_none None arg
+                 (fun block ->
+                    Llet (Strict, Pgenval, la, block, Lvar placeholder))
+             in
+             push (fun inner ->
+                 Lambda.subst (fun _ _ e -> e)
+                   (Ident.Map.singleton placeholder inner) wrapped)
+           end;
+           k ())
+      @@ fun () ->
+      let call = call () in
+      push (fun inner -> Llet (Strict, Pgenval, entry.tba_pair, call, inner));
+      if hidden then begin
+        push (fun inner -> Llet (Strict, Pgenval, m_id, record, inner));
+        next (m_id :: fields)
+      end else
+        Llet (Strict, Pgenval, m_id, record, next (m_id :: fields))
+    end else
+      nested_or entry.tba_lit_funct (fun () -> funct) literal_functor
+      @@ fun () ->
+      nested_or entry.tba_lit_arg arg_expr
+        (fun la k ->
+           (* Hoisted, as at top level. *)
+           with_hoisted_applications ~ctx ~scopes (arg_expr ()) @@ fun arg ->
+           if argument_compile_parts arg then
+             transl_module_hoisted ~ctx ~scopes Tcoerce_none None arg
+               (fun block -> Llet (Strict, Pgenval, la, block, k ()))
+           else k ())
+      @@ fun () ->
+      Llet (Strict, Pgenval, entry.tba_pair, call (),
+            Llet (Strict, Pgenval, m_id, record, next (m_id :: fields)))
+  end
+
+(* The block-form binding of one application item around [inner], at
+   the stage of the current pass.  [dummies] are the run-time positions
+   the item occupies when the static-body pass descends a functor
+   body. *)
+and transl_application_binding ~ctx ~scopes ?(transform = Fun.id) ~loc ~rescc
+      ~mixed_result m_id funct argopt ~dummies fields next inner =
+  let mcode = template_application_slot ctx m_id in
+  let coerced lam =
+    apply_coercion ~ctx (of_location ~scopes loc) Strict rescc lam
+  in
+  let bind_literals body =
+    (* The functor evaluates first, as in a plain application. *)
+    bind_literal_template_functor ~ctx ~scopes ~transform m_id funct
+      (bind_literal_template_argument ~ctx ~scopes ~transform m_id argopt body)
+  in
+  if in_run_world ctx then
+    (* The run-time term: a hole reading the fragment code.  The
+       fragment reaches the functor and the argument by their names,
+       which the hole hides until the static program fills it; the
+       names are mentioned before it, for the dependency analysis of
+       a recursive module group. *)
+    bind_literals
+      (hole_roots ~ctx ~scopes ~loc m_id funct argopt
+         (Llet (Strict, Pgenval, m_id, coerced (lsplice (Lvar mcode)),
+                inner ())))
+  else if ctx.translating_macros_object
+          || (mixed_result && ctx.template_apps_mode = Tapps_plain_body)
+  then
+    (* The compile-time object: the record call, re-evaluated at each
+           load.  The same shape serves an application with a mixed result
+           in the shared block of a mixed functor. *)
+    bind_literals
+      (Llet (Strict, Pgenval, m_id,
+             coerced
+               (Lprim (Pfield (0, Pointer, Immutable),
+                       [ template_component_call ~ctx ~scopes ~loc m_id funct
+                           argopt ],
+                       Loc_unknown)),
+             inner ()))
+  else if ctx.template_apps_mode = Tapps_plain_body then
+    (* The static-body pass in a functor body: the compile-time part was
+           hoisted to the definition item. *)
+    dummy_slots ~ctx dummies next fields
+  else
+    (* The static program: the call destructured, the record M's
+           compile-time meaning, the dynamic component run once. *)
+    let pr = Ident.create_local "*tpair*" in
+    let field i =
+      Lprim (Pfield (i, Pointer, Immutable), [Lvar pr], Loc_unknown)
+    in
+    bind_literals
+      (Llet (Strict, Pgenval, pr,
+            template_component_call ~ctx ~scopes ~loc m_id funct argopt,
+        Llet (Strict, Pgenval, m_id, coerced (field 0),
+          Llet (Strict, Pgenval, mcode,
+                Lapply { ap_func = field 1;
+                         ap_args =
+                           [ template_env_code ~ctx ~scopes ~loc m_id funct
+                               argopt ];
+                         ap_loc = Loc_unknown;
+                         ap_tailcall = Default_tailcall;
+                         ap_inlined = Default_inline;
+                         ap_specialised = Default_specialise },
+                inner ()))))
+
+and hole_roots ~ctx ~scopes ~loc m_id funct argopt body =
+  let roots =
+    Ident.Set.filter (fun r -> not (Ident.global r))
+      (free_variables
+         (template_env_pair_term ~ctx ~scopes ~loc m_id funct argopt))
+  in
+  Ident.Set.fold
+    (fun r body -> Lsequence (Lprim (Pignore, [Lvar r], Loc_unknown), body))
+    roots body
+
+(* The hoisted calls of the applications under the functor bodies of
+   [me], around [body]: for each, in declaration order, the
+   destructured component call and the fragment code bound for the
+   hole the run pass left inside the body.  A literal functor's or
+   argument's compile-time view is bound with the call. *)
+and hoisted_chain ~ctx ~scopes me body =
+  List.fold_right
+    (fun { pba_loc = loc; pba_m_id = m_id;
+           pba_funct = funct; pba_argopt = argopt } body ->
+       let mcode = template_application_slot ctx m_id in
+       let pr = Ident.create_local "*tpair*" in
+       bind_literal_template_functor ~ctx ~scopes m_id funct
+         (bind_literal_template_argument ~ctx ~scopes m_id argopt
+            (Llet (Strict, Pgenval, pr,
+                   template_component_call ~ctx ~scopes ~loc m_id funct argopt,
+              Llet (Strict, Pgenval, mcode,
+                    Lapply { ap_func =
+                               Lprim (Pfield (1, Pointer, Immutable),
+                                      [Lvar pr], Loc_unknown);
+                             ap_args =
+                               [ template_env_code ~ctx ~scopes ~loc m_id funct
+                                   argopt ];
+                             ap_loc = Loc_unknown;
+                             ap_tailcall = Default_tailcall;
+                             ap_inlined = Default_inline;
+                             ap_specialised = Default_specialise },
+                    body)))))
+    (functor_body_template_applications me) body
+
+(* Whether this is the static program's own pass, where the applications
+   under a functor body are hoisted. *)
+and hoisting_pass ctx =
+  in_compile_world ctx && not ctx.translating_macros_object
+  && ctx.template_apps_mode = Tapps_items
+
+(* The hidden application items of [apps] around [k ()], at this pass's
+   stage and in this body's routing. *)
+and bind_hidden_applications ~ctx ~scopes ?(transform = Fun.id) apps k =
+  List.fold_right
+    (fun (loc, app) k () ->
+       let id = application_id app in
+       match ctx.template_body_apps with
+       | Some acc ->
+           transl_body_application ~ctx ~scopes ~hidden:true acc
+             (application_binding ~id ~loc app) [] (fun _ -> k ())
+       | None ->
+           template_application_mode_check ~ctx ~loc;
+           nested_application_binding ~ctx ~scopes ~transform id app (k ()))
+    apps k ()
+
+(* [k] applied to [me] with the template applications inside it bound
+   as hidden items around. *)
+and with_hoisted_applications ~ctx ~scopes ?transform me k =
+  let apps, me = hoisted_applications ~ctx me in
+  bind_hidden_applications ~ctx ~scopes ?transform apps (fun () -> k me)
+
 and transl_struct_item ~ctx ~scopes fields rootpath item next =
-  if in_compile_world ctx && not (item_binds_at_compile_time item) then
+  match hoistable_item ~ctx item with
+  | Some (apps, item) ->
+      bind_hidden_applications ~ctx ~scopes apps
+        (fun () -> transl_struct_item ~ctx ~scopes fields rootpath item next)
+  | None ->
+  if in_compile_world ctx
+     && not (item_binds_at_compile_time item)
+     && not (item_has_template_application item)
+  then
     (* The compile-time part translates an item that binds something at
-       compile time.  What another binds is a placeholder there. *)
+       compile time, or applies a template.  What another binds is a
+       placeholder there. *)
     dummy_slots ~ctx (item_bound_idents item) next fields
   else
   match item.str_desc with
@@ -1181,6 +2667,148 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
       let body = next (id::fields) in
       Llet(Strict, Pgenval, id, lam, body)
   | Tstr_module ({mb_presence=Mp_present} as mb)
+    when template_definition mb.mb_expr <> None ->
+      (* A template definition; see [transl_template_definition]. *)
+      let id = mb.mb_id in
+      let bound =
+        transl_template_definition ~ctx ~scopes ~loc:mb.mb_loc id mb.mb_expr
+      in
+      let body = next (cons_opt id fields) in
+      begin match id with
+      | None ->
+          Lsequence (Lprim (Pignore, [bound],
+                            of_location ~scopes mb.mb_name.loc), body)
+      | Some id -> Llet (Strict, Pgenval, id, bound, body)
+      end
+  | Tstr_module ({mb_presence=Mp_present} as mb)
+    when template_application_parts mb.mb_expr <> None
+         && Option.is_some ctx.template_body_apps ->
+      (* Inside a template body. *)
+      transl_body_application ~ctx ~scopes (Option.get ctx.template_body_apps)
+        mb fields next
+  | Tstr_module ({mb_presence=Mp_present} as mb)
+    when template_application_parts mb.mb_expr <> None ->
+      let m_id, funct, argopt = template_application_checks ~ctx mb in
+      let dummies, k =
+        (* [module _ = F$(V)]: evaluated, no field. *)
+        if mb.mb_id = None then [], (fun () -> next fields)
+        else [m_id], (fun () -> next (m_id :: fields))
+      in
+      transl_application_binding ~ctx ~scopes ~loc:mb.mb_loc
+        ~rescc:(template_application_rescc mb.mb_expr)
+        ~mixed_result:(Mtype.has_macro_components mb.mb_expr.mod_env
+                         mb.mb_expr.mod_type)
+        m_id funct argopt ~dummies fields next
+        k
+  | Tstr_include _ | Tstr_open _
+    when Option.is_some ctx.template_body_apps
+         && template_application_items item <> None ->
+      let incl_loc, incl_mod, incl_type =
+        Option.get (template_application_items item)
+      in
+      (* [include F$(V)] under a template body: a hidden anonymous
+               application item, then the rebinding of the result's fields: in
+               the run world off the fragment; in the compile world, dummies
+               at the run-time positions and the record's fields at the
+               compile-time ones. *)
+      let acc = Option.get ctx.template_body_apps in
+      let m_id = application_id incl_mod in
+      let ids = bound_value_identifiers incl_type in
+      let macro_ids =
+        List.filter_map
+          (function
+            | Types.Sig_value (id, vd, _)
+              when Types.val_serving_level vd < 0 -> Some id
+            | Types.Sig_typext (id, ext, _, _)
+              when ext.ext_static -> Some id
+            | Types.Sig_module (id, _, md, _, _)
+              when Mtype.has_macro_components incl_mod.mod_env
+                     md.md_type -> Some id
+            | _ -> None)
+          incl_type
+        |> Ident.Set.of_list
+      in
+      let mb = application_binding ~loc:incl_loc incl_mod in
+      transl_body_application ~ctx ~scopes acc mb fields
+        (fun fields ->
+           if in_compile_world ctx then
+             let rec rebind pos fields = function
+               | [] -> next fields
+               | id :: rest ->
+                   if not (Ident.Set.mem id macro_ids) then
+                     (* Before [next]: the block's coercion consults the set. *)
+                     record_compile_world_dummy ctx id;
+                   let body = rebind (pos + 1) (id :: fields) rest in
+                   if Ident.Set.mem id macro_ids then
+                     Llet (Strict, Pgenval, id,
+                           Lprim (Pfield (pos, Pointer, Mutable),
+                                  [Lvar m_id], Loc_unknown),
+                           body)
+                   else
+                     Llet (Alias, Pgenval, id, Lconst const_unit, body)
+             in
+             rebind 0 fields ids
+           else
+             let rec rebind pos fields = function
+               | [] -> next fields
+               | id :: rest ->
+                   Llet (Alias, Pgenval, id,
+                         Lprim (Pfield (pos, Pointer, Mutable),
+                                [Lvar m_id], Loc_unknown),
+                         rebind (pos + 1) (id :: fields) rest)
+             in
+             rebind 0 fields ids)
+  | Tstr_include _ | Tstr_open _
+    when template_application_items item <> None ->
+      let loc, incl_mod, incl_type =
+        Option.get (template_application_items item)
+      in
+      (* [include F$(V)] and [open F$(V)]: a hidden application item, then
+               the rebinding of the result's fields, each pass off its own
+               meaning of the hidden binder. *)
+      let funct, argopt = Option.get (template_application_parts incl_mod) in
+      template_application_mode_check ~ctx ~loc;
+      let m_id = application_id incl_mod in
+      let ids = bound_value_identifiers incl_type in
+      let rebind_idents fields ids =
+        rebind_fields ~scopes ~loc ~block:m_id ids fields next
+      in
+      transl_application_binding ~ctx ~scopes ~loc
+        ~rescc:(template_application_rescc incl_mod)
+        ~mixed_result:(Mtype.has_macro_components incl_mod.mod_env
+                         incl_mod.mod_type)
+        m_id funct argopt ~dummies:ids fields next
+        (fun () -> rebind_idents fields ids)
+  | Tstr_module ({mb_presence=Mp_present} as mb)
+    when hoisting_pass ctx
+         && functor_body_template_applications mb.mb_expr <> [] ->
+      (* The static-body pass treats a functor body as run-time content,
+               but an application there has a compile-time part, evaluated
+               once, at the definition item, in declaration order: only the
+               fragment code is bound, through the registry, for the hole the
+               run pass left inside the body; the fragment reaches the
+               parameters and the body's bindings through the environment
+               pair. *)
+      let hoisted = hoisted_chain ~ctx ~scopes mb.mb_expr in
+      (* A mixed functor's shared block is built with the continuation
+               inside; a pure functor's binding is a closure, never applied. *)
+      let id = mb.mb_id in
+      let subscopes = match id with
+        | None -> scopes
+        | Some id -> enter_module_definition ~scopes id in
+      transl_module_hoisted ~ctx ~scopes:subscopes Tcoerce_none
+        (Option.bind id (field_path rootpath)) mb.mb_expr
+        (fun module_body ->
+           let body = next (cons_opt id fields) in
+           hoisted
+             (match id with
+              | None ->
+                  Lsequence (Lprim (Pignore, [module_body],
+                                    of_location ~scopes mb.mb_name.loc), body)
+              | Some id ->
+                  Llet (pure_module mb.mb_expr, Pgenval, id, module_body,
+                        body)))
+  | Tstr_module ({mb_presence=Mp_present} as mb)
     when in_compile_world ctx
          && (is_literal_structure mb.mb_expr
              || ((is_plain_functor mb.mb_expr
@@ -1201,6 +2829,35 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
                Lsequence (Lprim (Pignore, [block],
                                  of_location ~scopes mb.mb_name.loc), body)
            | Some id -> Llet (Strict, Pgenval, id, block, body))
+  | Tstr_module ({mb_presence=Mp_present} as mb)
+    when in_compile_world ctx
+         && ctx.template_apps_mode = Tapps_template_body
+         && not (binds_at_compile_time mb.mb_expr)
+         && functor_body_template_applications mb.mb_expr <> [] ->
+      (* A plain body under a template body: the pair of each application
+               is bound at this item, outside the functor's closure, in scope
+               of the record projections inside it and of the dynamic
+               component's calls. *)
+      let pending = ref ([] : (lambda -> lambda) list) in
+      let id = mb.mb_id in
+      let subscopes = match id with
+        | None -> scopes
+        | Some id -> enter_module_definition ~scopes id in
+      let module_body =
+        with_template_body_pending_chain ctx (Some pending) @@ fun ctx ->
+        transl_module ~ctx ~scopes:subscopes Tcoerce_none
+          (Option.bind id (field_path rootpath)) mb.mb_expr
+      in
+      let body = next (cons_opt id fields) in
+      let item =
+        match id with
+        | None ->
+            Lsequence (Lprim (Pignore, [module_body],
+                              of_location ~scopes mb.mb_name.loc), body)
+        | Some id ->
+            Llet (pure_module mb.mb_expr, Pgenval, id, module_body, body)
+      in
+      List.fold_left (fun acc wrap -> wrap acc) item !pending
   | Tstr_module ({mb_presence=Mp_present} as mb) ->
       let id = mb.mb_id in
       (* Translate module first *)
@@ -1364,6 +3021,15 @@ let required_globals ~flambda body =
   Translprim.clear_used_primitives ();
   required
 
+(* The globals that typing records are those of the run-time part.  Run
+   a translation of the compile-time part without them. *)
+let without_typing_required_globals f =
+  let saved = Env.get_required_globals () in
+  Env.reset_required_globals ();
+  let result = f () in
+  List.iter Env.add_required_global saved;
+  result
+
 (* Compile an implementation *)
 
 let module_block_size component_names coercion =
@@ -1402,21 +3068,28 @@ let transl_implementation ~ctx module_name (str, cc) =
   in
   { implementation with code }
 
-(* The globals that typing records are those of the run-time part.  Run
-   a translation of the compile-time part without them. *)
-let without_typing_required_globals f =
-  let saved = Env.get_required_globals () in
-  Env.reset_required_globals ();
-  let result = f () in
-  List.iter Env.add_required_global saved;
-  result
-
+(* The global holding a module's compile-time part; see Unit_info. *)
 let macros_global module_name =
   Ident.create_persistent (Unit_info.macros_modname module_name)
 
+(* A function of the compiler that the static program calls.  The
+   function is the only component of the unit [m], which the program
+   that runs the static program is linked with. *)
+let call_static_support m args =
+  let unit = Lprim (Pgetglobal (Ident.create_persistent m), [], Loc_unknown) in
+  Lapply { ap_func = Lprim (Pfield (0, Pointer, Immutable), [unit],
+                            Loc_unknown);
+           ap_args = args;
+           ap_loc = Loc_unknown;
+           ap_tailcall = Default_tailcall;
+           ap_inlined = Default_inline;
+           ap_specialised = Default_specialise }
+
 (* Whether a structure exports anything that it binds at compile time.
    A module alias is not expanded: under -no-alias-deps its target is not
-   read.  What an open binds is not exported. *)
+   read.  The driver completes the decision from the signature of the
+   unit, where aliases contribute nothing and ascriptions show their
+   signatures.  What an open binds is not exported. *)
 let exports_macros str =
   List.exists
     (fun item -> match item.str_desc with
@@ -1432,7 +3105,7 @@ let transl_macros_object module_name (str, cc) =
   let module_id = Ident.create_persistent module_name in
   let macros_id = macros_global module_name in
   let scopes = enter_module_definition ~scopes:empty_scopes module_id in
-  let ctx = initial_context () in
+  let ctx = { (initial_context ()) with translating_macros_object = true } in
   let body, required =
     without_typing_required_globals @@ fun () ->
       let body =
@@ -1629,21 +3302,17 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
     [] ->
       transl_store_subst := subst;
       Lambda.subst no_env_update subst cont
+    | item :: rem when hoistable_item ~ctx item <> None ->
+        let apps, item = Option.get (hoistable_item ~ctx item) in
+        bind_hidden_applications ~ctx ~scopes
+          ~transform:(Lambda.subst no_env_update subst) apps
+          (fun () -> transl_store ~scopes rootpath subst cont (item :: rem))
     | item :: rem ->
         match item.str_desc with
         | Tstr_eval (expr, _attrs) ->
             Lsequence(Lambda.subst no_env_update subst
                         (transl_exp ~ctx ~scopes expr),
                       transl_store ~scopes rootpath subst cont rem)
-        | Tstr_value(rec_flag, Macro, pat_expr_list) ->
-            let ids = List.map macro_bound_id pat_expr_list in
-            let lam =
-              macro_env_slots ~ctx ~scopes rec_flag pat_expr_list
-                (store_idents Loc_unknown ids)
-            in
-            Lsequence(Lambda.subst no_env_update subst lam,
-                      transl_store ~scopes rootpath
-                        (add_idents false ids subst) cont rem)
         | Tstr_value(_, Static, pat_expr_list) ->
             let ids = let_bound_idents pat_expr_list in
             let lam =
@@ -1656,7 +3325,16 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
             Lsequence(Lambda.subst no_env_update subst lam,
                       transl_store ~scopes rootpath
                         (add_idents false ids subst) cont rem)
-        | Tstr_value(rec_flag, Value, pat_expr_list) ->
+        | Tstr_value(rec_flag, Macro, pat_expr_list) ->
+            let ids = List.map macro_bound_id pat_expr_list in
+            let lam =
+              macro_env_slots ~ctx ~scopes rec_flag pat_expr_list
+                (store_idents Loc_unknown ids)
+            in
+            Lsequence(Lambda.subst no_env_update subst lam,
+                      transl_store ~scopes rootpath
+                        (add_idents false ids subst) cont rem)
+        | Tstr_value(rec_flag, _, pat_expr_list) ->
             let ids = let_bound_idents pat_expr_list in
             let lam =
               transl_let ~ctx ~scopes ~in_structure:true rec_flag pat_expr_list
@@ -1693,6 +3371,93 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
                            store_ident loc id),
                       transl_store ~scopes rootpath
                         (add_ident false id subst) cont rem)
+        | Tstr_module ({mb_presence=Mp_present} as mb)
+          when template_definition mb.mb_expr <> None ->
+            (* The store form of a template definition: its slot
+               holds the environment tuple, as the block form's does;
+               the component function is the macro object's business.
+               The tuple's roots are rewritten to field reads by the
+               pending substitution, as a generator's environment
+               slot's are. *)
+            let value =
+              transl_template_definition ~ctx ~scopes ~loc:mb.mb_loc mb.mb_id
+                mb.mb_expr
+            in
+            begin match mb.mb_id with
+            | None ->
+                Lsequence
+                  (Lprim (Pignore,
+                          [Lambda.subst no_env_update subst value],
+                          of_location ~scopes mb.mb_name.loc),
+                   transl_store ~scopes rootpath subst cont rem)
+            | Some id ->
+                Llet (Strict, Pgenval, id,
+                      Lambda.subst no_env_update subst value,
+                      Lsequence
+                        (store_ident (of_location ~scopes mb.mb_loc) id,
+                         transl_store ~scopes rootpath
+                           (add_ident true id subst) cont rem))
+            end
+        | Tstr_module ({mb_presence=Mp_present} as mb)
+          when template_application_parts mb.mb_expr <> None ->
+            (* The store form of a template application: a hole reading the
+                           fragment code, the record call being the compile-time
+                           object's.  A literal functor or argument is bound in-item,
+                           with the pending substitution applied. *)
+            let m_id, funct, argopt = template_application_checks ~ctx mb in
+            let mcode = template_application_slot ctx m_id in
+            let loc = of_location ~scopes mb.mb_loc in
+            let value =
+              apply_coercion ~ctx loc Strict
+                (template_application_rescc mb.mb_expr)
+                (lsplice (Lvar mcode))
+            in
+            bind_literal_template_functor ~ctx ~scopes
+              ~transform:(Lambda.subst no_env_update subst) m_id funct
+              (bind_literal_template_argument ~ctx ~scopes
+                 ~transform:(Lambda.subst no_env_update subst) m_id argopt
+                 (match mb.mb_id with
+                  | None ->
+                      (* [module _ = F$(V)]: evaluated, no field. *)
+                      Lsequence
+                        (Lprim (Pignore, [value], loc),
+                         transl_store ~scopes rootpath subst cont rem)
+                  | Some _ ->
+                      Llet (Strict, Pgenval, m_id, value,
+                            Lsequence
+                              (store_ident loc m_id,
+                               transl_store ~scopes rootpath
+                                 (add_ident true m_id subst) cont rem))))
+        | Tstr_include _ | Tstr_open _
+          when template_application_items item <> None ->
+            let loc, incl_mod, incl_type =
+              Option.get (template_application_items item)
+            in
+            (* The store form of [include F$(V)] and [open F$(V)]. *)
+            let funct, argopt =
+              Option.get (template_application_parts incl_mod)
+            in
+            template_application_mode_check ~ctx ~loc;
+            let m_id = application_id incl_mod in
+            let mcode = template_application_slot ctx m_id in
+            let ids = bound_value_identifiers incl_type in
+            let sloc = of_location ~scopes loc in
+            let rec store_incl_idents pos = function
+              | [] -> transl_store ~scopes rootpath
+                        (add_idents true ids subst) cont rem
+              | id :: idl ->
+                  Llet (Alias, Pgenval, id,
+                        Lprim (Pfield (pos, Pointer, Mutable), [Lvar m_id],
+                               sloc),
+                        Lsequence (store_ident sloc id,
+                                   store_incl_idents (pos + 1) idl))
+            in
+            bind_literal_template_functor ~ctx ~scopes
+              ~transform:(Lambda.subst no_env_update subst) m_id funct
+              (bind_literal_template_argument ~ctx ~scopes
+                 ~transform:(Lambda.subst no_env_update subst) m_id argopt
+                 (Llet (Strict, Pgenval, m_id, lsplice (Lvar mcode),
+                        store_incl_idents 0 ids)))
         | Tstr_module
             {mb_id=None; mb_name; mb_presence=Mp_present; mb_expr=modl;
              mb_loc=loc; mb_attributes} ->
@@ -1779,9 +3544,17 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
         | Tstr_module ({mb_presence=Mp_absent}) ->
             transl_store ~scopes rootpath subst cont rem
         | Tstr_recmodule bindings ->
+            (* Each module is stored as soon as it is bound, before any
+               right-hand side is evaluated: code built by compile-time
+               code reaches a module of the unit through the unit's
+               block, and a right-hand side may run such code naming a
+               module of this group.  A module with a shape is bound to
+               its final block, which the group then fills in place. *)
             let ids = List.filter_map (fun mb -> mb.mb_id) bindings in
             let ctx = group_modules_as_variables ctx ids in
             compile_recmodule ~scopes
+              ~bound:(fun id body ->
+                Lsequence (store_ident Loc_unknown id, body))
               (fun id modl ->
                  Lambda.subst no_env_update subst
                    (match id with
@@ -1792,9 +3565,8 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
                         ~ctx ~scopes:(enter_module_definition ~scopes id)
                         Tcoerce_none (field_path rootpath id) modl))
               bindings
-              (Lsequence(store_idents Loc_unknown ids,
-                         transl_store ~scopes rootpath
-                           (add_idents true ids subst) cont rem))
+              (transl_store ~scopes rootpath
+                 (add_idents true ids subst) cont rem)
         | Tstr_class cl_list ->
             let (ids, class_bindings) =
               transl_class_bindings ~ctx ~scopes cl_list
@@ -2077,19 +3849,6 @@ let transl_store_implementation ~ctx module_name (str, restr) =
     module_ident;
     required_globals = required_globals ~flambda:true code }
 
-(* A function of the compiler that the static program calls.  The
-   function is the only component of the unit [m], which the program
-   that runs the static program is linked with. *)
-let call_static_support m args =
-  let unit = Lprim (Pgetglobal (Ident.create_persistent m), [], Loc_unknown) in
-  Lapply { ap_func = Lprim (Pfield (0, Pointer, Immutable), [unit],
-                            Loc_unknown);
-           ap_args = args;
-           ap_loc = Loc_unknown;
-           ap_tailcall = Default_tailcall;
-           ap_inlined = Default_inline;
-           ap_specialised = Default_specialise }
-
 (* The code of each top-level splice is a function, which the hole of
    the splice applies to the variables of the run-time term that the
    splice quotes: a splice is evaluated when the term around it is
@@ -2153,6 +3912,7 @@ let transl_static_program ?(native = false) module_name (str, cc)
     ~source_file ~prefix =
   let module_id = Ident.create_persistent module_name in
   let scopes = enter_module_definition ~scopes:empty_scopes module_id in
+
   (* A failure of an evaluation is written to [err_file], where the
      driver finds it. *)
   let err_file = prefix ^ "$static.err" in
@@ -2163,14 +3923,20 @@ let transl_static_program ?(native = false) module_name (str, cc)
        Translquote.const what;
        Lambda.thunk (Ident.create_local "*report*") body]
   in
+
   let slot_layout =
     if native && not Config.flambda then
       Some { Translcore.nsl_module = module_id;
              nsl_pos = store_ident_positions (str, cc) }
     else None
   in
-  let ctx = { (initial_context ()) with native_slot_layout = slot_layout } in
+  let ctx =
+    { (initial_context ()) with
+      native_slot_layout = slot_layout;
+      template_apps_mode = Tapps_items }
+  in
   without_typing_required_globals @@ fun () ->
+
   let run_time, bind_splice_thunks =
     with_splice_thunks ~ctx ~scopes
       ~report:(fun loc code -> static_report loc "this splice" code)
@@ -2180,6 +3946,7 @@ let transl_static_program ?(native = false) module_name (str, cc)
            transl_implementation_flambda ~ctx module_name (str, cc)
          else transl_store_implementation ~ctx module_name (str, cc))
   in
+
   (* The globals that the object requires are those of the term with
      its holes empty: the globals of a splice's code belong to the
      static program. *)
@@ -2197,6 +3964,7 @@ let transl_static_program ?(native = false) module_name (str, cc)
          [Translquote.const (prefix ^ "$static.holes");
           Translquote.quote_module_holes run_time.code])
   in
+
   let static_id = Ident.create_persistent (module_name ^ "$static") in
   (* The call that writes the code of the holes is inside the scope of
      every binding of the compile-time part. *)
@@ -2435,6 +4203,7 @@ let toplevel_phrase_has_compile_time_part str =
   || exports_macros str
   || Mtype.has_macro_components ~expand_aliases:false str.str_final_env
        (Mty_signature str.str_type)
+  || has_template_applications str
 
 let transl_toplevel_phrase str =
   reset_labels ();
@@ -2442,7 +4211,9 @@ let transl_toplevel_phrase str =
   let scopes = empty_scopes in
   let env = str.str_final_env in
   let ctx =
-    { (initial_context ()) with unit_globals = toplevel_unit_globals }
+    { (initial_context ()) with
+      template_apps_mode = Tapps_items;
+      unit_globals = toplevel_unit_globals }
   in
   ctx.unit_state.compile_world_dummies <- !toplevel_compile_world_dummies;
   (* What the phrase binds, and in which part *)
@@ -2719,6 +4490,10 @@ let report_error loc = function
   | Conflicting_inline_attributes ->
       Location.errorf "@[Conflicting %a attributes@]"
         Style.inline_code "inline"
+  | Template_restriction msg ->
+      (* Free text: printed through [pp_print_text] so it wraps at spaces
+         like every other message, rather than as one atomic %s. *)
+      Location.errorf ~loc "%a" Format_doc.pp_print_text msg
   | Static_quotes_local id ->
       Location.errorf ~loc
         "The quotations in this static binding capture %a,@ \
@@ -2742,7 +4517,7 @@ let reset () =
   primitive_declarations := [];
   transl_store_subst := Ident.Map.empty;
   aliased_idents := Ident.empty;
-  toplevel_compile_time_idents := Ident.Set.empty;
-  toplevel_compile_world_dummies := Ident.Set.empty;
   Env.reset_required_globals ();
-  Translprim.clear_used_primitives ()
+  Translprim.clear_used_primitives ();
+  toplevel_compile_time_idents := Ident.Set.empty;
+  toplevel_compile_world_dummies := Ident.Set.empty

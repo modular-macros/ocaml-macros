@@ -1,0 +1,20 @@
+module P :
+  sig
+    type t = Toplevel_statics_lib.IntS.t
+    $val top : int
+    module M :
+      sig $val k : int val v : int $val[..] g : int expr -> int expr end
+  end
+val t : int = 3
+val k : int = 7
+val v : int = 5
+val g : int = 6
+module Q :
+  sig
+    module M :
+      sig $val k : int val v : int $val[..] g : int expr -> int expr end
+  end
+val k : int = 7
+val v : int = 5
+val g : int = 106
+

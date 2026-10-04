@@ -332,7 +332,9 @@ type lambda =
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
   (* Compile-time code in a term that is being quoted: a splice inside
-     a quotation.  Translquote replaces it by its contents, so it never
+     a quotation, or the hole that a top-level splice, a template's
+     environment or an instantiated fragment leaves in a run-time
+     term.  Translquote replaces it by its contents, so it never
      reaches code generation. *)
   | Lsplice of lambda_splice
 
@@ -477,6 +479,8 @@ val is_evaluated : lambda -> bool
 val free_variables: lambda -> Ident.Set.t
 
 val transl_module_path: scoped_location -> Env.t -> Path.t -> lambda
+(* The module's compile-time block, M$macros; for module references at the
+   compile-time stage, which must never reach a run-time global. *)
 val transl_module_macros_path: scoped_location -> Env.t -> Path.t -> lambda
 val transl_value_path: scoped_location -> Env.t -> Path.t -> lambda
 val transl_value_env_path: scoped_location -> Env.t -> Path.t -> lambda

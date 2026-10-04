@@ -13,7 +13,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* [const v] is the structured constant denoting [v].
+(* [const v] is the structured constant denoting [v].  The static program
+   passes its arguments to the compiler by value, so they are built this
+   way rather than by naming the types that describe them.
 
    [v] must be built only from immediates, strings, boxed numbers, floats,
    flat float blocks and blocks of these; anything else (a closure, a lazy
@@ -47,6 +49,12 @@ val transl_close_function :
    being translated is closed over, by the renaming that
    [transl_close_function] gives. *)
 val close_quoted : Ident.t Ident.Map.t -> Lambda.lambda -> Lambda.lambda
+(* As [transl_close_function], but for a quotation rather than a splice
+   body, and with the roots' identifiers baked into the close as
+   constants: keeps the (code, free-variable-set) pair shape a quotation
+   evaluates to.  Used by the toplevel to close a macro body's quotations
+   over the run-time names they mention. *)
+val transl_close_quotation : Location.t -> Ident.Set.t -> Lambda.lambda -> Lambda.lambda
 
 (* Strip the debug events that [-g] inserts, leaving the contents of
    [Lsplice] nodes alone.  An event carries a typing environment, which
@@ -70,3 +78,9 @@ val quote_module_holes : Lambda.lambda -> Lambda.lambda
    [contents.(i)], and reserves the numbers of the static exceptions
    of [contents]. *)
 val fill_holes : Lambda.lambda -> Lambda.lambda array -> Lambda.lambda
+
+(* Code that builds a FRESH instance of a module term -- binders renamed
+   at each evaluation -- through the expression quoter.  The fragment
+   primitive for templates; see the .ml.  A hole's variable must
+   be bound where the builder runs and yield the splice's term. *)
+val module_builder : Lambda.lambda -> Lambda.lambda

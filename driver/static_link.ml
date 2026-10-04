@@ -222,17 +222,17 @@ let run_static_program ~loc base ~objs_file ~holes_file =
   | None, n ->
       raise (Error (loc, Static_program_failed { base; status = n }))
 
-(* The static program is bytecode whichever compiler builds it, and is
-   simplified as bytecode. *)
-let simplify_compile_time lam =
-  Misc.protect_refs [ Misc.R (Clflags.native_code, false) ]
-    (fun () -> Simplif.simplify_lambda lam)
-
 let should_emit_macros_object ~exports =
   match !Clflags.macros_object with
   | Clflags.Macros_object_none -> false
   | Clflags.Macros_object_auto -> exports
   | Clflags.Macros_object_always -> true
+
+(* The static program is bytecode whichever compiler builds it, and is
+   simplified as bytecode. *)
+let simplify_compile_time lam =
+  Misc.protect_refs [ Misc.R (Clflags.native_code, false) ]
+    (fun () -> Simplif.simplify_lambda lam)
 
 let emit_macros_object i Typedtree.{structure; coercion; _} =
   let source_file = Unit_info.source_file i.target in
@@ -311,6 +311,7 @@ let implementation ~native i typed ~fallback ~finish =
   if should_emit_macros_object ~exports then
     emit_macros_object i typed;
   if Env.get_unit_has_top_level_splice ()
+     || Translmod.has_template_applications typed.Typedtree.structure
   then finish (build_static_program ~native i typed)
   else fallback ()
 
