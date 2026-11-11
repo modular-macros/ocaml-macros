@@ -231,6 +231,8 @@ let rec apply_coercion ~ctx loc strict restr arg =
            let carg = apply_coercion ~ctx loc Alias cc_arg (Lvar param) in
            apply_coercion_result ~ctx loc strict arg [param, Pgenval] [carg]
              cc_res)
+  | Tcoerce_primitive _ when in_compile_world ctx ->
+      lambda_unit
   | Tcoerce_primitive { pc_loc = _; pc_desc; pc_env; pc_type; } ->
       Translprim.transl_primitive loc pc_desc pc_env pc_type None
   | Tcoerce_alias (env, path, cc) ->
@@ -1650,7 +1652,9 @@ and transl_structure ?cont ~ctx ~scopes loc fields cc rootpath final_env =
                   List.map
                     (fun (pos, cc) ->
                       match cc with
-                        Tcoerce_primitive p ->
+                        Tcoerce_primitive _ when in_compile_world ctx ->
+                          lambda_unit
+                      | Tcoerce_primitive p ->
                           Translprim.transl_primitive
                             (of_location ~scopes p.pc_loc)
                             p.pc_desc p.pc_env p.pc_type None
