@@ -1485,6 +1485,9 @@ let item_binds_at_compile_time ?expand_aliases (item : Typedtree.structure_item)
   | Tstr_module mb -> binds mb.mb_expr
   | Tstr_recmodule mbs -> List.exists (fun mb -> binds mb.mb_expr) mbs
   | Tstr_include incl -> binds_at_compile_time incl.incl_mod
+  | Tstr_open { open_bound_items = []; _ } ->
+      (* An open of a path binds nothing: what it names is reached by paths. *)
+      false
   | Tstr_open od -> binds od.open_expr
   | Tstr_value (_, Value, _) | Tstr_eval _ | Tstr_primitive _ | Tstr_type _
   | Tstr_modtype _ | Tstr_class _ | Tstr_class_type _ | Tstr_attribute _ ->
