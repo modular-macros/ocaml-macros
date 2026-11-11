@@ -1,0 +1,5 @@
+File "template_static_primitive.ml", line 1:
+Error: Linking this unit's compile-time part failed:
+       Template_static_primitive_lib referenced from Template_static_primitive$static
+       The implementation of a unit that compile-time code uses
+       must be given to -static-use.

@@ -1800,6 +1800,7 @@ and transl_template_body ~ctx ~scopes ~loc params body =
   (* The body's applications, collected by the same pass. *)
   let apps_acc = ref ([] : template_body_app list) in
   let frag0 =
+    Translprim.without_used_primitives @@ fun () ->
     in_world ctx Run_world @@ fun ctx ->
     with_template_apps ctx Tapps_template_body @@ fun ctx ->
     with_template_body_apps ctx (Some apps_acc) @@ fun ctx ->

@@ -29,6 +29,8 @@ val remove_exception_ident : Ident.t -> unit
 val clear_used_primitives : unit -> unit
 val get_used_primitives: unit -> Path.t list
 
+val without_used_primitives : (unit -> 'a) -> 'a
+
 val check_primitive_arity :
   Location.t -> Primitive.description -> unit
 

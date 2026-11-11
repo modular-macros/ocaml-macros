@@ -119,6 +119,12 @@ let clear_used_primitives () = Hashtbl.clear used_primitives
 let get_used_primitives () =
   Hashtbl.fold (fun path _ acc -> path :: acc) used_primitives []
 
+let without_used_primitives f =
+  let saved = Hashtbl.copy used_primitives in
+  Fun.protect f ~finally:(fun () ->
+    Hashtbl.reset used_primitives;
+    Hashtbl.iter (Hashtbl.add used_primitives) saved)
+
 let gen_array_kind =
   if Config.flat_float_array then Pgenarray else Paddrarray
 
