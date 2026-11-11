@@ -63,8 +63,10 @@ let in_run_world ctx = not (in_compile_world ctx)
 let in_world ctx world f = f { ctx with world }
 
 let record_compile_world_dummy ctx id =
-  let st = ctx.unit_state in
-  st.compile_world_dummies <- Ident.Set.add id st.compile_world_dummies
+  if in_compile_world ctx then begin
+    let st = ctx.unit_state in
+    st.compile_world_dummies <- Ident.Set.add id st.compile_world_dummies
+  end
 
 (* Only the compile-time part asks: the run-time part binds the same
    identifiers to their values. *)
@@ -187,8 +189,14 @@ let rec apply_coercion ~ctx loc strict restr arg =
   | Tcoerce_structure(pos_cc_list, id_pos_list) ->
       name_lambda strict arg (fun id ->
         let get_field pos =
+          let field = Lprim(Pfield (pos, Pointer, Mutable), [Lvar id], loc) in
           if pos < 0 then lambda_unit
-          else Lprim(Pfield (pos, Pointer, Mutable), [Lvar id], loc)
+          else if in_compile_world ctx then
+            (* At compile time, a slot is either a unit (immediate)
+               or a block. Hence testing if it is an immediate also 
+               tests if it is a placeholder. *)
+            Lifthenelse (Lprim (Pisint, [Lvar id], loc), lambda_unit, field)
+          else field
         in
         let lam =
           Lprim(Pmakeblock(0, Immutable, None),
