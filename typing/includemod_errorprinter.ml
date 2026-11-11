@@ -913,8 +913,9 @@ and functor_symptom ~expansion_token ~env ~before ~ctx = function
         | Asttypes.Plain -> "a functor"
         | Asttypes.Template -> "a template"
       in
-      Location.msg "%s is not %s"
-        (String.capitalize_ascii (describe kind1)) (describe kind2) :: before
+      dwith_context ctx
+        (Fmt.dprintf "%s is not %s"
+           (String.capitalize_ascii (describe kind1)) (describe kind2)) :: before
 
 and signature ~expansion_token ~env:_ ~before ~ctx sgs =
   let suggestion_text ppf suggestion =
