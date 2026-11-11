@@ -1439,6 +1439,38 @@ let rebind_fields ~scopes ~loc ~block ids fields next =
   in
   go 0 fields ids
 
+let rebind_compile_time_fields ~ctx ~block incl_mod incl_type fields next =
+  let macro_ids =
+    List.filter_map
+      (function
+        | Types.Sig_value (id, vd, _)
+          when Types.val_serving_level vd < 0 -> Some id
+        | Types.Sig_typext (id, ext, _, _)
+          when ext.ext_static -> Some id
+        | Types.Sig_module (id, _, md, _, _)
+          when Mtype.has_macro_components incl_mod.Typedtree.mod_env
+                 md.md_type -> Some id
+        | _ -> None)
+      incl_type
+    |> Ident.Set.of_list
+  in
+  let rec go pos fields = function
+    | [] -> next fields
+    | id :: rest ->
+        if not (Ident.Set.mem id macro_ids) then
+          (* Before [next]: the block's coercion consults the set. *)
+          record_compile_world_dummy ctx id;
+        let body = go (pos + 1) (id :: fields) rest in
+        if Ident.Set.mem id macro_ids then
+          Llet (Strict, Pgenval, id,
+                Lprim (Pfield (pos, Pointer, Mutable), [Lvar block],
+                       Loc_unknown),
+                body)
+        else
+          Llet (Alias, Pgenval, id, Lconst const_unit, body)
+  in
+  go 0 fields (bound_value_identifiers incl_type)
+
 (* Whether a structure item binds something at compile time; see
    [binds_at_compile_time].  An include binds the components of its
    module, whatever names it. *)
@@ -2091,6 +2123,9 @@ and transl_template_body ~ctx ~scopes ~loc params body =
           (* A functor with compile-time content: its shared block is built
                        with the continuation inside. *)
           transl_module_hoisted ~ctx ~scopes cc None body assemble
+      | Tmod_apply (Plain_application, _, _, _)
+      | Tmod_apply_unit (Plain_application, _) ->
+          transl_module_hoisted ~ctx ~scopes cc None body assemble
       | _ ->
           (* No structure: the record is the body's compile-time block. *)
           assemble (transl_module ~ctx ~scopes cc None body)
@@ -2733,40 +2768,12 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
       let acc = Option.get ctx.template_body_apps in
       let m_id = application_id incl_mod in
       let ids = bound_value_identifiers incl_type in
-      let macro_ids =
-        List.filter_map
-          (function
-            | Types.Sig_value (id, vd, _)
-              when Types.val_serving_level vd < 0 -> Some id
-            | Types.Sig_typext (id, ext, _, _)
-              when ext.ext_static -> Some id
-            | Types.Sig_module (id, _, md, _, _)
-              when Mtype.has_macro_components incl_mod.mod_env
-                     md.md_type -> Some id
-            | _ -> None)
-          incl_type
-        |> Ident.Set.of_list
-      in
       let mb = application_binding ~loc:incl_loc incl_mod in
       transl_body_application ~ctx ~scopes acc mb fields
         (fun fields ->
            if in_compile_world ctx then
-             let rec rebind pos fields = function
-               | [] -> next fields
-               | id :: rest ->
-                   if not (Ident.Set.mem id macro_ids) then
-                     (* Before [next]: the block's coercion consults the set. *)
-                     record_compile_world_dummy ctx id;
-                   let body = rebind (pos + 1) (id :: fields) rest in
-                   if Ident.Set.mem id macro_ids then
-                     Llet (Strict, Pgenval, id,
-                           Lprim (Pfield (pos, Pointer, Mutable),
-                                  [Lvar m_id], Loc_unknown),
-                           body)
-                   else
-                     Llet (Alias, Pgenval, id, Lconst const_unit, body)
-             in
-             rebind 0 fields ids
+             rebind_compile_time_fields ~ctx ~block:m_id incl_mod incl_type
+               fields next
            else
              let rec rebind pos fields = function
                | [] -> next fields
@@ -2797,7 +2804,11 @@ and transl_struct_item ~ctx ~scopes fields rootpath item next =
         ~mixed_result:(Mtype.has_macro_components incl_mod.mod_env
                          incl_mod.mod_type)
         m_id funct argopt ~dummies:ids fields next
-        (fun () -> rebind_idents fields ids)
+        (fun () ->
+           if in_compile_world ctx then
+             rebind_compile_time_fields ~ctx ~block:m_id incl_mod incl_type
+               fields next
+           else rebind_idents fields ids)
   | Tstr_module ({mb_presence=Mp_present} as mb)
     when hoisting_pass ctx
          && functor_body_template_applications mb.mb_expr <> [] ->
