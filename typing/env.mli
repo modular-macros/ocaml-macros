@@ -519,14 +519,17 @@ val get_current_unit_name: unit -> string
 
 (* Read, save a signature to/from a file *)
 val read_signature: Unit_info.Artifact.t -> signature
+
+(* The compile-time components a loaded unit's .cmi records. *)
+val unit_macro_components: modname -> Cmi_format.macro_components option
         (* Arguments: module name, file name. Results: signature. *)
 val save_signature:
-  alerts:alerts -> Types.signature -> Unit_info.Artifact.t
-  -> Cmi_format.cmi_infos
+  alerts:alerts -> macro_components:Cmi_format.macro_components
+  -> Types.signature -> Unit_info.Artifact.t -> Cmi_format.cmi_infos
         (* Arguments: signature, module name, file name. *)
 val save_signature_with_imports:
-  alerts:alerts -> signature -> Unit_info.Artifact.t -> crcs
-  -> Cmi_format.cmi_infos
+  alerts:alerts -> macro_components:Cmi_format.macro_components
+  -> signature -> Unit_info.Artifact.t -> crcs -> Cmi_format.cmi_infos
         (* Arguments: signature, module name, file name,
            imported units with their CRCs. *)
 

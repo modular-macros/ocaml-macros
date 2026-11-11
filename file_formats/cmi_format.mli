@@ -15,10 +15,16 @@
 
 open Misc
 
+(* Where a unit's compile-time components are, aliases to other units aside. *)
+type macro_components =
+  | Present
+  | Through_aliases of Path.t list
+
 type pers_flags =
   | Rectypes
   | Alerts of alerts
   | Opaque
+  | Macro_components of macro_components
 
 type cmi_infos = {
     cmi_name : modname;

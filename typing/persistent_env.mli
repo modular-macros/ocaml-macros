@@ -62,6 +62,8 @@ val find : allow_hidden:bool -> 'a t -> (Persistent_signature.t -> 'a)
 
 val find_in_cache : 'a t -> modname -> 'a option
 
+val macro_components : 'a t -> modname -> Cmi_format.macro_components option
+
 val check : allow_hidden:bool -> 'a t -> (Persistent_signature.t -> 'a)
   -> loc:Location.t -> modname -> unit
 
@@ -83,7 +85,7 @@ val is_imported_opaque : 'a t -> modname -> bool
 val register_import_as_opaque : 'a t -> modname -> unit
 
 val make_cmi : 'a t -> modname -> Types.signature -> alerts
-  -> Cmi_format.cmi_infos
+  -> macro_components:Cmi_format.macro_components -> Cmi_format.cmi_infos
 
 val save_cmi : 'a t -> Persistent_signature.t -> 'a -> unit
 

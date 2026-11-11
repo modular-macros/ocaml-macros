@@ -2892,13 +2892,14 @@ let persistent_structures_of_dir dir =
   |> String.Set.of_seq
 
 (* Save a signature to a file *)
-let save_signature_with_transform cmi_transform ~alerts sg cmi_info =
+let save_signature_with_transform cmi_transform ~alerts ~macro_components sg
+    cmi_info =
   Btype.cleanup_abbrev ();
   Subst.reset_for_saving ();
   let sg = Subst.signature Make_local (Subst.for_saving Subst.identity) sg in
   let cmi =
     Persistent_env.make_cmi !persistent_env
-      (Unit_info.Artifact.modname cmi_info) sg alerts
+      (Unit_info.Artifact.modname cmi_info) sg alerts ~macro_components
     |> cmi_transform in
   let filename = Unit_info.Artifact.filename cmi_info in
   let pers_sig =
@@ -2908,12 +2909,16 @@ let save_signature_with_transform cmi_transform ~alerts sg cmi_info =
   Persistent_env.save_cmi !persistent_env pers_sig pm;
   cmi
 
-let save_signature ~alerts sg cmi =
-  save_signature_with_transform (fun cmi -> cmi) ~alerts sg cmi
+let save_signature ~alerts ~macro_components sg cmi =
+  save_signature_with_transform (fun cmi -> cmi) ~alerts ~macro_components
+    sg cmi
 
-let save_signature_with_imports ~alerts sg cmi imports =
+let save_signature_with_imports ~alerts ~macro_components sg cmi imports =
   let with_imports cmi = { cmi with cmi_crcs = imports } in
-  save_signature_with_transform with_imports ~alerts sg cmi
+  save_signature_with_transform with_imports ~alerts ~macro_components sg cmi
+
+let unit_macro_components modname =
+  Persistent_env.macro_components !persistent_env modname
 
 (* Make the initial environment *)
 let initial =

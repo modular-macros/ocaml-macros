@@ -118,6 +118,14 @@ let find_in_cache {persistent_structures; _} s =
   | Missing -> None
   | Found (_ps, pm) -> Some pm
 
+let macro_components {persistent_structures; _} s =
+  match Hashtbl.find persistent_structures s with
+  | exception Not_found -> None
+  | Missing -> None
+  | Found (ps, _pm) ->
+      List.find_map
+        (function Macro_components c -> Some c | _ -> None) ps.ps_flags
+
 let import_crcs penv ~source crcs =
   let {crc_units; _} = penv in
   let import_crc (name, crco) =
@@ -167,7 +175,7 @@ let save_pers_struct penv crc ps pm =
   List.iter
     (function
         | Rectypes -> ()
-        | Alerts _ -> ()
+        | Alerts _ | Macro_components _ -> ()
         | Opaque -> register_import_as_opaque penv modname)
     ps.ps_flags;
   Consistbl.check crc_units modname crc ps.ps_filename;
@@ -191,7 +199,7 @@ let acknowledge_pers_struct penv check modname pers_sig pm =
         | Rectypes ->
             if not !Clflags.recursive_types then
               error (Need_recursive_types(ps.ps_name))
-        | Alerts _ -> ()
+        | Alerts _ | Macro_components _ -> ()
         | Opaque -> register_import_as_opaque penv modname)
     ps.ps_flags;
   if check then check_consistency penv ps;
@@ -309,12 +317,13 @@ let is_imported {imported_units; _} s =
 let is_imported_opaque {imported_opaque_units; _} s =
   String.Set.mem s !imported_opaque_units
 
-let make_cmi penv modname sign alerts =
+let make_cmi penv modname sign alerts ~macro_components =
   let flags =
     List.concat [
       if !Clflags.recursive_types then [Cmi_format.Rectypes] else [];
       if !Clflags.opaque then [Cmi_format.Opaque] else [];
       [Alerts alerts];
+      [Macro_components macro_components];
     ]
   in
   let crcs = imports penv in

@@ -361,11 +361,12 @@ and no_code_needed_sig env sg =
 
 let no_code_needed env mty = no_code_needed_mod env Mp_present mty
 
-(* Whether a module type has a compile-time component, at any depth. *)
-let rec macro_components ~expand_aliases env mty =
-  let macro_components = macro_components ~expand_aliases in
+(* Whether a module type has a compile-time component, at any depth;
+   [alias] answers for a module alias. *)
+let rec macro_components ~alias env mty =
+  let macro_components = macro_components ~alias in
   match scrape env mty with
-  | Mty_signature sg -> macro_components_sig ~expand_aliases env sg
+  | Mty_signature sg -> macro_components_sig ~alias env sg
   | Mty_functor (Template, _, _) ->
       (* A template is expanded at each application, whether or not
          its parameter has compile-time components. *)
@@ -379,21 +380,14 @@ let rec macro_components ~expand_aliases env mty =
       (* An abstract module type is not instantiated with a module type
          that has compile-time components. *)
       false
-  | Mty_alias p ->
-      (* Without [expand_aliases] an alias contributes nothing: nothing
-         is addressed through an alias, and its target is not read. *)
-      expand_aliases
-      && begin match Env.find_module p env with
-         | md -> macro_components env md.md_type
-         | exception Not_found -> false
-         end
+  | Mty_alias p -> alias env p
 
 (* The body of a functor may name module types of its parameter. *)
 and env_with_functor_param env = function
   | Unit | Named (None, _) -> env
   | Named (Some id, arg) -> Env.add_module ~noalias:true id Mp_present arg env
 
-and macro_components_sig ~expand_aliases env sg =
+and macro_components_sig ~alias env sg =
   (* The items of a signature may refer to its earlier modules and
      module types.  Nothing else is added to the environment: entering
      a type can mint identifiers. *)
@@ -411,14 +405,46 @@ and macro_components_sig ~expand_aliases env sg =
   List.exists
     (function
       | Sig_value (_, vd, _) -> val_serving_level vd < 0
-      | Sig_module (_, _, md, _, _) ->
-          macro_components ~expand_aliases env md.md_type
+      | Sig_module (_, _, md, _, _) -> macro_components ~alias env md.md_type
       | Sig_typext (_, ext, _, _) -> ext.ext_static
       | Sig_type _ | Sig_modtype _ | Sig_class _ | Sig_class_type _ -> false)
     sg
 
+(* The target of an alias, read through the .cmi record of a unit. *)
+let rec alias_macro_components env p =
+  match Env.find_module p env with
+  | exception Not_found -> false
+  | md ->
+      let walk () =
+        macro_components ~alias:alias_macro_components env md.md_type in
+      match p with
+      | Pident id when Ident.persistent id ->
+          begin match Env.unit_macro_components (Ident.name id) with
+          | Some Present -> true
+          | Some (Through_aliases ps) ->
+              List.exists (alias_macro_components env) ps
+          | None -> walk ()
+          end
+      | _ -> walk ()
+
 let has_macro_components ?(expand_aliases = true) env mty =
-  macro_components ~expand_aliases env mty
+  (* Without [expand_aliases] an alias contributes nothing: nothing is
+     addressed through an alias, and its target is not read. *)
+  let alias = if expand_aliases then alias_macro_components
+              else fun _ _ -> false in
+  macro_components ~alias env mty
+
+(* An alias to another unit is recorded, not read: under -no-alias-deps
+   that unit may not be compiled yet.  Any other alias names a module
+   whose components the walk meets where that module is declared. *)
+let summarise_macro_components env mty : Cmi_format.macro_components =
+  let aliases = ref [] in
+  let alias _env p =
+    if List.exists Ident.persistent (Path.heads p) then aliases := p :: !aliases;
+    false
+  in
+  if macro_components ~alias env mty then Present
+  else Through_aliases (List.sort_uniq Path.compare !aliases)
 
 (* Check whether a module type may return types *)
 

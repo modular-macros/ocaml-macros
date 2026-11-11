@@ -3926,7 +3926,10 @@ let type_implementation target initial_env ast =
           let alerts = Builtin_attributes.alerts_of_str ~mark:true ast in
           if not !Clflags.dont_write_files then begin
             let cmi =
-              Env.save_signature ~alerts simple_sg (Unit_info.cmi target)
+              Env.save_signature ~alerts
+                ~macro_components:(Mtype.summarise_macro_components
+                                     initial_env (Mty_signature simple_sg))
+                simple_sg (Unit_info.cmi target)
             in
             let annots = Cmt_format.Implementation str in
             save_cmt target annots initial_env (Some cmi) (Some shape)
@@ -4051,6 +4054,8 @@ let package_units initial_env objfiles target_cmi =
     if not !Clflags.dont_write_files then begin
       let cmi =
         Env.save_signature_with_imports ~alerts:Misc.Stdlib.String.Map.empty
+          ~macro_components:(Mtype.summarise_macro_components initial_env
+                               (Mty_signature sg))
           sg target_cmi imports
       in
       Cmt_format.save_cmt (Unit_info.companion_cmt target_cmi)

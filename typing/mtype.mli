@@ -59,3 +59,7 @@ val lower_nongen: int -> module_type -> unit
    contributes nothing, and its target is not read. *)
 val has_macro_components:
   ?expand_aliases:bool -> Env.t -> module_type -> bool
+
+(* What a unit's .cmi records of the compile-time components of its type. *)
+val summarise_macro_components:
+  Env.t -> module_type -> Cmi_format.macro_components

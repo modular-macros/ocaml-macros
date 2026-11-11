@@ -66,8 +66,10 @@ let typecheck_intf info ast =
 
 let emit_signature info alerts tsg =
   let sg =
-    Env.save_signature ~alerts tsg.Typedtree.sig_type
-      (Unit_info.cmi info.target)
+    Env.save_signature ~alerts
+      ~macro_components:(Mtype.summarise_macro_components info.env
+                           (Types.Mty_signature tsg.Typedtree.sig_type))
+      tsg.Typedtree.sig_type (Unit_info.cmi info.target)
   in
   Typemod.save_signature info.target tsg info.env sg
 
