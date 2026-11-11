@@ -1,0 +1,4 @@
+(executables
+ (names cmo cmt trace)
+ (modules table cmo cmt trace)
+ (libraries compiler-libs.common csexp csv))

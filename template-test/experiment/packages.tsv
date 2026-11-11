@@ -1,0 +1,5 @@
+name	root	targets	directories	test_patterns	scoped
+ocamlgraph	src/ocamlgraph	@src/all @tests/all	src/ tests/	tests/*/dune__exe__*.cmo	-
+multicoretests	src/multicoretests	@install @src/all	lib/ src/	src/*/dune__exe__*.cmo	-
+containers-data	src/containers-data	@tests/data/all	src/ tests/data/	tests/data/*/dune__exe__*.cmo	-
+base	clients/core	base/test/.base_test.inline-tests/inline-test-runner.exe	base/	base/test/.base_test.objs/byte/*.cmo base/test/helpers/.base_test_helpers.objs/byte/*.cmo	base

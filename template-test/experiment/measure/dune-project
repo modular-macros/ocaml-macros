@@ -1,0 +1,2 @@
+(lang dune 3.24)
+(using macocaml 0.1)
