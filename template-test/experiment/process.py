@@ -75,14 +75,15 @@ def stem(path: pd.Series) -> pd.Series:
 # A process belongs to the package when it writes an object of one of its modules.
 def select_package_calls(observations: Observations) -> pd.DataFrame:
     modules = observations.modules
-    stems = pd.concat([modules[["package", "byte"]].rename(columns={"byte": "stem"}),
-                       modules[["package", "native"]].rename(columns={"native": "stem"})])
+    stems = pd.concat([modules[["package", "byte", "test"]].rename(columns={"byte": "stem"}),
+                       modules[["package", "native", "test"]].rename(columns={"native": "stem"})])
     calls = observations.calls.reset_index(names="call")
     written = calls[["call", "package", "outputs"]].assign(output=calls["outputs"].str.split()) \
         .explode("output").dropna(subset=["output"])
-    belongs = written.assign(stem=stem(written["output"])) \
-        .merge(stems.drop_duplicates(), on=["package", "stem"])["call"].unique()
-    calls = calls[calls["call"].isin(belongs)].drop(columns="call")
+    module = written.assign(stem=stem(written["output"])) \
+        .merge(stems.drop_duplicates(), on=["package", "stem"]) \
+        .drop_duplicates("call")[["call", "test"]]
+    calls = calls.merge(module, on="call").drop(columns="call")
     return calls.assign(
         ocamlc=calls["program"].str.startswith("ocamlc"),
         writes_cmo=calls["outputs"].str.split().apply(
@@ -92,12 +93,20 @@ def select_package_calls(observations: Observations) -> pd.DataFrame:
 def tally_compilations(observations: Observations, package_calls: pd.DataFrame,
                        experiment: str) -> pd.DataFrame:
     calls = package_calls[package_calls["experiment"] == experiment]
-    tally = calls.assign(ocamlc_cpu_s=calls["cpu_s"].where(calls["ocamlc"], 0.0),
-                         cmo_units=(calls["ocamlc"] & calls["writes_cmo"]).astype(int)) \
-        .groupby(BUILD, as_index=False)[["ocamlc_cpu_s", "cmo_units"]].sum()
+    ocamlc_cpu_s = calls["cpu_s"].where(calls["ocamlc"], 0.0)
+    cmo_units = (calls["ocamlc"] & calls["writes_cmo"]).astype(int)
+    columns = {
+        "ocamlc_cpu_s": ocamlc_cpu_s,
+        "library_cpu_s": ocamlc_cpu_s.where(~calls["test"], 0.0),
+        "test_cpu_s": ocamlc_cpu_s.where(calls["test"], 0.0),
+        "cmo_units": cmo_units,
+        "library_units": cmo_units.where(~calls["test"], 0),
+        "test_units": cmo_units.where(calls["test"], 0),
+    }
+    tally = calls.assign(**columns).groupby(BUILD, as_index=False)[list(columns)].sum()
     builds = observations.builds[observations.builds["experiment"] == experiment][BUILD]
-    return builds.merge(tally, how="left").fillna({"ocamlc_cpu_s": 0.0, "cmo_units": 0}) \
-        .astype({"cmo_units": int})
+    return builds.merge(tally, how="left").fillna({c: 0 for c in columns}) \
+        .astype({c: int for c in columns if c.endswith("units")})
 
 
 def check_bytecode(observations: Observations, package_calls: pd.DataFrame) -> None:
@@ -158,9 +167,15 @@ def summarise(clean: pd.DataFrame, bytecode: pd.DataFrame,
               rebuild: pd.DataFrame) -> pd.DataFrame:
     measures = [
         ("compile_cpu_s", clean, "ocamlc_cpu_s", "median"),
+        ("compile_library_cpu_s", clean, "library_cpu_s", "median"),
+        ("compile_test_cpu_s", clean, "test_cpu_s", "median"),
         ("test_bytecode", bytecode, "test_bytecode", "median"),
         ("rebuild_cpu_s", rebuild, "ocamlc_cpu_s", "mean"),
+        ("rebuild_library_cpu_s", rebuild, "library_cpu_s", "mean"),
+        ("rebuild_test_cpu_s", rebuild, "test_cpu_s", "mean"),
         ("rebuild_units", rebuild, "cmo_units", "mean"),
+        ("rebuild_library_units", rebuild, "library_units", "mean"),
+        ("rebuild_test_units", rebuild, "test_units", "mean"),
     ]
     tables = []
     for quantity, table, column, statistic in measures:
