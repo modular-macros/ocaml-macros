@@ -1,0 +1,180 @@
+--- a/src/coloring.ml	2026-11-11 10:02:44
++++ b/src/coloring.ml	2026-11-10 10:54:52
+@@ -35,7 +35,7 @@
+ 
+ (** Graph coloring with marking.
+     Only applies to imperative graphs with marks. *)
+-module Mark(G : GM) = struct
++module[@functor] Mark(G : GM) = struct
+ 
+   module Bfs = Traverse.Bfs(G)
+ 
+--- a/src/coloring.mli	2026-11-11 10:02:44
++++ b/src/coloring.mli	2026-11-10 10:54:59
+@@ -45,7 +45,7 @@
+ (** Provide a function for [k]-coloring a graph with integer marks.
+     The provided function is more efficient that the one provided by functor
+     {!Make} above. *)
+-module Mark(G : GM) : sig
++module[@functor] Mark(G : GM) : sig
+ 
+   val coloring : G.t -> int -> unit
+   (** [coloring g k] colors the nodes of graph [g] using [k] colors,
+--- a/src/components.ml	2026-11-11 10:02:44
++++ b/src/components.ml	2026-11-11 02:37:25
+@@ -22,7 +22,7 @@
+   val iter_succ : (V.t -> unit) -> t -> V.t -> unit
+ end
+ 
+-module Make(G: G) = struct
++module[@functor] Make(G: G) = struct
+ 
+   module H = Hashtbl.Make(G.V)
+ 
+--- a/src/components.mli	2026-11-11 10:02:44
++++ b/src/components.mli	2026-11-10 10:54:59
+@@ -28,7 +28,7 @@
+ 
+ (** Functor providing functions to compute strongly connected components of a
+     graph. *)
+-module Make (G: G) : sig
++module[@functor] Make (G: G) : sig
+ 
+   val scc : G.t -> int * (G.V.t -> int)
+   (** [scc g] computes the strongly connected components of [g].
+--- a/src/dGraphModel.ml	2026-11-11 10:02:44
++++ b/src/dGraphModel.ml	2026-11-10 10:59:23
+@@ -60,7 +60,7 @@
+ 
+ (* BUILDING A MODEL WITH AN OCAML GRAPH *)
+ 
+-module Make(G : Graphviz.GraphWithDotAttrs)
++module[@functor] Make(G : Graphviz.GraphWithDotAttrs)
+  = struct
+ 
+    exception Multiple_layouts of (G.E.t * edge_layout) list
+--- a/src/dGraphModel.mli	2026-11-11 10:02:44
++++ b/src/dGraphModel.mli	2026-11-10 10:59:23
+@@ -62,7 +62,7 @@
+ end
+ 
+ (** This functor creates a model from a graph *)
+-module Make(G : Graphviz.GraphWithDotAttrs) : sig
++module[@functor] Make(G : Graphviz.GraphWithDotAttrs) : sig
+ 
+   type cluster = string
+   exception Multiple_layouts of (G.E.t * edge_layout) list
+--- a/src/dGraphTreeModel.ml	2026-11-11 10:02:44
++++ b/src/dGraphTreeModel.ml	2026-11-10 11:00:31
+@@ -48,7 +48,7 @@
+ 
+ end
+ 
+-module Build
++module[@functor] Build
+     (G: Sig.G)
+     (T: Graphviz.GraphWithDotAttrs with type V.label = G.V.t)
+     (TM: DGraphSubTree.S with type Tree.t = T.t
+@@ -145,7 +145,7 @@
+ 
+ end
+ 
+-module SubTreeMake(G: Graphviz.GraphWithDotAttrs) = struct
++module[@functor] SubTreeMake(G: Graphviz.GraphWithDotAttrs) = struct
+ 
+   module T = Imperative.Digraph.Abstract(G.V)
+   module TM = DGraphSubTree.Make(G)(T)
+--- a/src/dGraphTreeModel.mli	2026-11-11 10:02:44
++++ b/src/dGraphTreeModel.mli	2026-11-10 11:00:31
+@@ -49,7 +49,7 @@
+ end
+ 
+ (** This functor creates a model centered on a vertex from a graph *)
+-module SubTreeMake(G : Graphviz.GraphWithDotAttrs) : sig
++module[@functor] SubTreeMake(G : Graphviz.GraphWithDotAttrs) : sig
+ 
+   include S with type Tree.V.label = G.V.t
+ 
+--- a/src/graphviz.ml	2026-11-11 10:02:44
++++ b/src/graphviz.ml	2026-11-10 10:57:52
+@@ -436,7 +436,7 @@
+ 
+ end
+ 
+-module MakeEngine
++module[@functor] MakeEngine
+     (EN: ENGINE)
+     (X : sig
+        type t
+@@ -845,7 +845,7 @@
+          attributes. *)
+ end
+ 
+-module Dot =
++module[@functor] Dot =
+   MakeEngine (struct
+     module Attributes = DotAttributes
+     let name = "dot"
+--- a/src/graphviz.mli	2026-11-11 10:02:44
++++ b/src/graphviz.mli	2026-11-10 10:58:04
+@@ -399,7 +399,7 @@
+ 
+ end
+ 
+-module Dot
++module[@functor] Dot
+     (X : sig
+ 
+        (** Graph implementation. Sub-signature of {!Sig.G} *)
+@@ -497,7 +497,7 @@
+ 
+ end
+ 
+-module Neato
++module[@functor] Neato
+     (X : sig
+ 
+        (** Graph implementation. Sub-signature of {!Sig.G}. *)
+--- a/src/path.ml	2026-11-11 10:02:44
++++ b/src/path.ml	2026-11-10 10:57:52
+@@ -43,7 +43,7 @@
+   (** Subtraction of weights. *)
+ end
+ 
+-module Dijkstra
++module[@functor] Dijkstra
+     (G: G)
+     (W: Sig.WEIGHT with type edge = G.E.t) =
+ struct
+--- a/src/path.mli	2026-11-11 10:02:44
++++ b/src/path.mli	2026-11-10 10:57:52
+@@ -38,7 +38,7 @@
+   val nb_vertex : t -> int
+ end
+ 
+-module Dijkstra
++module[@functor] Dijkstra
+     (G: G)
+     (W: Sig.WEIGHT with type edge = G.E.t) :
+ sig
+--- a/src/util.ml	2026-11-11 10:02:44
++++ b/src/util.ml	2026-11-10 10:54:52
+@@ -48,7 +48,7 @@
+   let set_data (y, _) = (:=) y
+ end
+ 
+-module Memo(X: HASHABLE) = struct
++module[@functor] Memo(X: HASHABLE) = struct
+   module H = Hashtbl.Make(X)
+   let memo ?(size=128) f =
+     let h = H.create size in
+--- a/src/util.mli	2026-11-11 10:02:44
++++ b/src/util.mli	2026-11-10 10:54:52
+@@ -45,6 +45,6 @@
+   val set_data : t -> data -> unit
+ end
+ 
+-module Memo(X: HASHABLE) : sig
++module[@functor] Memo(X: HASHABLE) : sig
+   val memo: ?size:int -> (X.t -> 'a) -> X.t -> 'a
+ end

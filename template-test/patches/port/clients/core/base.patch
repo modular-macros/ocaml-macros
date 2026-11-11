@@ -1,0 +1,20 @@
+--- a/test/dune	2026-11-11 10:05:02
++++ b/test/dune	2026-11-11 10:19:12
+@@ -1,7 +1,14 @@
++;; The tests "test_base_containers_mono", "test_base_containers_poly", "test_int_conversions"
++;; and "test_sexpable" are left out, since they use the libraries base_container_tests and
++;; sexp_grammar_validation, which are not published.
++;; The test "test_compare" is left out, since MacoCaml cannot apply a template inside an expression.
++;; (inline_tests) makes dune build the runner executable.
+ (library
+  (name base_test)
+- (libraries base base_container_tests core.base_for_tests base_test_helpers
+-   expect_test_helpers_core.expect_test_helpers_base sexplib
+-   sexp_grammar_validation num stdio)
++ (modules (:standard \ test_base_containers_mono test_base_containers_poly
++   test_int_conversions test_sexpable test_compare))
++ (libraries base core core.base_for_tests base_test_helpers expect_test_helpers_core
++   expect_test_helpers_core.expect_test_helpers_base sexplib num stdio)
++ (inline_tests)
+  (preprocess
+   (pps ppx_jane -dont-apply=pipebang -no-check-on-extensions)))

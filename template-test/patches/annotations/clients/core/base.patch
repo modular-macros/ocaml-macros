@@ -1,0 +1,22 @@
+--- a/src/type_equal.ml	2026-11-11 10:05:02
++++ b/src/type_equal.ml	2026-11-10 12:04:21
+@@ -192,7 +192,7 @@
+     type nonrec 'a t = 'a t
+   end)
+ 
+-  module Create0 (T : Arg0) = struct
++  module[@functor] Create0 (T : Arg0) = struct
+     type _ key += T0 : T.t key
+ 
+     let type_equal_id : T.t t =
+--- a/src/type_equal_intf.ml	2026-11-11 10:05:02
++++ b/src/type_equal_intf.ml	2026-11-10 12:04:21
+@@ -355,7 +355,7 @@
+     val same_witness : 'a t -> 'b t -> ('a, 'b) equal option
+     val same_witness_exn : 'a t -> 'b t -> ('a, 'b) equal
+ 
+-    module Create0 (T : Arg0) : S0 with type t := T.t
++    module[@functor] Create0 (T : Arg0) : S0 with type t := T.t
+     module Create1 (T : Arg1) : S1 with type 'a t := 'a T.t
+     module Create2 (T : Arg2) : S2 with type ('a, 'b) t := ('a, 'b) T.t
+     module Create3 (T : Arg3) : S3 with type ('a, 'b, 'c) t := ('a, 'b, 'c) T.t

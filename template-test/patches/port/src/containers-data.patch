@@ -1,0 +1,40 @@
+--- a/tests/data/dune	2026-11-11 10:02:44
++++ b/tests/data/dune	2026-11-11 10:19:12
+@@ -1,5 +1,8 @@
+ (test
+  (name t)
++ ;; The tests "t_bitfield", "t_hashset", "t_misc", "t_trie" and "t_bv" are left out, since
++ ;; MacoCaml cannot apply a template inside an expression.
++ (modules (:standard \ t_bitfield t_hashset t_misc t_trie t_bv))
+  (flags :standard -strict-sequence -warn-error -a+8 -w -48)
+  (modes
+   (best exe))
+--- a/tests/data/t.ml	2026-11-11 10:02:44
++++ b/tests/data/t.ml	2026-11-10 12:16:35
+@@ -1,26 +1,21 @@
+ Containers_testlib.run_all ~descr:"containers-data"
+   [
+-    T_bv.Test.get ();
+     T_bijection.Test.get ();
+-    T_bitfield.Test.get ();
+     T_cache.Test.get ();
+     T_deque.Test.get ();
+     T_fqueue.Test.get ();
+     T_fun_vec.Test.get ();
+     T_graph.Test.get ();
+-    T_hashset.Test.get ();
+     T_hashtrie.Test.get ();
+     T_het.Test.get ();
+     T_immutarray.Test.get ();
+     T_intmap.Test.get ();
+     T_lazylist.Test.get ();
+-    T_misc.Test.get ();
+     T_mutheap.Test.get ();
+     T_persistenthashtbl.Test.get ();
+     T_ral.Test.get ();
+     T_ringbuffer.Test.get ();
+     T_simplequeue.Test.get ();
+-    T_trie.Test.get ();
+     T_wbt.Test.get ();
+     T_zipper.Test.get ();
+   ]

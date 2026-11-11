@@ -1,0 +1,93 @@
+--- a/src/core/CCArray.ml	2026-11-11 10:02:44
++++ b/src/core/CCArray.ml	2026-11-10 12:14:47
+@@ -480,7 +480,7 @@
+ 
+ (* Dual Pivot Quicksort (Yaroslavskiy)
+    from "average case analysis of Java 7's Dual Pivot Quicksort" *)
+-module SortGeneric (A : MONO_ARRAY) = struct
++module[@functor] SortGeneric (A : MONO_ARRAY) = struct
+   module Rand = Random.State
+ 
+   let seed_ = [| 123456 |]
+--- a/src/core/CCCanonical_sexp.ml	2026-11-11 10:02:44
++++ b/src/core/CCCanonical_sexp.ml	2026-11-10 12:15:15
+@@ -106,7 +106,7 @@
+     val read_string : int -> string
+   end
+ 
+-  module Decoder (I : INPUT) = struct
++  module[@functor] Decoder (I : INPUT) = struct
+     let[@inline] is_num_ c =
+       Char.code c >= Char.code '0' && Char.code c <= Char.code '9'
+ 
+@@ -160,7 +160,7 @@
+   end
+   [@@inline]
+ 
+-  module Decoder_str (X : sig
++  module[@functor] Decoder_str (X : sig
+     val s : string
+   end) =
+   Decoder (struct
+@@ -195,7 +195,7 @@
+     end) in
+     D.to_list ()
+ 
+-  module Decoder_ic (X : sig
++  module[@functor] Decoder_ic (X : sig
+     val ic : in_channel
+   end) =
+   Decoder (struct
+--- a/src/data/CCCache.ml	2026-11-11 10:02:44
++++ b/src/data/CCCache.ml	2026-11-10 10:56:20
+@@ -184,7 +184,7 @@
+   val hash : t hash
+ end
+ 
+-module LRU (X : HASH) = struct
++module[@functor] LRU (X : HASH) = struct
+   type key = X.t
+ 
+   module H = Hashtbl.Make (X)
+@@ -299,7 +299,7 @@
+     iter = L.iter c;
+   }
+ 
+-module UNBOUNDED (X : HASH) = struct
++module[@functor] UNBOUNDED (X : HASH) = struct
+   module H = Hashtbl.Make (X)
+ 
+   let make size =
+--- a/src/scc/containers_scc.ml	2026-11-11 10:02:44
++++ b/src/scc/containers_scc.ml	2026-11-10 12:15:17
+@@ -15,7 +15,7 @@
+   val scc : A.t -> A.node list -> A.node list list
+ end
+ 
+-module Make (A : ARG) = struct
++module[@functor] Make (A : ARG) = struct
+   module A = A
+ 
+   type state = {
+--- a/src/scc/containers_scc.mli	2026-11-11 10:02:44
++++ b/src/scc/containers_scc.mli	2026-11-10 12:15:19
+@@ -15,7 +15,7 @@
+   val scc : A.t -> A.node list -> A.node list list
+ end
+ 
+-module Make (A : ARG) : S with module A = A
++module[@functor] Make (A : ARG) : S with module A = A
+ 
+ val scc :
+   tbl:(module Hashtbl.S with type key = 'node) ->
+--- a/src/testlib/containers_testlib.ml	2026-11-11 10:02:44
++++ b/src/testlib/containers_testlib.ml	2026-11-10 12:16:01
+@@ -165,7 +165,7 @@
+   val get : unit -> Test.t list
+ end
+ 
+-module Make_test (X : sig
++module[@functor] Make_test (X : sig
+   val file : string
+ end) =
+ struct

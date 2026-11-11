@@ -1,0 +1,11 @@
+--- a/tests/dune	2026-11-11 10:02:44
++++ b/tests/dune	2026-11-11 10:19:12
+@@ -1,7 +1,4 @@
+-(test
+- (name check)
+- (libraries graph)
+- (modules check))
++;; The test "check" is left out, since MacoCaml cannot apply a template inside an expression.
+ 
+ (test
+  (name test_bfs)

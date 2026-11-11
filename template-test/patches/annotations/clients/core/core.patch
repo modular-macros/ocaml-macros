@@ -1,0 +1,118 @@
+--- a/core/src/comparable_intf.ml	2026-11-11 10:05:03
++++ b/core/src/comparable_intf.ml	2026-11-10 14:53:35
+@@ -168,11 +168,11 @@
+       sexp_of_t], and do not generate container datatypes.
+   *)
+ 
+-  module Infix (T : sig
++  module[@template] Infix (T : sig
+     type t [@@deriving compare]
+   end) : Infix with type t := T.t
+ 
+-  module Comparisons (T : sig
++  module[@template] Comparisons (T : sig
+     type t [@@deriving compare]
+   end) : Comparisons with type t := T.t
+ 
+--- a/core/src/hash_queue.ml	2026-11-11 10:05:03
++++ b/core/src/hash_queue.ml	2026-11-10 14:53:35
+@@ -4,7 +4,7 @@
+ module type Key = Key
+ module type S_backend = S_backend
+ 
+-module Make_backend (Table : Hashtbl_intf.Hashtbl) : S_backend = struct
++module[@template] Make_backend (Table : Hashtbl_intf.Hashtbl) : S_backend = struct
+   module type Backend =
+     S1
+       with type 'key create_arg := 'key Hashtbl.Hashable.t
+--- a/core/src/hash_queue_intf.ml	2026-11-11 10:05:03
++++ b/core/src/hash_queue_intf.ml	2026-11-10 14:53:35
+@@ -245,7 +245,7 @@
+   module type Key = Key
+   module type S_backend = S_backend
+ 
+-  module Make_backend (Table : Hashtbl_intf.Hashtbl) : S_backend
++  module[@template] Make_backend (Table : Hashtbl_intf.Hashtbl) : S_backend
+ 
+   (** equivalent to [Make_backend (Hashtbl)] *)
+   include S_backend
+--- a/core/src/hashtbl_intf.ml	2026-11-11 10:05:03
++++ b/core/src/hashtbl_intf.ml	2026-11-10 14:53:35
+@@ -285,7 +285,7 @@
+     val hashable : Key.t Hashable.t
+   end) : S_stable with type key = T.Key.t
+ 
+-  module M (K : T.T) : sig
++  module[@template] M (K : T.T) : sig
+     type nonrec 'v t = (K.t, 'v) t
+   end
+ 
+--- a/core/src/map.ml	2026-11-11 10:05:03
++++ b/core/src/map.ml	2026-11-10 14:53:35
+@@ -432,7 +432,7 @@
+     binary_search_subrange ~comparator t ~compare ~lower_bound ~upper_bound
+   ;;
+ 
+-  module Make_applicative_traversals (A : Applicative.Lazy_applicative) = struct
++  module[@template] Make_applicative_traversals (A : Applicative.Lazy_applicative) = struct
+     module Traversals = Make_applicative_traversals (A)
+ 
+     let mapi = Traversals.mapi
+--- a/core/src/map.mli	2026-11-11 10:05:03
++++ b/core/src/map.mli	2026-11-10 14:53:35
+@@ -874,7 +874,7 @@
+ (** Creates traversals to reconstruct a map within an applicative. Uses
+     [Lazy_applicative] so that the map can be traversed within the applicative, rather
+     than needing to be traversed all at once, outside the applicative. *)
+-module Make_applicative_traversals (A : Applicative.Lazy_applicative) : sig
++module[@template] Make_applicative_traversals (A : Applicative.Lazy_applicative) : sig
+   val mapi
+     :  ('k, 'v1, 'cmp) t
+     -> f:(key:'k -> data:'v1 -> 'v2 A.t)
+--- a/core/src/sexpable.ml	2026-11-11 10:05:03
++++ b/core/src/sexpable.ml	2026-11-10 14:53:35
+@@ -3,7 +3,7 @@
+ 
+ module Stable = struct
+   module Of_sexpable = struct
+-    module V1
++    module[@template] V1
+       (Sexpable : S) (M : sig
+         type t
+ 
+@@ -21,7 +21,7 @@
+   end
+ 
+   module Of_sexpable1 = struct
+-    module V1
++    module[@template] V1
+       (Sexpable : S1) (M : sig
+         type 'a t
+ 
+@@ -39,7 +39,7 @@
+   end
+ 
+   module Of_sexpable2 = struct
+-    module V1
++    module[@template] V1
+       (Sexpable : S2) (M : sig
+         type ('a, 'b) t
+ 
+@@ -59,7 +59,7 @@
+   end
+ 
+   module Of_sexpable3 = struct
+-    module V1
++    module[@template] V1
+       (Sexpable : S3) (M : sig
+         type ('a, 'b, 'c) t
+ 
+@@ -79,7 +79,7 @@
+   end
+ 
+   module Of_stringable = struct
+-    module V1 (M : Stringable.S) : sig
++    module[@template] V1 (M : Stringable.S) : sig
+       type t [@@deriving sexp_grammar]
+ 
+       include S with type t := t
