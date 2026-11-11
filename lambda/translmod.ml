@@ -3480,7 +3480,11 @@ let transl_store_structure ~ctx ~scopes glob map prims aliases str =
               transl_store ~scopes rootpath subst cont rem
             )
         | Tstr_module{mb_id=Some id;mb_loc=loc;mb_presence=Mp_present;
-                      mb_expr={mod_desc = Tmod_structure str}} ->
+                      mb_expr={mod_desc = Tmod_structure str}}
+        | Tstr_module{mb_id=Some id;mb_loc=loc;mb_presence=Mp_present;
+                      mb_expr={mod_desc = Tmod_constraint (
+                          {mod_desc = Tmod_structure str}, _, _,
+                          Tcoerce_none)}} ->
             let loc = of_location ~scopes loc in
             let lam =
               transl_store
