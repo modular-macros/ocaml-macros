@@ -218,9 +218,14 @@ def print_targets(run: str, package: str, k: int) -> None:
     root = EXPERIMENT / load(run, "packages").set_index("package").at[package, "root"]
     sites = load(run, "clean-sites")
     sites = sites[(sites["package"] == package) & (sites["config"] == "templated")]
+    modules = load(run, "modules")
+    tests = modules[(modules["package"] == package) & (modules["test"] == "true")]["module"]
+    tests = set(tests.str[0].str.upper() + tests.str[1:])
     applications = sites[sites["role"] == "application"]["name"].value_counts()
     found = []
-    for _, d in sites[(sites["role"] == "definition") & (sites["kind"] == "template")].iterrows():
+    definitions = sites[(sites["role"] == "definition") & (sites["kind"] == "template")
+                        & ~sites["module"].isin(tests)]
+    for _, d in definitions.iterrows():
         source = d["file"].replace(".pp.ml", ".ml")  # ppx output names its source
         if applications.get(d["name"], 0) and (root / source).exists():
             line = find_struct_line(root / source, int(d["line"]))
