@@ -143,7 +143,13 @@ def mark_sites_of_package(observations: Observations) -> pd.DataFrame:
         callee_module=observations.sites["name"].str.split(".").str[0])
     sites = sites.merge(units.assign(of_package=True), how="left",
                         on=["package", "config", "callee_module"])
-    return sites.assign(of_package=sites["of_package"].notna())
+    modules = observations.modules
+    tests = modules[modules["test"]]
+    tests = tests[["package"]].assign(
+        module=tests["module"].str[0].str.upper() + tests["module"].str[1:], in_tests=True)
+    sites = sites.merge(tests.drop_duplicates(), how="left", on=["package", "module"])
+    return sites.assign(of_package=sites["of_package"].notna(),
+                        in_tests=sites["in_tests"].notna())
 
 
 def count_functors(sites: pd.DataFrame) -> pd.DataFrame:
@@ -153,11 +159,16 @@ def count_functors(sites: pd.DataFrame) -> pd.DataFrame:
 
     definitions = sites[sites["role"] == "definition"]
     applications = sites[sites["role"] == "application"]
+    of_package = applications[applications["of_package"]]
     counts = pd.concat([count(definitions, "s"), count(applications, "_apps"),
-                        count(applications[applications["of_package"]], "_apps_of_package")],
+                        count(of_package, "_apps_of_package"),
+                        count(definitions[definitions["in_tests"]], "s_in_tests"),
+                        count(of_package[of_package["in_tests"]], "_apps_of_package_in_tests")],
                        axis=1).fillna(0).astype(int)
     columns = ["functors", "templates", "functor_apps", "template_apps",
-               "functor_apps_of_package", "template_apps_of_package"]
+               "functor_apps_of_package", "template_apps_of_package",
+               "functors_in_tests", "templates_in_tests",
+               "functor_apps_of_package_in_tests", "template_apps_of_package_in_tests"]
     return counts.reindex(columns=columns, fill_value=0).reset_index()
 
 
