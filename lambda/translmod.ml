@@ -235,6 +235,12 @@ let rec apply_coercion ~ctx loc strict restr arg =
       lambda_unit
   | Tcoerce_primitive { pc_loc = _; pc_desc; pc_env; pc_type; } ->
       Translprim.transl_primitive loc pc_desc pc_env pc_type None
+  | Tcoerce_alias (env, path, _)
+    when in_compile_world ctx
+         && (match Env.find_module path env with
+             | md -> not (Mtype.has_macro_components env md.md_type)
+             | exception Not_found -> false) ->
+      lambda_unit
   | Tcoerce_alias (env, path, cc) ->
       let lam = transl_module_path ~ctx loc env path in
       name_lambda strict arg
