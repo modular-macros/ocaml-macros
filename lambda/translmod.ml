@@ -1831,13 +1831,21 @@ and transl_template_body ~ctx ~scopes ~loc params body =
   in
   (* The body's applications, collected by the same pass. *)
   let apps_acc = ref ([] : template_body_app list) in
+  let body_application ~ctx me k =
+    let m = application_id me in
+    transl_body_application ~ctx ~scopes ~hidden:true apps_acc
+      (application_binding ~id:m ~loc:me.Typedtree.mod_loc me) []
+      (fun _ -> k (Lvar m))
+  in
   let frag0 =
     Translprim.without_used_primitives @@ fun () ->
     in_world ctx Run_world @@ fun ctx ->
     with_template_apps ctx Tapps_template_body @@ fun ctx ->
     with_template_body_apps ctx (Some apps_acc) @@ fun ctx ->
-    transl_module ~ctx:{ ctx with splice_source = Some collector } ~scopes
-      Tcoerce_none None body
+    let ctx = { ctx with splice_source = Some collector } in
+    if template_application_parts body <> None
+    then body_application ~ctx body Fun.id
+    else transl_module ~ctx ~scopes Tcoerce_none None body
   in
   let splices = List.rev !splices in
   let apps = List.rev !apps_acc in
@@ -2126,6 +2134,10 @@ and transl_template_body ~ctx ~scopes ~loc params body =
       | Tmod_apply (Plain_application, _, _, _)
       | Tmod_apply_unit (Plain_application, _) ->
           transl_module_hoisted ~ctx ~scopes cc None body assemble
+      | Tmod_apply (Template_application _, _, _, _)
+      | Tmod_apply_unit (Template_application _, _) ->
+          body_application ~ctx body (fun m ->
+              assemble (apply_coercion ~ctx Loc_unknown Strict cc m))
       | _ ->
           (* No structure: the record is the body's compile-time block. *)
           assemble (transl_module ~ctx ~scopes cc None body)
