@@ -3442,7 +3442,8 @@ and get_functor_components ~errors ~loc ~kind lid env comps =
       match fcomps.fcomp_arg with
       | Unit -> (* PR#7611 *)
           may_lookup_error errors loc env (Generative_used_as_applicative lid)
-      | Named _ when fcomps.fcomp_kind <> kind ->
+      | Named _ when fcomps.fcomp_kind <> kind
+                     && not (Clflags.converts_functors ()) ->
           may_lookup_error errors loc env
             (Functor_kind_in_path (fcomps.fcomp_kind, lid))
       | Named (_, arg) -> fcomps, arg

@@ -2856,6 +2856,11 @@ and type_application loc ~strengthen ~funct_body env smod =
 
 and type_one_application ~ctx:(apply_loc,sfunct,md_f,args)
     funct_body env (funct, funct_shape) app_view =
+  let app_view =
+    match Clflags.converts_functors (), Env.scrape_alias env funct.mod_type with
+    | true, Mty_functor (fkind, _, _) -> { app_view with kind = fkind }
+    | _ -> app_view
+  in
   match Env.scrape_alias env funct.mod_type with
   | Mty_functor (fkind, Unit, mty_res) when fkind = app_view.kind ->
       begin match app_view.arg with
@@ -3747,7 +3752,97 @@ let gen_annot target annots =
     ~use_summaries:false
     annots
 
+(* Under -functors-as-templates every functor and functor type is a template,
+   but for the parameters of a binding or declaration marked [@@functor]. *)
+let functors_as_templates =
+  let marked attrs =
+    List.exists (fun (a : attribute) -> a.attr_name.txt = "functor") attrs in
+  let rec plain_mty mty =
+    match mty.pmty_desc with
+    | Pmty_functor (_, p, r) ->
+        { mty with pmty_desc = Pmty_functor (Asttypes.Plain, p, plain_mty r) }
+    | _ -> mty in
+  let rec plain_mod me =
+    match me.pmod_desc with
+    | Pmod_functor (_, p, b) ->
+        { me with pmod_desc = Pmod_functor (Asttypes.Plain, p, plain_mod b) }
+    | Pmod_constraint (me', mty) ->
+        { me with pmod_desc = Pmod_constraint (plain_mod me', plain_mty mty) }
+    | _ -> me in
+  let open Ast_mapper in
+  { default_mapper with
+    module_expr = (fun m me ->
+      let me = default_mapper.module_expr m me in
+      match me.pmod_desc with
+      | Pmod_functor (Asttypes.Plain, p, b) ->
+          { me with pmod_desc = Pmod_functor (Asttypes.Template, p, b) }
+      | _ -> me);
+    module_type = (fun m mty ->
+      let mty = default_mapper.module_type m mty in
+      match mty.pmty_desc with
+      | Pmty_functor (Asttypes.Plain, p, r) ->
+          { mty with pmty_desc = Pmty_functor (Asttypes.Template, p, r) }
+      | _ -> mty);
+    module_binding = (fun m mb ->
+      let mb = default_mapper.module_binding m mb in
+      if marked mb.pmb_attributes then { mb with pmb_expr = plain_mod mb.pmb_expr }
+      else mb);
+    module_declaration = (fun m md ->
+      let md = default_mapper.module_declaration m md in
+      if marked md.pmd_attributes then { md with pmd_type = plain_mty md.pmd_type }
+      else md);
+    module_type_declaration = (fun m mtd ->
+      let mtd = default_mapper.module_type_declaration m mtd in
+      if marked mtd.pmtd_attributes
+      then { mtd with pmtd_type = Option.map plain_mty mtd.pmtd_type }
+      else mtd) }
+
+(* Under -marked-templates only the functor heads of the bindings and
+   declarations marked [@template] are templates. *)
+let marked_templates =
+  let marked attrs =
+    List.exists (fun (a : attribute) -> a.attr_name.txt = "template") attrs in
+  let rec template_mty mty =
+    match mty.pmty_desc with
+    | Pmty_functor (_, p, r) ->
+        let r = template_mty r in
+        { mty with pmty_desc = Pmty_functor (Asttypes.Template, p, r) }
+    | _ -> mty in
+  let rec template_mod me =
+    match me.pmod_desc with
+    | Pmod_functor (_, p, b) ->
+        let b = template_mod b in
+        { me with pmod_desc = Pmod_functor (Asttypes.Template, p, b) }
+    | Pmod_constraint (me', mty) ->
+        let me' = template_mod me' and mty = template_mty mty in
+        { me with pmod_desc = Pmod_constraint (me', mty) }
+    | _ -> me in
+  let open Ast_mapper in
+  { default_mapper with
+    module_binding = (fun m mb ->
+      let mb = default_mapper.module_binding m mb in
+      if marked mb.pmb_attributes
+      then { mb with pmb_expr = template_mod mb.pmb_expr }
+      else mb);
+    module_declaration = (fun m md ->
+      let md = default_mapper.module_declaration m md in
+      if marked md.pmd_attributes
+      then { md with pmd_type = template_mty md.pmd_type }
+      else md);
+    module_type_declaration = (fun m mtd ->
+      let mtd = default_mapper.module_type_declaration m mtd in
+      if marked mtd.pmtd_attributes
+      then { mtd with pmtd_type = Option.map template_mty mtd.pmtd_type }
+      else mtd) }
+
 let type_implementation target initial_env ast =
+  let ast =
+    if !Clflags.functors_as_templates
+    then functors_as_templates.structure functors_as_templates ast
+    else if !Clflags.marked_templates
+    then marked_templates.structure marked_templates ast
+    else ast
+  in
   let sourcefile = Unit_info.source_file target in
   let save_cmt target annots initial_env cmi shape =
     Cmt_format.save_cmt (Unit_info.cmt target)
@@ -3857,6 +3952,13 @@ let save_signature target tsg initial_env cmi =
     (Cmt_format.Interface tsg) initial_env (Some cmi) None
 
 let type_interface env ast =
+  let ast =
+    if !Clflags.functors_as_templates
+    then functors_as_templates.signature functors_as_templates ast
+    else if !Clflags.marked_templates
+    then marked_templates.signature marked_templates ast
+    else ast
+  in
   transl_signature env ast
 
 (* "Packaging" of several compilation units into one unit

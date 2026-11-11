@@ -452,6 +452,14 @@ let mk_plugin f =
 let mk_principal f =
   "-principal", Arg.Unit f, " Check principality of type inference"
 
+let mk_functors_as_templates f =
+  "-functors-as-templates", Arg.Unit f,
+  " Parse every functor, functor type and functor application as a template"
+
+let mk_marked_templates f =
+  "-marked-templates", Arg.Unit f,
+  " Parse as a template each functor and functor type marked [@template]"
+
 let mk_no_principal f =
   "-no-principal", Arg.Unit f,
   " Do not check principality of type inference (default)"
@@ -860,6 +868,8 @@ module type Common_options = sig
   val _ppx : string -> unit
   val _keywords: string -> unit
   val _principal : unit -> unit
+  val _functors_as_templates : unit -> unit
+  val _marked_templates : unit -> unit
   val _no_principal : unit -> unit
   val _rectypes : unit -> unit
   val _no_rectypes : unit -> unit
@@ -1174,6 +1184,8 @@ struct
     mk_ppx F._ppx;
     mk_plugin F._plugin;
     mk_principal F._principal;
+    mk_functors_as_templates F._functors_as_templates;
+    mk_marked_templates F._marked_templates;
     mk_no_principal F._no_principal;
     mk_rectypes F._rectypes;
     mk_no_rectypes F._no_rectypes;
@@ -1268,6 +1280,8 @@ struct
     mk_ppx F._ppx;
     mk_keywords F._keywords;
     mk_principal F._principal;
+    mk_functors_as_templates F._functors_as_templates;
+    mk_marked_templates F._marked_templates;
     mk_no_principal F._no_principal;
     mk_rectypes F._rectypes;
     mk_no_rectypes F._no_rectypes;
@@ -1405,6 +1419,8 @@ struct
     mk_pp F._pp;
     mk_ppx F._ppx;
     mk_principal F._principal;
+    mk_functors_as_templates F._functors_as_templates;
+    mk_marked_templates F._marked_templates;
     mk_no_principal F._no_principal;
     mk_rectypes F._rectypes;
     mk_no_rectypes F._no_rectypes;
@@ -1542,6 +1558,8 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_open F._open;
     mk_ppx F._ppx;
     mk_principal F._principal;
+    mk_functors_as_templates F._functors_as_templates;
+    mk_marked_templates F._marked_templates;
     mk_no_principal F._no_principal;
     mk_rectypes F._rectypes;
     mk_no_rectypes F._no_rectypes;
@@ -1636,6 +1654,8 @@ struct
     mk_pp F._pp;
     mk_ppx F._ppx;
     mk_principal F._principal;
+    mk_functors_as_templates F._functors_as_templates;
+    mk_marked_templates F._marked_templates;
     mk_no_principal F._no_principal;
     mk_rectypes F._rectypes;
     mk_no_rectypes F._no_rectypes;
@@ -1731,6 +1751,8 @@ module Default = struct
     let _nocwd = set no_cwd
     let _open s = open_modules := (s :: (!open_modules))
     let _principal = set principal
+    let _functors_as_templates = set functors_as_templates
+    let _marked_templates = set marked_templates
     let _rectypes = set recursive_types
     let _safer_matching = set safer_matching
     let _short_paths = clear real_paths

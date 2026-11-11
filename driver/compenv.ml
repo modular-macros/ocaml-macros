@@ -243,6 +243,9 @@ let read_one_param ppf position name v =
   | "linkall" -> set "linkall" [ link_everything ] v
   | "nolabels" -> set "nolabels" [ classic ] v
   | "principal" -> set "principal"  [ principal ] v
+  | "functors-as-templates" ->
+      set "functors-as-templates" [ functors_as_templates ] v
+  | "marked-templates" -> set "marked-templates" [ marked_templates ] v
   | "rectypes" -> set "rectypes" [ recursive_types ] v
   | "safe-string" -> compat "safe-string" v (* kept for compatibility *)
   | "strict-sequence" -> set "strict-sequence" [ strict_sequence ] v

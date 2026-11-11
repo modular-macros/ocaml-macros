@@ -108,6 +108,8 @@ and search_method =                     (* -search-method ... *)
   ref Config.search_method
 and plugin = ref false                  (* -plugin ... *)
 and principal = ref false               (* -principal *)
+and functors_as_templates = ref false   (* -functors-as-templates *)
+and marked_templates = ref false        (* -marked-templates *)
 and real_paths = ref true               (* -short-paths *)
 and recursive_types = ref false         (* -rectypes *)
 and strict_sequence = ref false         (* -strict-sequence *)
@@ -122,6 +124,9 @@ and for_package = ref (None: string option) (* -for-pack *)
 and error_size = ref 500                (* -error-size *)
 and float_const_prop = ref true         (* -no-float-const-prop *)
 and no_alias_deps = ref false           (* -no-alias-deps *)
+
+let converts_functors () = !functors_as_templates || !marked_templates
+
 let unique_ids = ref true               (* -d(no-)unique-ids *)
 let canonical_ids = ref false           (* -d(no-)canonical-ids *)
 let locations = ref true                (* -d(no-)locations *)

@@ -38,6 +38,8 @@ module type Common_options = sig
   val _ppx : string -> unit
   val _keywords: string -> unit
   val _principal : unit -> unit
+  val _functors_as_templates : unit -> unit
+  val _marked_templates : unit -> unit
   val _no_principal : unit -> unit
   val _rectypes : unit -> unit
   val _no_rectypes : unit -> unit

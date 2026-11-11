@@ -132,6 +132,9 @@ val launch_method : Config.launch_method ref
 val search_method : Config.search_method ref
 val plugin : bool ref
 val principal : bool ref
+val functors_as_templates : bool ref
+val marked_templates : bool ref
+val converts_functors : unit -> bool
 val print_variance : bool ref
 val real_paths : bool ref
 val recursive_types : bool ref
