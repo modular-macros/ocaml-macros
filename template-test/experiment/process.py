@@ -238,7 +238,8 @@ def print_targets(run: str, package: str, k: int) -> None:
                         & ~sites["module"].isin(tests)]
     for _, d in definitions.iterrows():
         source = d["file"].replace(".pp.ml", ".ml")  # ppx output names its source
-        if applications.get(d["name"], 0) and (root / source).exists():
+        interface = (root / source).with_suffix(".mli")  # else any edit may change the .cmi
+        if applications.get(d["name"], 0) and (root / source).exists() and interface.exists():
             line = find_struct_line(root / source, int(d["line"]))
             if line is not None:
                 found.append((applications[d["name"]], d["name"], source, line))
